@@ -54,6 +54,7 @@ fn main() {
             commands::engine_advise,
             commands::engine_classify_risk,
             commands::strategy_agent_chat,
+            commands::ensure_strategy_model,
             commands::get_device_signer_info,
             commands::sign_integrity_payload,
             commands::verify_integrity_payload,

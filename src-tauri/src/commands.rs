@@ -1,6 +1,6 @@
 // src-tauri/src/commands.rs
 use crate::engine;
-use engine::{AdvisorItem, CaseItem, RankOpts, RankedHit, RecordItem, RiskPrediction, StrategyChatOptions, StrategyChatRunResult, StrategyChatTurn};
+use engine::{AdvisorItem, CaseItem, RankOpts, RankedHit, RecordItem, RiskPrediction, StrategyChatOptions, StrategyChatRunResult, StrategyChatTurn, StrategyModelReadyResult};
 
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -76,6 +76,13 @@ pub async fn strategy_agent_chat(app: AppHandle, args: StrategyChatArgs) -> Resu
   })
   .await
   .map_err(|e| format!("전략자문 작업 스레드가 중단되었어요: {e}"))?
+}
+
+#[tauri::command]
+pub async fn ensure_strategy_model(app: AppHandle) -> Result<StrategyModelReadyResult, String> {
+  tauri::async_runtime::spawn_blocking(move || engine::ensure_strategy_model_ready(&app))
+    .await
+    .map_err(|e| format!("전략자문 모델 준비 작업이 중단되었어요: {e}"))?
 }
 
 

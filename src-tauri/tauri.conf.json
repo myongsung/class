@@ -29,9 +29,6 @@
     "targets": "all",
     "externalBin": [
       "binaries/llama-sidecar"
-    ],
-    "resources": [
-      "resources/models/HyperCLOVAX-SEED-Text-Instruct-0.5B-q4_0.gguf"
     ]
   }
 }

@@ -1,14 +1,15 @@
 use serde::{Deserialize, Serialize};
+use reqwest::blocking::Client;
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs;
-use std::io::{BufRead, BufReader, Read};
+use std::io::{BufRead, BufReader, Read, Write};
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH}; // 시간 처리를 위한 표준 라이브러리 추가
 use tauri::{path::BaseDirectory, AppHandle, Emitter, Manager};
@@ -829,9 +830,11 @@ pub fn generate_advisors_for_case(case_item: &CaseItem, _records: &[RecordItem])
 
 const STRATEGY_MODEL_FILENAME: &str = "HyperCLOVAX-SEED-Text-Instruct-0.5B-q4_0.gguf";
 const STRATEGY_MODEL_RESOURCE_PATH: &str = "models/HyperCLOVAX-SEED-Text-Instruct-0.5B-q4_0.gguf";
+const STRATEGY_MODEL_URL: &str = "https://github.com/myongsung/roosycozy-models/releases/download/model_v1/HyperCLOVAX-SEED-Text-Instruct-0.5B-q4_0.gguf";
 const STRATEGY_SIDECAR_STEM: &str = "llama-sidecar";
 const STRATEGY_PROGRESS_EVENT: &str = "strategy-chat-progress";
 const STRATEGY_CHAT_TIMEOUT_SECS: u64 = 90;
+static STRATEGY_MODEL_DOWNLOAD_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
 const STRATEGY_SIDECAR_FILENAME: &str = "llama-sidecar-aarch64-apple-darwin";
@@ -880,6 +883,15 @@ pub struct StrategyChatRunResult {
   pub records_used: usize,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StrategyModelReadyResult {
+  pub model_path: String,
+  pub downloaded: bool,
+  pub file_name: String,
+  pub source_url: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct StrategyProgressPayload {
@@ -913,6 +925,10 @@ fn push_unique_path(out: &mut Vec<PathBuf>, path: PathBuf) {
   if !out.iter().any(|p| p == &path) {
     out.push(path);
   }
+}
+
+fn strategy_model_download_lock() -> &'static Mutex<()> {
+  STRATEGY_MODEL_DOWNLOAD_LOCK.get_or_init(|| Mutex::new(()))
 }
 
 #[cfg(unix)]
@@ -989,6 +1005,9 @@ fn strategy_model_candidates(app: Option<&AppHandle>) -> Vec<PathBuf> {
   }
 
   if let Some(app) = app {
+    if let Ok(path) = strategy_model_cache_path(app) {
+      push_unique_path(&mut out, path);
+    }
     if let Ok(path) = app.path().resolve(STRATEGY_MODEL_RESOURCE_PATH, BaseDirectory::Resource) {
       push_unique_path(&mut out, path);
     }
@@ -1013,16 +1032,115 @@ fn strategy_model_candidates(app: Option<&AppHandle>) -> Vec<PathBuf> {
   out
 }
 
+fn strategy_model_cache_dir(app: &AppHandle) -> Result<PathBuf, String> {
+  let dir = app
+    .path()
+    .app_data_dir()
+    .map_err(|e| format!("모델 저장 폴더를 찾지 못했어요: {e}"))?
+    .join("models");
+  fs::create_dir_all(&dir).map_err(|e| format!("모델 저장 폴더를 만들지 못했어요: {e}"))?;
+  Ok(dir)
+}
+
+fn strategy_model_cache_path(app: &AppHandle) -> Result<PathBuf, String> {
+  Ok(strategy_model_cache_dir(app)?.join(STRATEGY_MODEL_FILENAME))
+}
+
+fn download_strategy_model(app: &AppHandle) -> Result<PathBuf, String> {
+  let cache_path = strategy_model_cache_path(app)?;
+  if cache_path.exists() {
+    return Ok(cache_path);
+  }
+
+  let tmp_path = cache_path.with_extension("download");
+  emit_strategy_progress(Some(app), "모델", format!("전략자문 모델 {} 다운로드를 시작해요.", STRATEGY_MODEL_FILENAME));
+
+  let client = Client::builder()
+    .connect_timeout(Duration::from_secs(20))
+    .timeout(Duration::from_secs(60 * 20))
+    .build()
+    .map_err(|e| format!("모델 다운로드 클라이언트를 준비하지 못했어요: {e}"))?;
+
+  let mut response = client
+    .get(STRATEGY_MODEL_URL)
+    .send()
+    .map_err(|e| format!("전략자문 모델 다운로드 요청에 실패했어요: {e}"))?
+    .error_for_status()
+    .map_err(|e| format!("전략자문 모델 다운로드 응답이 올바르지 않아요: {e}"))?;
+
+  let total = response.content_length();
+  let mut file = fs::File::create(&tmp_path).map_err(|e| format!("임시 모델 파일을 만들지 못했어요: {e}"))?;
+  let mut downloaded: u64 = 0;
+  let mut last_reported_bucket = 0u64;
+  let mut buf = [0u8; 64 * 1024];
+
+  loop {
+    let read = response
+      .read(&mut buf)
+      .map_err(|e| format!("모델 파일을 읽는 중 오류가 났어요: {e}"))?;
+    if read == 0 {
+      break;
+    }
+    file
+      .write_all(&buf[..read])
+      .map_err(|e| format!("모델 파일을 저장하는 중 오류가 났어요: {e}"))?;
+    downloaded += read as u64;
+    if let Some(total_bytes) = total {
+      let pct = if total_bytes == 0 { 0 } else { downloaded.saturating_mul(100) / total_bytes };
+      let bucket = pct / 10;
+      if bucket > last_reported_bucket {
+        last_reported_bucket = bucket;
+        emit_strategy_progress(Some(app), "모델", format!("전략자문 모델 다운로드 중... {}% 완료", pct.min(100)));
+      }
+    } else if downloaded / (50 * 1024 * 1024) > last_reported_bucket {
+      last_reported_bucket = downloaded / (50 * 1024 * 1024);
+      emit_strategy_progress(
+        Some(app),
+        "모델",
+        format!("전략자문 모델 다운로드 중... {:.1}MB 수신", downloaded as f64 / 1024f64 / 1024f64),
+      );
+    }
+  }
+
+  file.flush().map_err(|e| format!("모델 파일 쓰기를 마무리하지 못했어요: {e}"))?;
+  fs::rename(&tmp_path, &cache_path).map_err(|e| format!("모델 파일을 저장 위치로 옮기지 못했어요: {e}"))?;
+  emit_strategy_progress(Some(app), "모델", format!("전략자문 모델 다운로드를 마쳤어요. 저장 위치: {}", cache_path.display()));
+  Ok(cache_path)
+}
+
 fn resolve_strategy_model_path(app: Option<&AppHandle>) -> Result<PathBuf, String> {
   for candidate in strategy_model_candidates(app) {
     if candidate.exists() {
       return Ok(candidate);
     }
   }
+  if let Some(app) = app {
+    let _guard = strategy_model_download_lock()
+      .lock()
+      .map_err(|_| "전략자문 모델 다운로드 잠금을 얻지 못했어요.".to_string())?;
+    if let Ok(path) = strategy_model_cache_path(app) {
+      if path.exists() {
+        return Ok(path);
+      }
+    }
+    return download_strategy_model(app);
+  }
   Err(format!(
-    "전략자문 모델 파일을 찾지 못했어요. {} 파일을 앱 번들 리소스 models 경로나 src-tauri/src/engine 폴더에 넣어주세요.",
-    STRATEGY_MODEL_FILENAME
+    "전략자문 모델 파일을 찾지 못했어요. 앱 실행 후 자동 다운로드가 필요해요. 모델 URL: {}",
+    STRATEGY_MODEL_URL
   ))
+}
+
+pub fn ensure_strategy_model_ready(app: &AppHandle) -> Result<StrategyModelReadyResult, String> {
+  let cache_path = strategy_model_cache_path(app)?;
+  let downloaded = !cache_path.exists();
+  let path = resolve_strategy_model_path(Some(app))?;
+  Ok(StrategyModelReadyResult {
+    model_path: path.display().to_string(),
+    downloaded,
+    file_name: STRATEGY_MODEL_FILENAME.to_string(),
+    source_url: STRATEGY_MODEL_URL.to_string(),
+  })
 }
 
 fn format_actor_short(actor: &ActorRef) -> String {

@@ -119,6 +119,13 @@ type SimulationResult = {
   nextSteps: string[];
 };
 
+type StrategyModelReadyResult = {
+  modelPath: string;
+  downloaded: boolean;
+  fileName: string;
+  sourceUrl: string;
+};
+
 const SIMULATION_DEFAULTS: SimulationDraft = {
   evidenceFilter: '',
   scenarioPreset: 'balanced',
@@ -426,6 +433,25 @@ const ensureStrategyChatProgressListener = () => {
     _strategyProgressListenerBound = false;
     log('strategy progress listener failed', err);
   });
+};
+
+let _strategyModelEnsureStarted = false;
+const ensureStrategyModelBootstrap = async () => {
+  if (_strategyModelEnsureStarted) return;
+  _strategyModelEnsureStarted = true;
+  try {
+    const result = await invoke<StrategyModelReadyResult>('ensure_strategy_model');
+    if (result?.downloaded) {
+      toast('전략자문 모델 다운로드를 마쳤어요');
+      log('strategy model downloaded', result.modelPath);
+    } else {
+      log('strategy model ready', result?.modelPath || '');
+    }
+  } catch (err) {
+    _strategyModelEnsureStarted = false;
+    log('strategy model bootstrap failed', err);
+    toast('전략자문 모델 준비에 실패했어요');
+  }
 };
 
 const appendStrategyChatMessage = (role: StrategyChatRole, content: string, meta = '') => {
@@ -2376,6 +2402,7 @@ function syncDraftDefaults() {
 export function initApp() {
   bindEvents(); ensurePaperStyles(); syncDraftDefaults();
   ensureStrategyChatProgressListener();
+  void ensureStrategyModelBootstrap();
 
   const focusRecordComposer = () => window.setTimeout(() => {
     (document.getElementById('recordSummaryOverview') as HTMLTextAreaElement | null)?.focus();
