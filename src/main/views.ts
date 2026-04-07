@@ -18,7 +18,7 @@ import { renderCasePaperModal } from './paper';
 
 const feedImageUrl = new URL('./feed.png', import.meta.url).href;
 const lawyerProfileImageUrl = new URL('./lawyer-profile.png', import.meta.url).href;
-const ENABLE_BACKUP_RESTORE = true; // backup/restore (JSON copy/paste) UI disabled
+const ENABLE_BACKUP_RESTORE = true; // 설정에서 백업/복구 UI 노출
 const HIDE_CASE_ACTIONS_AND_GUIDES = true; // 사건조회하기에서 내조치로그/대응가이드 임시 비노출
 
 
@@ -400,11 +400,11 @@ function renderLegalSimulationPanel() {
 
   const briefingBubble = result
     ? `
-      <article class="strategyMsg agent primary">
+      <article class="strategyMsg agent primary strategySummaryMsg">
         <div class="strategyAvatar">AI</div>
         <div class="strategyBubble">
-          <div class="strategyBubbleHead">
-            <strong>현재 사건 맥락 요약</strong>
+          <div class="strategyInlineMeta">
+            <span>${esc(contextSummaryLine)}</span>
             <span>${dirty ? '증거 변경됨' : `마지막 분석 ${esc(fmt(result.calculatedAt))}`}</span>
           </div>
           <div class="strategyLead">${esc(recommendedTone)}</div>
@@ -419,12 +419,11 @@ function renderLegalSimulationPanel() {
       </article>
     `
     : `
-      <article class="strategyMsg agent primary">
+      <article class="strategyMsg agent primary strategySummaryMsg">
         <div class="strategyAvatar">AI</div>
         <div class="strategyBubble">
-          <div class="strategyBubbleHead">
-            <strong>전략자문 에이전트</strong>
-            <span>${selectedRecords.length ? `증거 ${esc(String(selectedRecords.length))}개 연결됨` : '증거를 붙여주세요'}</span>
+          <div class="strategyInlineMeta">
+            <span>${esc(contextSummaryLine)}</span>
           </div>
           <div class="strategyLead">사건을 읽고 어떤 말부터 꺼내야 하는지, 무엇을 먼저 기록해야 하는지 바로 정리해드릴게요.</div>
           <div class="strategyParagraph">하단 입력창에 질문만 보내면 답장 초안, 기록 포인트, 다음 행동 순서를 채팅으로 이어서 도와드려요.</div>
@@ -446,19 +445,16 @@ function renderLegalSimulationPanel() {
 
   const renderedChatMessages = chatMessages.map((msg) => {
     const role = String(msg.role || 'assistant') === 'user' ? 'user' : 'assistant';
-    const avatar = role === 'user' ? '나' : 'AI';
-    const bubbleClass = role === 'user' ? 'strategyBubble userBubble' : 'strategyBubble';
-    const wrapperClass = role === 'user' ? 'strategyMsg user' : 'strategyMsg agent';
-    const headLabel = role === 'user' ? '내 질문' : '전략자문 응답';
+    const bubbleClass = role === 'user' ? 'strategyBubble userBubble strategyUserCard' : 'strategyBubble strategyAssistantCard';
+    const wrapperClass = role === 'user' ? 'strategyMsg user strategyUserMsg' : 'strategyMsg agent strategyResponseMsg';
     const headMeta = String(msg.meta || '').trim() || fmt(String(msg.ts || ''));
     return `
       <article class="${wrapperClass}">
-        <div class="strategyAvatar ${role === 'user' ? 'user' : ''}">${avatar}</div>
+        ${role === 'assistant' ? `<div class="strategyAvatar">AI</div>` : ''}
         <div class="${bubbleClass}">
-          <div class="strategyBubbleHead">
-            <strong>${esc(headLabel)}</strong>
-            <span>${esc(headMeta)}</span>
-          </div>
+          ${role === 'assistant'
+            ? `<div class="strategyBubbleMetaOnly"><span>${esc(headMeta)}</span></div>`
+            : ''}
           <div class="strategyParagraph">${strategyTextHtml(String(msg.content || ''))}</div>
         </div>
       </article>
@@ -466,11 +462,10 @@ function renderLegalSimulationPanel() {
   }).join('');
 
   const pendingBubble = chatPending ? `
-    <article class="strategyMsg agent">
+    <article class="strategyMsg agent strategyStatusMsg">
       <div class="strategyAvatar">AI</div>
       <div class="strategyBubble soft">
-        <div class="strategyBubbleHead">
-          <strong>전략자문 에이전트</strong>
+        <div class="strategyInlineMeta">
           <span>${esc(progressStage || '모델 응답 생성 중')}</span>
         </div>
         <div class="strategyParagraph">연결된 증거와 사건 맥락을 읽고 답변을 정리하고 있어요…</div>
@@ -480,24 +475,22 @@ function renderLegalSimulationPanel() {
   ` : '';
 
   const errorBubble = chatError ? `
-    <article class="strategyMsg agent">
+    <article class="strategyMsg agent strategyStatusMsg">
       <div class="strategyAvatar">AI</div>
       <div class="strategyBubble soft">
-        <div class="strategyBubbleHead">
-          <strong>실행 안내</strong>
-          <span>백엔드 확인 필요</span>
+        <div class="strategyInlineMeta">
+          <span>실행 오류</span>
         </div>
         <div class="strategyParagraph">${strategyTextHtml(chatError)}</div>
       </div>
     </article>
   ` : '';
   const starterThread = !chatMessages.length ? `
-    <article class="strategyMsg agent">
+    <article class="strategyMsg agent strategyIntroMsg">
       <div class="strategyAvatar">AI</div>
       <div class="strategyBubble soft">
-        <div class="strategyBubbleHead">
-          <strong>대화 준비됨</strong>
-          <span>${selectedCase ? '사건 기반 대화' : '직접 분석 모드'}</span>
+        <div class="strategyInlineMeta">
+          <span>${esc(contextSummaryLine)}</span>
         </div>
         <div class="strategyParagraph">${esc(caseSummary)}</div>
         <div class="strategyParagraph">질문을 보내면 답변 문구, 기록 포인트, 다음 행동 순서를 짧고 실무적으로 정리해드릴게요.</div>
@@ -508,14 +501,6 @@ function renderLegalSimulationPanel() {
   return `
     <article class="legalHubPanel strategyChatPage" aria-label="전략자문 에이전트">
       <section class="strategyChatOnlyShell">
-        <header class="strategyChatOnlyHeader">
-          <div class="strategyChatOnlyIdentity">
-            <div class="strategyChatOnlyEyebrow">학교 현장 대응 도우미</div>
-            <div class="strategyChatOnlyTitle">전략자문 에이전트</div>
-            <div class="strategyChatOnlySubline">${esc(contextSummaryLine)}</div>
-          </div>
-        </header>
-
         <div class="strategyChatThread strategyChatThreadOnly">
           ${starterThread}
           ${result ? briefingBubble : ''}
@@ -531,10 +516,10 @@ function renderLegalSimulationPanel() {
           <div class="strategyChatOnlyComposerBar">
             <div class="strategyChatOnlyComposerTools">
               ${H.btn(selectedRecords.length ? `증거 ${selectedRecords.length}개` : '증거 붙이기', 'open-simulation-picker', '', 'btn ghost')}
-              <div class="strategyChatOnlyComposerHint">${chatPending ? esc(progressStage || '응답 생성 중') : 'Enter로 보내기 · Shift+Enter로 줄바꿈'}</div>
+              <div class="strategyChatOnlyComposerHint">${chatPending ? esc(progressStage || '응답 생성 중') : 'Enter 전송 · Shift+Enter 줄바꿈'}</div>
             </div>
             <div class="strategyComposerActions">
-              ${H.btn(chatPending ? '답변 생성 중…' : '채팅 보내기', 'send-strategy-chat', chatPending ? ' disabled aria-disabled="true"' : '', 'btn primary')}
+              ${H.btn(chatPending ? '생성 중…' : '보내기', 'send-strategy-chat', chatPending ? ' disabled aria-disabled="true"' : '', 'btn primary')}
             </div>
           </div>
         </footer>
@@ -1178,12 +1163,10 @@ function renderSettingsModal() {
           <div class="muted">현재 데이터를 JSON 파일로 저장합니다.</div>
         </button>
 
-        <!--
         <button class="settingsAction" data-action="open-restore" type="button">
           <div class="settingsActionTitle">복구</div>
           <div class="muted">백업 파일로 현재 데이터를 덮어씁니다.</div>
         </button>
-        -->
 
         <button class="settingsAction danger" data-action="wipe" type="button">
           <div class="settingsActionTitle">삭제</div>

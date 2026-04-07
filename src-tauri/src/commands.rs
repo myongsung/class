@@ -837,3 +837,23 @@ pub fn export_backup_json(args: ExportBackupArgs) -> Result<String, String> {
 
   Ok(out_path.to_string_lossy().to_string())
 }
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportBackupArgs {
+  #[serde(default, alias = "fileName", alias = "filePath", alias = "path", alias = "inputPath")]
+  pub file_path: Option<String>,
+}
+
+#[tauri::command]
+pub fn import_backup_json(args: ImportBackupArgs) -> Result<String, String> {
+  let file_path = args
+    .file_path
+    .as_ref()
+    .map(|s| s.trim())
+    .filter(|s| !s.is_empty())
+    .ok_or_else(|| "filePath(전체 경로)가 필요해요. 프론트에서 openDialog 결과를 넘겨주세요.".to_string())?;
+
+  std::fs::read_to_string(PathBuf::from(file_path))
+    .map_err(|e| format!("backup read failed: {e}"))
+}

@@ -16628,3 +16628,835 @@ body{
     padding:9px 11px;
   }
 }
+
+/* =====================================================================
+   2026-04-08 strategy chat codex white mode
+   ===================================================================== */
+
+.legalHubShellFlat{
+  background:#fcfcfd;
+  overflow:visible !important;
+}
+
+.strategyChatPage{
+  font-family:"Pretendard Variable","Pretendard","Noto Sans KR","Apple SD Gothic Neo",sans-serif;
+  background:
+    radial-gradient(circle at top center, rgba(148,163,184,0.08), transparent 24%),
+    linear-gradient(180deg, #fbfbfc 0%, #f5f6f8 100%);
+  padding:18px 16px 132px;
+}
+
+.strategyChatOnlyShell{
+  width:min(760px, 100%);
+  gap:18px;
+}
+
+.strategyChatOnlyHeader{
+  padding:0;
+}
+
+.strategyChatOnlyIdentity{
+  gap:0;
+}
+
+.strategyChatOnlyEyebrow{
+  font-size:10px;
+  letter-spacing:0.06em;
+  text-transform:uppercase;
+  color:#9aa4b2;
+}
+
+.strategyChatOnlyTitle{
+  margin-top:3px;
+  font-size:28px;
+  line-height:1.05;
+  letter-spacing:-0.04em;
+  color:#111827;
+}
+
+.strategyChatOnlySubline{
+  margin-top:8px;
+  font-size:12px;
+  line-height:1.55;
+  color:#6b7280;
+}
+
+.strategyChatThreadOnly{
+  min-height:auto;
+  padding:6px 0 12px;
+  border:none;
+  background:transparent;
+  box-shadow:none;
+}
+
+.strategyMsg{
+  display:grid;
+  align-items:start;
+}
+
+.strategyResponseMsg,
+.strategyIntroMsg,
+.strategySummaryMsg,
+.strategyStatusMsg{
+  grid-template-columns:minmax(0, 1fr);
+}
+
+.strategyResponseMsg .strategyAvatar,
+.strategyIntroMsg .strategyAvatar,
+.strategySummaryMsg .strategyAvatar,
+.strategyStatusMsg .strategyAvatar{
+  display:none;
+}
+
+.strategyResponseMsg{
+  margin:0 0 28px;
+}
+
+.strategyResponseMsg .strategyBubble{
+  border:none;
+  background:transparent;
+  box-shadow:none;
+  padding:0;
+  border-radius:0;
+  max-width:100%;
+}
+
+.strategyAssistantCard{
+  max-width:100%;
+}
+
+.strategyBubbleMetaOnly{
+  margin-bottom:8px;
+}
+
+.strategyBubbleMetaOnly span{
+  display:inline-flex;
+  align-items:center;
+  min-height:20px;
+  padding:0 8px;
+  border-radius:999px;
+  background:#f2f4f7;
+  color:#6b7280;
+  font-size:10.5px;
+  font-weight:700;
+}
+
+.strategyResponseMsg .strategyParagraph{
+  font-size:14px;
+  line-height:1.78;
+  color:#18212f;
+}
+
+.strategyIntroMsg,
+.strategySummaryMsg,
+.strategyStatusMsg{
+  margin:0 0 18px;
+}
+
+.strategyIntroMsg .strategyBubble,
+.strategySummaryMsg .strategyBubble,
+.strategyStatusMsg .strategyBubble{
+  max-width:100%;
+  padding:16px 18px;
+  border-radius:20px;
+  background:#ffffff;
+  border:1px solid #e5e7eb;
+  box-shadow:0 10px 30px rgba(15,23,42,0.04);
+}
+
+.strategySummaryMsg .strategyLead,
+.strategyIntroMsg .strategyLead,
+.strategyStatusMsg .strategyLead{
+  font-size:14px;
+  line-height:1.6;
+  color:#111827;
+}
+
+.strategySummaryMsg .strategyParagraph,
+.strategyIntroMsg .strategyParagraph,
+.strategyStatusMsg .strategyParagraph{
+  font-size:13px;
+  line-height:1.7;
+  color:#475569;
+}
+
+.strategyBubbleHead{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+}
+
+.strategyBubbleHead strong{
+  font-size:12px;
+  font-weight:800;
+  color:#111827;
+}
+
+.strategyBubbleHead span{
+  font-size:11px;
+  color:#94a3b8;
+}
+
+.strategyContextRow{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-top:2px;
+}
+
+.strategyContextPill{
+  min-height:24px;
+  padding:0 9px;
+  border-radius:999px;
+  background:#f8fafc;
+  border:1px solid #e5e7eb;
+  color:#64748b;
+  font-size:10.5px;
+  font-weight:800;
+}
+
+.strategyUserMsg{
+  grid-template-columns:minmax(0, 1fr);
+  justify-items:end;
+  margin:2px 0 24px;
+}
+
+.strategyUserMsg .strategyAvatar{
+  display:none;
+}
+
+.strategyUserCard{
+  max-width:min(560px, 84%);
+  padding:12px 14px;
+  border-radius:22px;
+  background:#eef2f7;
+  border:1px solid #e5e7eb;
+  box-shadow:none;
+}
+
+.strategyUserMsg .strategyParagraph{
+  font-size:13px;
+  line-height:1.6;
+  color:#111827;
+}
+
+.strategyProgressConsoleMini{
+  margin-top:2px;
+  padding:8px 10px;
+  border-radius:14px;
+  background:#f8fafc;
+  border:1px solid #e5e7eb;
+}
+
+.strategyProgressConsoleMini .strategyProgressLine{
+  font-size:11px;
+  line-height:1.55;
+  color:#64748b;
+}
+
+.strategyChatOnlyComposer{
+  position:fixed;
+  left:50%;
+  transform:translateX(-50%);
+  bottom:14px;
+  width:min(760px, calc(100vw - 22px));
+  gap:10px;
+  padding:14px 16px 12px;
+  border-radius:26px;
+  background:rgba(255,255,255,0.97);
+  border:1px solid #e5e7eb;
+  box-shadow:0 24px 70px rgba(15,23,42,0.10);
+  backdrop-filter:blur(16px);
+}
+
+.strategyComposerTextareaOnly{
+  min-height:30px;
+  max-height:160px;
+  padding:2px 0 6px;
+  font-size:15px;
+  line-height:1.65;
+  color:#111827;
+}
+
+.strategyComposerTextareaOnly::placeholder{
+  color:#9ca3af;
+}
+
+.strategyChatOnlyComposerBar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+}
+
+.strategyChatOnlyComposerTools{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  min-width:0;
+}
+
+.strategyChatOnlyComposerTools .btn.ghost{
+  min-height:34px;
+  padding:0 12px;
+  border-radius:999px;
+  background:#f8fafc;
+  border:1px solid #e5e7eb;
+  color:#475569;
+  font-size:12px;
+  font-weight:700;
+}
+
+.strategyChatOnlyComposerTools .btn.ghost:hover{
+  background:#f1f5f9;
+}
+
+.strategyChatOnlyComposerHint{
+  font-size:11px;
+  color:#94a3b8;
+  white-space:nowrap;
+}
+
+.strategyChatOnlyComposer .btn.primary{
+  min-width:84px;
+  min-height:36px;
+  padding:0 14px;
+  border-radius:999px;
+  background:#111827;
+  border-color:#111827;
+  color:#ffffff;
+  font-size:12px;
+  font-weight:800;
+}
+
+.strategyChatOnlyComposer .btn.primary:hover{
+  background:#0f172a;
+}
+
+@media (max-width: 860px){
+  .strategyChatPage{
+    padding:12px 10px 118px;
+  }
+
+  .strategyChatOnlyShell{
+    width:100%;
+    gap:14px;
+  }
+
+  .strategyChatOnlyTitle{
+    font-size:24px;
+  }
+
+  .strategyResponseMsg{
+    margin-bottom:24px;
+  }
+
+  .strategyUserCard{
+    max-width:100%;
+  }
+
+  .strategyChatOnlyComposer{
+    width:calc(100vw - 12px);
+    bottom:6px;
+    padding:12px 12px 10px;
+  }
+
+  .strategyChatOnlyComposerBar{
+    flex-direction:column;
+    align-items:stretch;
+    gap:10px;
+  }
+
+  .strategyChatOnlyComposerTools{
+    justify-content:space-between;
+  }
+}
+
+/* =====================================================================
+   2026-04-08 strategy chat codex white cleanup
+   ===================================================================== */
+
+.legalHubShellFlat{
+  background:#ffffff;
+  box-shadow:none;
+}
+
+.strategyChatPage{
+  background:#ffffff;
+  padding:16px 18px 128px;
+}
+
+.strategyChatOnlyShell{
+  width:min(760px, 100%);
+  gap:10px;
+}
+
+.strategyChatOnlyHeader{
+  display:none;
+}
+
+.strategyChatThreadOnly{
+  padding:0;
+}
+
+.strategySummaryMsg,
+.strategyIntroMsg,
+.strategyStatusMsg{
+  margin:0 0 14px;
+}
+
+.strategyIntroMsg .strategyBubble,
+.strategySummaryMsg .strategyBubble,
+.strategyStatusMsg .strategyBubble{
+  padding:0;
+  border:none;
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
+}
+
+.strategyInlineMeta{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-bottom:8px;
+}
+
+.strategyInlineMeta span{
+  font-size:10.5px;
+  line-height:1.5;
+  color:#94a3b8;
+}
+
+.strategySummaryMsg .strategyLead,
+.strategyIntroMsg .strategyLead,
+.strategyStatusMsg .strategyLead{
+  font-size:14px;
+  line-height:1.65;
+  color:#111827;
+}
+
+.strategySummaryMsg .strategyParagraph,
+.strategyIntroMsg .strategyParagraph,
+.strategyStatusMsg .strategyParagraph{
+  font-size:14px;
+  line-height:1.72;
+  color:#374151;
+}
+
+.strategyContextRow{
+  margin-top:6px;
+}
+
+.strategyContextPill{
+  background:#ffffff;
+  border-color:#e5e7eb;
+}
+
+.strategyResponseMsg{
+  margin:0 0 26px;
+}
+
+.strategyBubbleMetaOnly{
+  margin-bottom:10px;
+}
+
+.strategyBubbleMetaOnly span{
+  background:transparent;
+  padding:0;
+  min-height:0;
+  color:#9ca3af;
+  font-size:10.5px;
+  font-weight:600;
+}
+
+.strategyResponseMsg .strategyParagraph{
+  font-size:15px;
+  line-height:1.82;
+  color:#1f2937;
+}
+
+.strategyUserMsg{
+  margin:0 0 22px;
+}
+
+.strategyUserCard{
+  max-width:min(540px, 82%);
+  padding:10px 14px;
+  border-radius:20px;
+  background:#f3f4f6;
+  border:1px solid #eceff3;
+}
+
+.strategyUserMsg .strategyParagraph{
+  font-size:13px;
+  line-height:1.6;
+}
+
+.strategyProgressConsoleMini{
+  background:#fafafa;
+  border-color:#eceff3;
+}
+
+.strategyChatOnlyComposer{
+  bottom:12px;
+  width:min(760px, calc(100vw - 24px));
+  padding:12px 14px 10px;
+  border-radius:24px;
+  background:rgba(255,255,255,0.98);
+  border:1px solid #e5e7eb;
+  box-shadow:0 16px 40px rgba(15,23,42,0.06);
+  backdrop-filter:none;
+}
+
+.strategyComposerTextareaOnly{
+  font-size:15px;
+}
+
+.strategyChatOnlyComposerTools .btn.ghost{
+  background:#ffffff;
+}
+
+@media (max-width: 860px){
+  .strategyChatPage{
+    padding:12px 10px 118px;
+  }
+
+  .strategyChatOnlyComposer{
+    width:calc(100vw - 14px);
+    bottom:6px;
+  }
+
+  .strategyUserCard{
+    max-width:100%;
+  }
+}
+
+/* =====================================================================
+   2026-04-08 strategy chat fixed viewport + compact type
+   ===================================================================== */
+
+.strategyChatPage{
+  height:calc(100dvh - 112px);
+  padding:14px 18px 14px;
+  overflow:hidden;
+}
+
+.strategyChatOnlyShell{
+  height:100%;
+  display:grid;
+  grid-template-rows:minmax(0, 1fr) auto;
+  gap:12px;
+}
+
+.strategyChatThreadOnly{
+  min-height:0;
+  overflow:auto;
+  padding:2px 6px 18px 0;
+  scrollbar-gutter:stable;
+}
+
+.strategySummaryMsg,
+.strategyIntroMsg,
+.strategyStatusMsg{
+  margin:0 0 12px;
+}
+
+.strategyResponseMsg{
+  margin:0 0 20px;
+}
+
+.strategyResponseMsg .strategyParagraph{
+  font-size:14px;
+  line-height:1.74;
+}
+
+.strategySummaryMsg .strategyLead,
+.strategyIntroMsg .strategyLead,
+.strategyStatusMsg .strategyLead{
+  font-size:13.5px;
+  line-height:1.58;
+}
+
+.strategySummaryMsg .strategyParagraph,
+.strategyIntroMsg .strategyParagraph,
+.strategyStatusMsg .strategyParagraph{
+  font-size:13px;
+  line-height:1.66;
+}
+
+.strategyUserMsg{
+  margin:0 0 18px;
+}
+
+.strategyUserCard{
+  padding:9px 13px;
+}
+
+.strategyUserMsg .strategyParagraph{
+  font-size:12.5px;
+  line-height:1.56;
+}
+
+.strategyChatOnlyComposer{
+  position:relative;
+  left:auto;
+  transform:none;
+  bottom:auto;
+  width:100%;
+  padding:10px 12px 9px;
+  border-radius:20px;
+  box-shadow:0 10px 24px rgba(15,23,42,0.05);
+}
+
+.strategyComposerTextareaOnly{
+  min-height:26px;
+  max-height:116px;
+  font-size:14px;
+  line-height:1.58;
+}
+
+.strategyChatOnlyComposerBar{
+  gap:10px;
+}
+
+.strategyChatOnlyComposerTools .btn.ghost{
+  min-height:32px;
+  padding:0 10px;
+  font-size:11.5px;
+}
+
+.strategyChatOnlyComposerHint{
+  font-size:10.5px;
+}
+
+.strategyChatOnlyComposer .btn.primary{
+  min-width:78px;
+  min-height:34px;
+  padding:0 12px;
+  font-size:11.5px;
+}
+
+@media (max-width: 860px){
+  .strategyChatPage{
+    height:calc(100dvh - 94px);
+    padding:10px 10px 10px;
+  }
+
+  .strategyChatOnlyShell{
+    gap:10px;
+  }
+
+  .strategyChatThreadOnly{
+    padding:0 2px 14px 0;
+  }
+
+  .strategyChatOnlyComposer{
+    width:100%;
+    padding:9px 10px 8px;
+  }
+
+  .strategyComposerTextareaOnly{
+    font-size:13.5px;
+  }
+}
+
+/* =====================================================================
+   2026-04-08 strategy chat fixed composer + scrollable thread
+   ===================================================================== */
+
+.strategyChatPage{
+  height:calc(100dvh - 112px);
+  padding:16px 18px 12px;
+  overflow:hidden;
+}
+
+.strategyChatOnlyShell{
+  height:100%;
+  width:min(760px, 100%);
+}
+
+.strategyChatThreadOnly{
+  height:100%;
+  min-height:0;
+  overflow:auto;
+  padding:0 8px 148px 0;
+  scrollbar-gutter:stable;
+}
+
+.strategyResponseMsg{
+  margin:0 0 18px;
+}
+
+.strategySummaryMsg,
+.strategyIntroMsg,
+.strategyStatusMsg{
+  margin:0 0 12px;
+}
+
+.strategyResponseMsg .strategyParagraph{
+  font-size:13.5px;
+  line-height:1.72;
+}
+
+.strategySummaryMsg .strategyParagraph,
+.strategyIntroMsg .strategyParagraph,
+.strategyStatusMsg .strategyParagraph{
+  font-size:12.5px;
+  line-height:1.64;
+}
+
+.strategySummaryMsg .strategyLead,
+.strategyIntroMsg .strategyLead,
+.strategyStatusMsg .strategyLead{
+  font-size:13px;
+  line-height:1.56;
+}
+
+.strategyUserCard{
+  padding:8px 12px;
+}
+
+.strategyUserMsg .strategyParagraph{
+  font-size:12px;
+  line-height:1.52;
+}
+
+.strategyChatOnlyComposer{
+  position:fixed;
+  left:50%;
+  transform:translateX(-50%);
+  bottom:12px;
+  width:min(760px, calc(100vw - 24px));
+  z-index:90;
+  padding:10px 12px 9px;
+  border-radius:22px;
+}
+
+.strategyComposerTextareaOnly{
+  min-height:24px;
+  max-height:100px;
+  font-size:13.5px;
+  line-height:1.52;
+}
+
+.strategyChatOnlyComposerTools .btn.ghost{
+  min-height:30px;
+  font-size:11px;
+}
+
+.strategyChatOnlyComposer .btn.primary{
+  min-height:32px;
+  min-width:74px;
+  font-size:11px;
+}
+
+.strategyChatOnlyComposerHint{
+  font-size:10px;
+}
+
+@media (max-width: 860px){
+  .strategyChatPage{
+    height:calc(100dvh - 94px);
+    padding:10px 10px 8px;
+  }
+
+  .strategyChatThreadOnly{
+    padding:0 2px 136px 0;
+  }
+
+  .strategyChatOnlyComposer{
+    width:calc(100vw - 14px);
+    bottom:6px;
+    padding:9px 10px 8px;
+  }
+}
+
+/* =====================================================================
+   2026-04-08 strategy chat final scroll lock
+   ===================================================================== */
+
+.strategyChatPage{
+  height:calc(100dvh - 112px) !important;
+  min-height:0 !important;
+  padding:16px 18px 12px !important;
+  overflow:hidden !important;
+}
+
+.strategyChatOnlyShell{
+  width:min(760px, 100%) !important;
+  height:100% !important;
+  min-height:0 !important;
+  display:flex !important;
+  flex-direction:column !important;
+  gap:0 !important;
+}
+
+.strategyChatThreadOnly{
+  flex:1 1 auto !important;
+  min-height:0 !important;
+  max-height:none !important;
+  overflow-y:auto !important;
+  overflow-x:hidden !important;
+  padding:0 8px 184px 0 !important;
+  scrollbar-gutter:stable !important;
+  -webkit-overflow-scrolling:touch;
+}
+
+.strategyChatOnlyComposer{
+  position:fixed !important;
+  left:50% !important;
+  transform:translateX(-50%) !important;
+  bottom:12px !important;
+  width:min(760px, calc(100vw - 24px)) !important;
+  z-index:120 !important;
+}
+
+@media (max-width: 860px){
+  .strategyChatPage{
+    height:calc(100dvh - 94px) !important;
+    padding:10px 10px 8px !important;
+  }
+
+  .strategyChatThreadOnly{
+    padding:0 2px 170px 0 !important;
+  }
+
+  .strategyChatOnlyComposer{
+    width:calc(100vw - 14px) !important;
+    bottom:6px !important;
+  }
+}
+
+/* =====================================================================
+   2026-04-08 strategy chat user bubble + input crop fix
+   ===================================================================== */
+
+.strategyUserMsg{
+  display:block !important;
+  text-align:right !important;
+  width:100% !important;
+}
+
+.strategyUserCard{
+  display:inline-block !important;
+  vertical-align:top;
+  margin-left:auto !important;
+  margin-right:0 !important;
+  background:#eceff3 !important;
+  border:1px solid #e5e7eb !important;
+  width:auto !important;
+  max-width:min(540px, 82%) !important;
+  text-align:left !important;
+}
+
+.strategyChatOnlyComposer{
+  padding:11px 12px 10px !important;
+}
+
+.strategyComposerTextareaOnly{
+  min-height:28px !important;
+  padding:5px 0 7px !important;
+  line-height:1.56 !important;
+}

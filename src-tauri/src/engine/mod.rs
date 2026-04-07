@@ -836,6 +836,11 @@ const STRATEGY_PROGRESS_EVENT: &str = "strategy-chat-progress";
 const STRATEGY_CHAT_TIMEOUT_SECS: u64 = 90;
 static STRATEGY_MODEL_DOWNLOAD_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
+#[cfg(target_os = "windows")]
+const STRATEGY_SIDECAR_GENERIC_FILENAME: &str = "llama-sidecar.exe";
+#[cfg(not(target_os = "windows"))]
+const STRATEGY_SIDECAR_GENERIC_FILENAME: &str = STRATEGY_SIDECAR_STEM;
+
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
 const STRATEGY_SIDECAR_FILENAME: &str = "llama-sidecar-aarch64-apple-darwin";
 #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
@@ -927,6 +932,25 @@ fn push_unique_path(out: &mut Vec<PathBuf>, path: PathBuf) {
   }
 }
 
+fn strategy_runner_filenames() -> Vec<&'static str> {
+  let mut out = vec![STRATEGY_SIDECAR_FILENAME];
+  if STRATEGY_SIDECAR_GENERIC_FILENAME != STRATEGY_SIDECAR_FILENAME {
+    out.push(STRATEGY_SIDECAR_GENERIC_FILENAME);
+  }
+  out
+}
+
+fn strategy_runner_hint_text() -> String {
+  if STRATEGY_SIDECAR_GENERIC_FILENAME == STRATEGY_SIDECAR_FILENAME {
+    return format!("{} 파일", STRATEGY_SIDECAR_FILENAME);
+  }
+  format!(
+    "{} 또는 {} 파일",
+    STRATEGY_SIDECAR_FILENAME,
+    STRATEGY_SIDECAR_GENERIC_FILENAME
+  )
+}
+
 fn strategy_model_download_lock() -> &'static Mutex<()> {
   STRATEGY_MODEL_DOWNLOAD_LOCK.get_or_init(|| Mutex::new(()))
 }
@@ -958,24 +982,30 @@ fn strategy_runner_candidates(app: Option<&AppHandle>) -> Vec<PathBuf> {
   }
 
   if let Some(app) = app {
-    if let Ok(path) = app.path().resolve(format!("sidecar/{}", STRATEGY_SIDECAR_FILENAME), BaseDirectory::Resource) {
-      push_unique_path(&mut out, path);
-    }
-    if let Ok(path) = app.path().resolve(STRATEGY_SIDECAR_FILENAME, BaseDirectory::Resource) {
-      push_unique_path(&mut out, path);
+    for file_name in strategy_runner_filenames() {
+      if let Ok(path) = app.path().resolve(format!("sidecar/{}", file_name), BaseDirectory::Resource) {
+        push_unique_path(&mut out, path);
+      }
+      if let Ok(path) = app.path().resolve(file_name, BaseDirectory::Resource) {
+        push_unique_path(&mut out, path);
+      }
     }
   }
 
   let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-  push_unique_path(&mut out, manifest.join("binaries").join(STRATEGY_SIDECAR_FILENAME));
-  push_unique_path(&mut out, manifest.join("resources").join("sidecar").join(STRATEGY_SIDECAR_FILENAME));
-  push_unique_path(&mut out, manifest.join(STRATEGY_SIDECAR_FILENAME));
+  for file_name in strategy_runner_filenames() {
+    push_unique_path(&mut out, manifest.join("binaries").join(file_name));
+    push_unique_path(&mut out, manifest.join("resources").join("sidecar").join(file_name));
+    push_unique_path(&mut out, manifest.join(file_name));
+  }
 
   if let Ok(exe) = std::env::current_exe() {
     if let Some(dir) = exe.parent() {
-      push_unique_path(&mut out, dir.join(STRATEGY_SIDECAR_FILENAME));
-      push_unique_path(&mut out, dir.join("sidecar").join(STRATEGY_SIDECAR_FILENAME));
-      push_unique_path(&mut out, dir.join("resources").join("sidecar").join(STRATEGY_SIDECAR_FILENAME));
+      for file_name in strategy_runner_filenames() {
+        push_unique_path(&mut out, dir.join(file_name));
+        push_unique_path(&mut out, dir.join("sidecar").join(file_name));
+        push_unique_path(&mut out, dir.join("resources").join("sidecar").join(file_name));
+      }
     }
   }
 
@@ -990,8 +1020,8 @@ fn resolve_strategy_runner_path(app: Option<&AppHandle>) -> Result<PathBuf, Stri
     }
   }
   Err(format!(
-    "전략자문 추론기 파일을 찾지 못했어요. {} 파일을 앱 번들 리소스 sidecar 경로나 src-tauri/binaries 폴더에 넣어주세요.",
-    STRATEGY_SIDECAR_FILENAME
+    "전략자문 추론기 파일을 찾지 못했어요. {}을(를) roosycozy 실행 파일과 같은 폴더, 앱 번들 리소스 sidecar 경로, 또는 src-tauri/binaries 폴더에 넣어주세요.",
+    strategy_runner_hint_text()
   ))
 }
 

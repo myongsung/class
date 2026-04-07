@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { save as saveDialog } from '@tauri-apps/plugin-dialog';
+import { open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog';
 import { uid, nowISO, toLocalInputValue, fromLocalInputValue, safeParseJSON, defaultState, normalizeState, loadState, saveState, wipeAll, STATUSES, ensureRecordV8, sealNewRecord, amendSignedRecord, verifyRecordIntegrity, buildSignedBackupEnvelope, verifyBackupEnvelope, reverifyStateRecords, refreshDeviceSignerInfo } from '../utils';
 import type { ActorRef, PlaceType, StoreType, Sensitivity, StepItem, CaseItem, RecordItem } from '../engine';
 import { OTHER, casesContainingRecord, addActorToList, buildRecordFromDraft, createCaseWithAdvisors, regenerateCaseAdvisors, buildCaseTimeline, getCaseUpdateCandidates, addRecordsToCase, recordsForCase, classifyRecordsRisk } from '../engine';
@@ -1130,6 +1130,10 @@ let _bound = false;
 // backup/restore (file)
 let _restoreFileText: string | null = null;
 let _restoreFileName: string | null = null;
+const resetRestoreFileSelection = () => {
+  _restoreFileText = null;
+  _restoreFileName = null;
+};
 function bindEvents() {
   if (_bound) return; _bound = true;
 
@@ -1601,6 +1605,7 @@ function bindEvents() {
     },
 
     'open-restore': () => {
+      resetRestoreFileSelection();
       ui.settingsOpen = false; closeDlg('settingsModal');
       openDlg('restoreModal');
       const info = document.getElementById('restoreFileName');
@@ -1608,16 +1613,39 @@ function bindEvents() {
       log('restore modal open');
     },
 
-    'pick-restore-file': () => {
-      const input = document.getElementById('restoreFile') as HTMLInputElement | null;
-      input?.click();
+    'pick-restore-file': async () => {
+      try {
+        const picked = await openDialog({
+          directory: false,
+          multiple: false,
+          filters: [{ name: 'JSON', extensions: ['json'] }],
+        });
+        if (!picked || Array.isArray(picked)) return;
+
+        const restoreText = await invoke<string>('import_backup_json', { args: { filePath: picked } });
+        _restoreFileText = String(restoreText || '');
+        _restoreFileName = String(picked).split(/[\\/]/).pop() || 'backup.json';
+        const info = document.getElementById('restoreFileName');
+        if (info) info.textContent = `선택됨: ${_restoreFileName}`;
+        toast('백업 파일 선택됨');
+        log('restore file loaded (dialog)', _restoreFileName || '');
+      } catch (e) {
+        toast('백업 파일을 불러오지 못했어요');
+        log('restore file pick failed', e);
+      }
     },
 
-    'close-restore': () => closeDlg('restoreModal'),
+    'close-restore': () => {
+      resetRestoreFileSelection();
+      const input = document.getElementById('restoreFile') as HTMLInputElement | null;
+      if (input) input.value = '';
+      closeDlg('restoreModal');
+    },
 
     'do-restore': async () => {
       const parsed = safeParseJSON(_restoreFileText || '');
       if (!parsed || typeof parsed !== 'object') return toast('백업 파일을 먼저 선택하세요');
+      if (!(await openConfirm('선택한 백업 파일로 현재 데이터를 덮어쓸까요?'))) return;
 
       const restore = await verifyBackupEnvelope(parsed as any);
       if (!restore.ok && !restore.legacy) {
@@ -1637,6 +1665,7 @@ function bindEvents() {
       syncDraftDefaults();
       render();
       closeDlg('restoreModal');
+      resetRestoreFileSelection();
       const trustSummary = next.records.reduce((acc, r) => { const v = verifyRecordIntegrity(r as any) as any; if (!v.valid) acc.warn += 1; else if (v.trusted) acc.verified += 1; else if (v.verificationStatus === 'legacy') acc.legacy += 1; else acc.foreign += 1; return acc; }, { verified: 0, legacy: 0, foreign: 0, warn: 0 });
       toast(`복구 완료 · ${restore.legacy ? '레거시 백업' : '서명확인'} · 검증 ${trustSummary.verified} · 레거시 ${trustSummary.legacy} · 외부 ${trustSummary.foreign} · 경고 ${trustSummary.warn}`);
       log('restore ok', restore.code, trustSummary);

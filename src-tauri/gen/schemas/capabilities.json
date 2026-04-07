@@ -1,1 +1,1 @@
-{"main":{"identifier":"main","description":"Default capability for roosycozy","local":true,"windows":["main"],"permissions":["core:default","dialog:allow-save"]}}
+{"main":{"identifier":"main","description":"Default capability for roosycozy","local":true,"windows":["main"],"permissions":["core:default","dialog:allow-save","dialog:allow-open"]}}

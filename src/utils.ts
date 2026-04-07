@@ -936,13 +936,15 @@ export const verifyBackupEnvelope = async (raw: any): Promise<{ ok: boolean; sta
 
   if (!signature || !signerPublicKey) {
     return {
-      ok: false,
+      ok: true,
       state,
-      signed: true,
-      legacy: false,
-      code: 'backup-signature-missing',
-      message: '백업 서명 정보가 비어 있어요.',
-      signerFingerprint,
+      signed: false,
+      legacy: true,
+      code: 'legacy-backup-missing-signature',
+      message: stateHash && stateHash !== expectedHash
+        ? '서명 정보가 없는 레거시 백업이에요. 선택한 파일 기준으로 복구합니다.'
+        : '서명 정보가 없는 레거시 백업으로 복구합니다.',
+      signerFingerprint: '',
     };
   }
   if (stateHash !== expectedHash) {
