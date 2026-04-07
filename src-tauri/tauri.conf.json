@@ -1,0 +1,37 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/schema.json",
+  "productName": "roosycozy",
+  "version": "1.0.47",
+  "identifier": "co.roosycozy.app",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "devUrl": "http://localhost:1420",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "roosycozy",
+        "width": 920,
+        "height": 680,
+        "minWidth": 860,
+        "minHeight": 620,
+        "resizable": true,
+        "fullscreen": false,
+        "center": true
+      }
+    ]
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "externalBin": [
+      "binaries/llama-sidecar"
+    ],
+    "resources": [
+      "resources/models/HyperCLOVAX-SEED-Text-Instruct-0.5B-q4_0.gguf"
+    ]
+  }
+}
