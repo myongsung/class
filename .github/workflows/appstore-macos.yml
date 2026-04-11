@@ -14,10 +14,10 @@ jobs:
       KEYCHAIN_PASSWORD: "${{ secrets.APPLE_KEYCHAIN_PASSWORD }}"
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: setup node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 20
           cache: npm
@@ -31,7 +31,7 @@ jobs:
       - name: ensure bundled model
         env:
           ROOSYCOZY_MODEL_PATH: "${{ vars.ROOSYCOZY_MODEL_PATH }}"
-          ROOSYCOZY_MODEL_URL: "${{ secrets.ROOSYCOZY_MODEL_URL || vars.ROOSYCOZY_MODEL_URL }}"
+          ROOSYCOZY_MODEL_URL: "${{ secrets.ROOSYCOZY_MODEL_URL || vars.ROOSYCOZY_MODEL_URL || 'https://github.com/myongsung/roosycozy-models/releases/download/model_v1/HyperCLOVAX-SEED-Text-Instruct-0.5B-q4_0.gguf' }}"
           ROOSYCOZY_MODEL_SHA256: "${{ secrets.ROOSYCOZY_MODEL_SHA256 || vars.ROOSYCOZY_MODEL_SHA256 }}"
         run: npm run ci:ensure-model
 
@@ -81,7 +81,7 @@ jobs:
         run: npm run appstore:pkg
 
       - name: upload App Store package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: roosycozy-mac-app-store-pkg
           path: src-tauri/target/release/bundle/appstore/*.pkg

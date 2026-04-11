@@ -80,6 +80,12 @@ sidecar/llama-sidecar-x86_64-pc-windows-msvc.exe
   - 선택사항
   - 내려받은 모델 무결성 검사용
 
+현재 워크플로에는 아래 public release asset URL이 기본값으로 들어가 있어, 별도 설정이 없어도 우선 이 주소에서 모델을 받습니다.
+
+```text
+https://github.com/myongsung/roosycozy-models/releases/download/model_v1/HyperCLOVAX-SEED-Text-Instruct-0.5B-q4_0.gguf
+```
+
 ### Mac App Store 전용 secrets
 
 - `APPLE_PROVISION_PROFILE_BASE64`
