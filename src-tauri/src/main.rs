@@ -3,6 +3,9 @@
 mod engine;
 mod commands;
 
+#[cfg(target_os = "windows")]
+use tauri::Manager;
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
