@@ -11,7 +11,7 @@
 ## 실행
 
 ```bash
-npm install
+npm install --legacy-peer-deps
 
 # 브라우저에서만 실행
 npm run dev
