@@ -92,13 +92,59 @@ export type RecordIntegrityV8 = {
 
 export type RecordV8 = RecordItem & { integrity?: RecordIntegrityV8 };
 
+export type StrategyThreadMessage = {
+  id: string;
+  role: 'assistant' | 'user' | 'system';
+  content: string;
+  ts: string;
+  meta?: string;
+};
+
+export type StrategyThreadEvidencePacket = {
+  mode?: string;
+  caseTitle?: string;
+  focusSummary?: string;
+  overview?: string;
+  actorSummary?: string[];
+  timelineSummary?: string[];
+  riskSummary?: string[];
+  gaps?: string[];
+  evidenceRecords?: Array<{
+    refId?: string;
+    recordId?: string;
+    ts?: string;
+    actor?: string;
+    place?: string;
+    store?: string;
+    summary?: string;
+    score?: number;
+    riskLabel?: string;
+    reasons?: string[];
+  }>;
+};
+
+export type StrategyThreadPackage = {
+  id: string;
+  title: string;
+  summary: string;
+  createdAt: string;
+  updatedAt: string;
+  caseId: string | null;
+  caseTitle: string;
+  selectedRecordIds: string[];
+  retrievalQuery: string;
+  messages: StrategyThreadMessage[];
+  evidencePacket: StrategyThreadEvidencePacket | null;
+};
+
 export type AppState = {
-  v: 10;
+  v: 11;
   tab: 'home' | 'records' | 'cases' | 'legal';
   selectedCaseId: string | null;
   records: RecordV8[];
   cases: Record<string, CaseItem>;
   classRoster: string[];
+  strategyThreadPackages: StrategyThreadPackage[];
 };
 
 export type DeviceSignerInfo = {
@@ -972,12 +1018,13 @@ export const verifyBackupEnvelope = async (raw: any): Promise<{ ok: boolean; sta
 };
 
 export const defaultState = (): AppState => ({
-  v: 10,
+  v: 11,
   tab: 'records',
   selectedCaseId: null,
   records: [],
   cases: {},
   classRoster: Array.from({ length: 40 }, () => ''),
+  strategyThreadPackages: [],
 });
 
 
@@ -1047,6 +1094,67 @@ const normCase = (raw: any, key: string): CaseItem => {
   return { id: str(c.id, key), title: (trim(c.title) || '케이스') as any, actors: arr(c.actors).map(actorRel).filter(Boolean) as ActorRef[], onlyMainActor: !!c.onlyMainActor, sensFilter: (c.sensFilter ?? 'any') as CaseSensFilter, status: st as CaseStatus, createdAt: str(c.createdAt, nowISO()), steps: arr(c.steps).map(normStep) as any, advisors: arr(c.advisors).map(normAdvisor) as any, query: str(c.query, ''), timeFrom: str(c.timeFrom, ''), timeTo: str(c.timeTo, ''), maxResults: typeof c.maxResults === 'number' ? c.maxResults : undefined, recordIds: Array.isArray(c.recordIds) ? c.recordIds.map((x: any) => str(x)) : undefined, scoreByRecordId: c.scoreByRecordId && typeof c.scoreByRecordId === 'object' ? c.scoreByRecordId : undefined, mode: m as any } as CaseItem;
 };
 
+const normStrategyThreadMessage = (raw: any): StrategyThreadMessage => {
+  const o = obj(raw) ?? {};
+  const role = o.role === 'user' || o.role === 'system' ? o.role : 'assistant';
+  const meta = trim(o.meta);
+  return {
+    id: str(o.id, uid('stratmsg')),
+    role,
+    content: str(o.content, ''),
+    ts: str(o.ts, nowISO()),
+    ...(meta ? { meta } : {}),
+  };
+};
+
+const normStrategyThreadEvidencePacket = (raw: any): StrategyThreadEvidencePacket | null => {
+  const o = obj(raw);
+  if (!o) return null;
+  return {
+    mode: trim(o.mode),
+    caseTitle: trim(o.caseTitle),
+    focusSummary: trim(o.focusSummary),
+    overview: trim(o.overview),
+    actorSummary: arr(o.actorSummary).map((item) => trim(item)).filter(Boolean).slice(0, 8),
+    timelineSummary: arr(o.timelineSummary).map((item) => trim(item)).filter(Boolean).slice(0, 8),
+    riskSummary: arr(o.riskSummary).map((item) => trim(item)).filter(Boolean).slice(0, 8),
+    gaps: arr(o.gaps).map((item) => trim(item)).filter(Boolean).slice(0, 8),
+    evidenceRecords: arr(o.evidenceRecords).map((item) => {
+      const entry = obj(item) ?? {};
+      const score = Number(entry.score);
+      return {
+        refId: trim(entry.refId),
+        recordId: trim(entry.recordId),
+        ts: trim(entry.ts),
+        actor: trim(entry.actor),
+        place: trim(entry.place),
+        store: trim(entry.store),
+        summary: trim(entry.summary),
+        ...(Number.isFinite(score) ? { score } : {}),
+        riskLabel: trim(entry.riskLabel),
+        reasons: arr(entry.reasons).map((reason) => trim(reason)).filter(Boolean).slice(0, 8),
+      };
+    }).slice(0, 8),
+  };
+};
+
+const normStrategyThreadPackage = (raw: any): StrategyThreadPackage => {
+  const o = obj(raw) ?? {};
+  return {
+    id: str(o.id, uid('threadpkg')),
+    title: trim(o.title) || '사건분석 스레드',
+    summary: trim(o.summary),
+    createdAt: str(o.createdAt, nowISO()),
+    updatedAt: str(o.updatedAt, nowISO()),
+    caseId: trim(o.caseId) || null,
+    caseTitle: trim(o.caseTitle),
+    selectedRecordIds: arr(o.selectedRecordIds).map((item) => trim(item)).filter(Boolean).slice(0, 24),
+    retrievalQuery: trim(o.retrievalQuery),
+    messages: arr(o.messages).map(normStrategyThreadMessage).filter((item) => trim(item.content)).slice(0, 80),
+    evidencePacket: normStrategyThreadEvidencePacket(o.evidencePacket),
+  };
+};
+
 export const normalizeState = (anyObj: any): AppState => {
   const base = defaultState();
   const o = obj(anyObj?.state && typeof anyObj.state === 'object' ? anyObj.state : anyObj);
@@ -1060,6 +1168,9 @@ export const normalizeState = (anyObj: any): AppState => {
   base.cases = out;
   const rosterRaw = arr(o.classRoster).slice(0, 40).map((x: any) => trim(x));
   base.classRoster = Array.from({ length: 40 }, (_, i) => rosterRaw[i] || '');
+  base.strategyThreadPackages = arr(o.strategyThreadPackages).map(normStrategyThreadPackage)
+    .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')))
+    .slice(0, 24);
   return base;
 };
 

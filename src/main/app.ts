@@ -1,7 +1,8 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog';
-import { uid, nowISO, toLocalInputValue, fromLocalInputValue, safeParseJSON, defaultState, normalizeState, loadState, saveState, wipeAll, STATUSES, ensureRecordV8, sealNewRecord, amendSignedRecord, verifyRecordIntegrity, buildSignedBackupEnvelope, verifyBackupEnvelope, reverifyStateRecords, refreshDeviceSignerInfo } from '../utils';
+import { uid, nowISO, toLocalInputValue, fromLocalInputValue, safeParseJSON, defaultState, normalizeState, loadState, saveState, wipeAll, STATUSES, ensureRecordV8, sealNewRecord, amendSignedRecord, verifyRecordIntegrity, buildSignedBackupEnvelope, verifyBackupEnvelope, reverifyStateRecords, refreshDeviceSignerInfo, trunc } from '../utils';
 import type { ActorRef, PlaceType, StoreType, Sensitivity, StepItem, CaseItem, RecordItem } from '../engine';
 import { OTHER, casesContainingRecord, addActorToList, buildRecordFromDraft, createCaseWithAdvisors, regenerateCaseAdvisors, buildCaseTimeline, getCaseUpdateCandidates, addRecordsToCase, recordsForCase, classifyRecordsRisk } from '../engine';
 import { S, setState, ui, toast, runToastAction, log, openConfirm, closeConfirm, openRecordModal, closeRecordModal,  openCaseCreateModal, closeCaseCreateModal, openTimelineModal, closeTimelineModal, openPaperModal, closePaperModal, openPaperPickModal, closePaperPickModal, openCaseUpdateModal, closeCaseUpdateModal, draftRecord, draftRecordEdit, draftCase, draftStep, actorTypeTextFromInternal, actorTypeInternalFromText, getSelectedCase, logs, actorShort, LVS, PLACE_TYPES, STORE_TYPES, UI_OTHER_ACTOR_LABEL, UI_CLASS_ACTOR_LABEL, normalizeActorTypeTextUI, loadRecordEditDraft, resetRecordEditDraft, CLASS_ROSTER_SIZE, getClassRoster, hasScreenPin, readScreenPin, saveScreenPin, clearScreenPin, normalizeScreenPin, isValidScreenPin } from './state';
@@ -18,7 +19,16 @@ const setText = (id: string, text: string) => { const el = document.getElementBy
 const SIGNATURE_MODAL_ID = 'signatureModal';
 const SIGN_SUCCESS_MODAL_ID = 'signSuccessModal';
 const SCREEN_PIN_MODAL_ID = 'screenPinModal';
-const TEACHER_ACCOUNT_MODAL_ID = 'teacherAccountModal';
+let _boundWindowDrag = false;
+const hasTauriWindow = () => typeof window !== 'undefined' && !!(window as any).__TAURI_INTERNALS__;
+const currentDesktopWindow = () => {
+  if (!hasTauriWindow()) return null;
+  try {
+    return getCurrentWindow();
+  } catch {
+    return null;
+  }
+};
 
 const resetScreenPinModalDraft = () => {
   ui.pinEntryDraft = '';
@@ -53,6 +63,26 @@ const openSignSuccessModal = (message: string, sub: string) => {
 // render()가 전체 DOM을 갈아엎기 때문에(dialog 포함) 리렌더링 중 close 이벤트로 상태가 날아가는 걸 막고,
 // 렌더 후 열려있어야 하는 dialog는 다시 열어준다.
 let _isRerendering = false;
+const bindWindowDragRegionFallback = () => {
+  if (_boundWindowDrag || typeof document === 'undefined') return;
+  _boundWindowDrag = true;
+  document.addEventListener('mousedown', async (e) => {
+    if (e.button !== 0) return;
+    const target = e.target as HTMLElement | null;
+    if (!target) return;
+    const topbar = target.closest<HTMLElement>('.topbar');
+    if (!topbar) return;
+    if (target.closest('button, a, input, textarea, select, label, dialog, [role="button"]')) return;
+    if (target.closest('.windowControls')) return;
+    const win = currentDesktopWindow();
+    if (!win) return;
+    try {
+      await win.startDragging();
+    } catch (err) {
+      log('window drag start failed', err);
+    }
+  });
+};
 const syncDialogs = () => {
   if (ui.viewRecordId) openRecordModal();
   if (ui.caseCreateOpen) openCaseCreateModal();
@@ -64,7 +94,6 @@ const syncDialogs = () => {
   if (ui.settingsOpen) openDlg('settingsModal');
   if (ui.updatesNoteOpen) openDlg('updateNotesModal');
   if (ui.classRosterOpen) openDlg('classRosterModal');
-  if ((ui as any).teacherAccountOpen) openDlg(TEACHER_ACCOUNT_MODAL_ID);
   if ((ui as any).simulationPickerOpen) openDlg('simulationPickerModal');
   if (ui.signatureModalMode) openDlg(SIGNATURE_MODAL_ID);
   if (ui.pinModalOpen) openDlg(SCREEN_PIN_MODAL_ID);
@@ -117,13 +146,6 @@ type SimulationResult = {
   highlights: string[];
   caution: string[];
   nextSteps: string[];
-};
-
-type StrategyModelReadyResult = {
-  modelPath: string;
-  downloaded: boolean;
-  fileName: string;
-  sourceUrl: string;
 };
 
 const SIMULATION_DEFAULTS: SimulationDraft = {
@@ -317,36 +339,36 @@ const computeSimulationResult = (): SimulationResult | null => {
         : '관계회복 여지 확보형';
 
   const recommendedAction = escalationRisk >= 72
-    ? '감정적 응답을 멈추고 공식 채널·관리자 동시 공유로 전환하세요.'
+    ? '감정적 응답을 멈추고 공식 채널과 제출용 기록 정리로 전환하세요.'
     : counterLogic >= 70
-      ? '핵심 사실표 + 증거 인덱스를 먼저 보내고, 추가 연락은 한 창구로 모으세요.'
-      : '상담·조치 로그를 더 모아 반박축을 보강한 뒤 대응 문구를 정리하세요.';
+      ? '핵심 사실표와 기록 인덱스를 먼저 보내고, 추가 연락은 한 창구로 모으세요.'
+      : '기록 로그를 더 모아 설명 축을 보강한 뒤 대응 문구를 정리하세요.';
 
   const highlights = [
-    documentCount >= 2 ? '공식 문서 축이 있어 공문·내용증명 전환 흐름이 자연스럽습니다.' : '',
+    documentCount >= 2 ? '문서 축이 있어 공유/제출 문서 전환 흐름이 자연스럽습니다.' : '',
     trustedCount >= 2 ? '봉인/무결성 흔적이 남은 기록이 포함되어 신뢰 확보에 유리합니다.' : '',
-    uniqueStores >= 3 ? '녹취·문서·상담기록처럼 채널이 분산되어 있어 일관성 입증에 좋습니다.' : '',
-    actionCount >= 2 ? '교사의 선조치 흔적이 보여 예방 노력과 절차 준수를 설명하기 쉽습니다.' : '',
+    uniqueStores >= 3 ? '녹취·문서·대화기록처럼 채널이 분산되어 있어 흐름 설명에 좋습니다.' : '',
+    actionCount >= 2 ? '선행 대응 흔적이 남아 있어 경과 설명과 타임라인 정리에 유리합니다.' : '',
   ].filter(Boolean).slice(0, 3);
 
   const caution = [
-    selectedRecords.length < 3 ? '선택한 증거 수가 적어 반박 논리를 짧게 끊길 수 있습니다.' : '',
-    escalationRisk >= 68 ? '민원 확산 가능성이 높아 개별 DM·전화 대응을 줄이는 편이 안전합니다.' : '',
-    draft.adminSupport < 45 ? '관리자 공유와 내부 보고선 정리가 약해 단독 대응처럼 보일 수 있습니다.' : '',
-    draft.publicSpread >= 45 ? '커뮤니티/단톡 확산 가정이 높아 표현 수위를 더 낮출 필요가 있습니다.' : '',
+    selectedRecords.length < 3 ? '선택한 기록 수가 적어 설명 논리가 짧게 끊길 수 있습니다.' : '',
+    escalationRisk >= 68 ? '확산 가능성이 높아 개별 DM·전화 대응을 줄이는 편이 안전합니다.' : '',
+    draft.adminSupport < 45 ? '공유 대상과 보고선 정리가 약해 단독 대응처럼 보일 수 있습니다.' : '',
+    draft.publicSpread >= 45 ? '커뮤니티/단체방 확산 가정이 높아 표현 수위를 더 낮출 필요가 있습니다.' : '',
   ].filter(Boolean).slice(0, 3);
 
   const nextSteps = [
-    counterLogic >= 68 ? '1차 회신은 사실표 3줄 + 증거번호 묶음으로 짧게 보내기' : '누락된 사실관계와 날짜축을 먼저 보강하기',
-    escalationRisk >= 68 ? '관리자·동학년과 동일 문구를 공유해 창구를 1개로 묶기' : '상담·안내·연락 로그를 한 장의 타임라인으로 정리하기',
-    responseIndex >= 74 ? '내용증명/공문 초안으로 전환할 증거 묶음을 따로 저장하기' : '반박력이 약한 부분은 추가 증거 확보 전까지 답변 범위를 제한하기',
+    counterLogic >= 68 ? '1차 회신은 사실표 3줄과 기록 번호 묶음으로 짧게 보내기' : '누락된 사실관계와 날짜축을 먼저 보강하기',
+    escalationRisk >= 68 ? '관련자와 동일 문구를 공유해 응답 창구를 1개로 묶기' : '연락·안내·메모 로그를 한 장의 타임라인으로 정리하기',
+    responseIndex >= 74 ? '공유/제출 문서로 전환할 기록 묶음을 따로 저장하기' : '근거가 약한 부분은 추가 기록 확보 전까지 답변 범위를 제한하기',
   ];
 
   const bundleLabel = draft.scenarioPreset === 'shield'
-    ? '방어막형 묶음'
+    ? '완충형 묶음'
     : draft.scenarioPreset === 'assertive'
-      ? '강경대응형 묶음'
-      : '균형대응형 묶음';
+      ? '주도형 묶음'
+      : '균형형 묶음';
 
   return {
     calculatedAt: nowISO(),
@@ -382,6 +404,43 @@ type StrategyChatInvokeResult = {
   runner: string;
   promptChars: number;
   recordsUsed: number;
+  retrievalQuery?: string;
+  evidencePacket?: {
+    mode?: string;
+    caseTitle?: string;
+    focusSummary?: string;
+    overview?: string;
+    actorSummary?: string[];
+    timelineSummary?: string[];
+    riskSummary?: string[];
+    gaps?: string[];
+    evidenceRecords?: Array<{
+      refId?: string;
+      recordId?: string;
+      ts?: string;
+      actor?: string;
+      place?: string;
+      store?: string;
+      summary?: string;
+      score?: number;
+      riskLabel?: string;
+      reasons?: string[];
+    }>;
+  };
+};
+
+type StrategyThreadPackageState = {
+  id: string;
+  title: string;
+  summary: string;
+  createdAt: string;
+  updatedAt: string;
+  caseId: string | null;
+  caseTitle: string;
+  selectedRecordIds: string[];
+  retrievalQuery: string;
+  messages: StrategyChatMessage[];
+  evidencePacket: StrategyChatInvokeResult['evidencePacket'] | null;
 };
 
 type StrategyChatProgressPayload = {
@@ -389,8 +448,9 @@ type StrategyChatProgressPayload = {
   message?: string;
 };
 
-const STRATEGY_DEFAULT_PROMPT = '이 사건, 지금 어떤 말부터 꺼내고 무엇을 먼저 남겨야 할까요?';
+const STRATEGY_DEFAULT_PROMPT = '이 상황에서 지금 어떤 말부터 꺼내고 무엇을 먼저 남겨야 할까요?';
 const STRATEGY_PROGRESS_MAX = 8;
+const STRATEGY_THREAD_PACKAGE_LIMIT = 24;
 let _strategyProgressListenerBound = false;
 
 const getStrategyChatMessages = (): StrategyChatMessage[] => {
@@ -403,6 +463,160 @@ const getStrategyProgressLines = (): string[] => {
   const raw = Array.isArray((ui as any).strategyChatProgressLines) ? (ui as any).strategyChatProgressLines : [];
   (ui as any).strategyChatProgressLines = raw;
   return raw as string[];
+};
+
+const getStrategyThreadPackages = (): StrategyThreadPackageState[] => {
+  const raw = Array.isArray((S as any).strategyThreadPackages) ? (S as any).strategyThreadPackages : [];
+  (S as any).strategyThreadPackages = raw;
+  return raw as StrategyThreadPackageState[];
+};
+
+const getActiveStrategyThreadPackageId = () => String((ui as any).strategyThreadPackageId || '').trim();
+
+const findStrategyThreadPackage = (id: string) => getStrategyThreadPackages().find((item) => String(item.id || '') === String(id || '').trim()) || null;
+
+const cloneStrategyChatMessages = (messages = getStrategyChatMessages()): StrategyChatMessage[] => messages.map((item) => ({
+  id: String(item.id || uid('stratmsg')),
+  role: item.role === 'user' || item.role === 'system' ? item.role : 'assistant',
+  content: String(item.content || '').trim(),
+  ts: String(item.ts || nowISO()),
+  ...(String(item.meta || '').trim() ? { meta: String(item.meta || '').trim() } : {}),
+}));
+
+const cloneStrategyEvidencePacket = (packet: StrategyChatInvokeResult['evidencePacket'] | null | undefined): StrategyChatInvokeResult['evidencePacket'] | null => {
+  if (!packet) return null;
+  try {
+    return JSON.parse(JSON.stringify(packet)) as StrategyChatInvokeResult['evidencePacket'];
+  } catch {
+    return null;
+  }
+};
+
+const getStrategyCurrentCase = () => {
+  const caseId = String((ui as any).simulationCaseId || '').trim();
+  return caseId && S.cases[caseId] ? S.cases[caseId] as CaseItem : null;
+};
+
+const getStrategySelectedRecordIds = () => Array.isArray((ui as any).simulationSelectedRecordIds)
+  ? ((ui as any).simulationSelectedRecordIds as string[]).map((id) => String(id || '').trim()).filter(Boolean)
+  : [] as string[];
+
+const buildStrategyThreadPackageTitle = (messages: StrategyChatMessage[], caseTitle: string) => {
+  const firstUser = messages.find((item) => item.role === 'user' && String(item.content || '').trim());
+  const seed = String(firstUser?.content || '').trim();
+  if (caseTitle && seed) return `${trunc(caseTitle, 16)} · ${trunc(seed, 18)}`;
+  if (seed) return trunc(seed, 28);
+  if (caseTitle) return `${trunc(caseTitle, 24)} 스레드`;
+  return `사건분석 스레드 ${new Date().toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' })}`;
+};
+
+const buildStrategyThreadPackageSummary = (
+  messages: StrategyChatMessage[],
+  evidencePacket: StrategyChatInvokeResult['evidencePacket'] | null,
+  retrievalQuery: string,
+) => {
+  const lastAssistant = [...messages].reverse().find((item) => item.role === 'assistant' && String(item.content || '').trim());
+  const lastUser = [...messages].reverse().find((item) => item.role === 'user' && String(item.content || '').trim());
+  const focus = String(evidencePacket?.focusSummary || '').trim();
+  const overview = String(evidencePacket?.overview || '').trim();
+  return trunc(lastAssistant?.content || lastUser?.content || focus || retrievalQuery || overview || '저장된 대화 패키지', 72);
+};
+
+const snapshotStrategyThreadPackage = (existing?: StrategyThreadPackageState | null): StrategyThreadPackageState => {
+  const messages = cloneStrategyChatMessages().filter((item) => item.content);
+  const currentCase = getStrategyCurrentCase();
+  const caseTitle = String(currentCase?.title || existing?.caseTitle || '').trim();
+  const retrievalQuery = String((ui as any).strategyChatRetrievalQuery || existing?.retrievalQuery || '').trim();
+  const evidencePacket = cloneStrategyEvidencePacket(((ui as any).strategyChatEvidencePacket || existing?.evidencePacket || null) as any);
+  return {
+    id: String(existing?.id || uid('threadpkg')),
+    title: String(existing?.title || buildStrategyThreadPackageTitle(messages, caseTitle)).trim(),
+    summary: buildStrategyThreadPackageSummary(messages, evidencePacket, retrievalQuery),
+    createdAt: String(existing?.createdAt || nowISO()),
+    updatedAt: nowISO(),
+    caseId: currentCase?.id || existing?.caseId || null,
+    caseTitle,
+    selectedRecordIds: getStrategySelectedRecordIds().slice(0, 24),
+    retrievalQuery,
+    messages,
+    evidencePacket,
+  };
+};
+
+const persistStrategyThreadPackage = async (
+  existingId?: string | null,
+  opts: { silent?: boolean; activate?: boolean } = {},
+) => {
+  const hasContent = getStrategyChatMessages().some((item) => String(item.content || '').trim())
+    || !!String((ui as any).strategyChatRetrievalQuery || '').trim()
+    || !!(ui as any).strategyChatEvidencePacket;
+  if (!hasContent) {
+    if (!opts.silent) toast('먼저 저장할 대화나 근거 묶음을 만들어주세요');
+    return null;
+  }
+  const packages = getStrategyThreadPackages();
+  const current = existingId ? findStrategyThreadPackage(existingId) : null;
+  const snapshot = snapshotStrategyThreadPackage(current);
+  const next = packages.filter((item) => item.id !== snapshot.id);
+  next.unshift(snapshot);
+  (S as any).strategyThreadPackages = next.slice(0, STRATEGY_THREAD_PACKAGE_LIMIT);
+  if (opts.activate !== false) (ui as any).strategyThreadPackageId = snapshot.id;
+  await saveState(S);
+  if (!opts.silent) toast(current ? '사건분석 패키지를 업데이트했어요' : '현재 대화를 패키지로 저장했어요');
+  return snapshot;
+};
+
+const syncActiveStrategyThreadPackage = () => {
+  const activeId = getActiveStrategyThreadPackageId();
+  if (!activeId) return;
+  void persistStrategyThreadPackage(activeId, { silent: true, activate: true });
+};
+
+const openStrategyThreadPackage = async (id: string) => {
+  const pkg = findStrategyThreadPackage(id);
+  if (!pkg) return;
+  (ui as any).strategyThreadPackageId = pkg.id;
+  (ui as any).strategyChatMessages = cloneStrategyChatMessages(pkg.messages || []);
+  (ui as any).strategyChatInput = '';
+  (ui as any).strategyChatError = '';
+  (ui as any).strategyChatPending = false;
+  (ui as any).strategyChatEvidencePacket = cloneStrategyEvidencePacket(pkg.evidencePacket);
+  (ui as any).strategyChatRetrievalQuery = String(pkg.retrievalQuery || '').trim();
+  clearStrategyChatProgress();
+  if (pkg.caseId && S.cases[pkg.caseId]) {
+    (ui as any).simulationCaseId = pkg.caseId;
+  }
+  (ui as any).simulationSelectedRecordIds = Array.isArray(pkg.selectedRecordIds)
+    ? pkg.selectedRecordIds.map((item) => String(item || '').trim()).filter(Boolean)
+    : [];
+  (ui as any).simulationResult = null;
+  markSimulationDirty();
+  S.tab = 'legal' as any;
+  (ui as any).legalTab = 'simulation';
+  await saveState(S);
+  render();
+  toast('사건분석 스레드 패키지를 열었어요');
+};
+
+const startFreshStrategyThread = () => {
+  (ui as any).strategyThreadPackageId = '';
+  clearStrategyChat();
+  render();
+  toast('새 사건분석 스레드를 시작했어요');
+};
+
+const deleteStrategyThreadPackage = async (id: string) => {
+  const pkg = findStrategyThreadPackage(id);
+  if (!pkg) return;
+  if (!(await openConfirm(`"${String(pkg.title || '사건분석 스레드')}" 패키지를 삭제할까요?`))) return;
+  (S as any).strategyThreadPackages = getStrategyThreadPackages().filter((item) => item.id !== pkg.id);
+  if (getActiveStrategyThreadPackageId() === pkg.id) {
+    (ui as any).strategyThreadPackageId = '';
+    clearStrategyChat();
+  }
+  await saveState(S);
+  render();
+  toast('사건분석 패키지를 삭제했어요');
 };
 
 const clearStrategyChatProgress = () => {
@@ -435,25 +649,6 @@ const ensureStrategyChatProgressListener = () => {
   });
 };
 
-let _strategyModelEnsureStarted = false;
-const ensureStrategyModelBootstrap = async () => {
-  if (_strategyModelEnsureStarted) return;
-  _strategyModelEnsureStarted = true;
-  try {
-    const result = await invoke<StrategyModelReadyResult>('ensure_strategy_model');
-    if (result?.downloaded) {
-      toast('전략자문 모델 다운로드를 마쳤어요');
-      log('strategy model downloaded', result.modelPath);
-    } else {
-      log('strategy model ready', result?.modelPath || '');
-    }
-  } catch (err) {
-    _strategyModelEnsureStarted = false;
-    log('strategy model bootstrap failed', err);
-    toast('전략자문 모델 준비에 실패했어요');
-  }
-};
-
 const appendStrategyChatMessage = (role: StrategyChatRole, content: string, meta = '') => {
   const safeContent = String(content || '').trim();
   if (!safeContent) return null;
@@ -465,6 +660,7 @@ const appendStrategyChatMessage = (role: StrategyChatRole, content: string, meta
     meta: String(meta || '').trim(),
   };
   getStrategyChatMessages().push(msg);
+  syncActiveStrategyThreadPackage();
   return msg;
 };
 
@@ -473,6 +669,8 @@ const clearStrategyChat = () => {
   (ui as any).strategyChatInput = '';
   (ui as any).strategyChatError = '';
   (ui as any).strategyChatPending = false;
+  (ui as any).strategyChatEvidencePacket = null;
+  (ui as any).strategyChatRetrievalQuery = '';
   clearStrategyChatProgress();
 };
 
@@ -487,17 +685,17 @@ const buildStrategyNote = () => {
   const result = ((ui as any).simulationResult || null) as any;
   const selectedCaseId = String((ui as any).simulationCaseId || '').trim();
   const selectedCase = selectedCaseId && S.cases[selectedCaseId] ? S.cases[selectedCaseId] : null;
-  const presetLabel = draft.scenarioPreset === 'shield' ? '방어적' : draft.scenarioPreset === 'assertive' ? '단호형' : '균형형';
-  const goalLabel = draft.goal === 'document' ? '기록 축적' : draft.goal === 'escalate' ? '공식 대응 강화' : '관계 안정';
+  const presetLabel = draft.scenarioPreset === 'shield' ? '완화형' : draft.scenarioPreset === 'assertive' ? '단호형' : '균형형';
+  const goalLabel = draft.goal === 'document' ? '기록 축적' : draft.goal === 'escalate' ? '공유·제출 강화' : '상황 안정';
   const lines = [
     `현재 목표: ${goalLabel}`,
     `전략 프리셋: ${presetLabel}`,
     `AI에게 반영할 메모: ${String(draft.evidenceFilter || '').trim() || '없음'}`,
-    selectedCase ? `기준 사건: ${String(selectedCase.title || '').trim() || '제목 없는 사건'}` : '기준 사건: 직접 분석 모드',
+    selectedCase ? `기준 컬렉션: ${String(selectedCase.title || '').trim() || '제목 없는 컬렉션'}` : '기준 컬렉션: 직접 분석 모드',
   ];
   if (result) {
     lines.push(
-      `로컬 브리핑 지표: 증거력 ${Number(result.evidencePower || 0)}, 논리 ${Number(result.counterLogic || 0)}, 확산위험 ${Number(result.escalationRisk || 0)}, 통제력 ${Number(result.communicationControl || 0)}`,
+      `로컬 브리핑 지표: 근거 ${Number(result.evidencePower || 0)}, 논리 ${Number(result.counterLogic || 0)}, 확산 ${Number(result.escalationRisk || 0)}, 통제 ${Number(result.communicationControl || 0)}`,
       `추천 톤: ${String(result.recommendedTone || '').trim() || '미계산'}`,
       `추천 행동: ${String(result.recommendedAction || '').trim() || '미계산'}`,
     );
@@ -508,7 +706,7 @@ const buildStrategyNote = () => {
 const sendStrategyAgentMessage = async (overrideMessage?: string) => {
   const records = getStrategySelectedRecords();
   if (!records.length) {
-    toast('먼저 전략자문에 연결할 증거를 1개 이상 붙여주세요');
+    toast('먼저 AI 분석에 연결할 기록을 1개 이상 붙여주세요');
     return;
   }
 
@@ -534,7 +732,7 @@ const sendStrategyAgentMessage = async (overrideMessage?: string) => {
   (ui as any).strategyChatError = '';
   (ui as any).strategyChatPending = true;
   clearStrategyChatProgress();
-  appendStrategyChatProgress('준비', '전략자문 요청을 접수했어요.', false);
+  appendStrategyChatProgress('준비', 'AI 분석 요청을 접수했어요.', false);
   render();
 
   try {
@@ -553,14 +751,20 @@ const sendStrategyAgentMessage = async (overrideMessage?: string) => {
 
     const answer = String(result?.answer || '').trim();
     if (!answer) throw new Error('모델이 빈 응답을 반환했어요.');
-    appendStrategyChatMessage('assistant', answer, `${String(result.runner || 'llama-cli')} · ${String(result.recordsUsed || records.length)}개 증거`);
-    toast('전략자문 답변이 도착했어요');
+    (ui as any).strategyChatEvidencePacket = result?.evidencePacket || null;
+    (ui as any).strategyChatRetrievalQuery = String(result?.retrievalQuery || '').trim();
+    appendStrategyChatMessage(
+      'assistant',
+      answer,
+      `${String(result.runner || 'llama-cli')} · 근거 ${String(result.recordsUsed || records.length)}개`
+    );
+    toast('AI 분석 답변이 도착했어요');
   } catch (err) {
-    const messageText = String((err as any)?.message || err || '전략자문 모델 호출에 실패했어요.');
+    const messageText = String((err as any)?.message || err || 'AI 분석 모델 호출에 실패했어요.');
     (ui as any).strategyChatError = messageText;
     appendStrategyChatProgress('오류', messageText, false);
-    appendStrategyChatMessage('assistant', `전략자문 에이전트를 실행하지 못했어요.\n${messageText}`, '실행 오류');
-    toast('전략자문 실행 실패');
+    appendStrategyChatMessage('assistant', `AI 분석 에이전트를 실행하지 못했어요.\n${messageText}`, '실행 오류');
+    toast('AI 분석 실행 실패');
     log('strategy chat failed', err);
   } finally {
     (ui as any).strategyChatPending = false;
@@ -580,6 +784,68 @@ const autoResizeStrategyChatArea = (el: HTMLTextAreaElement | null) => {
   el.style.height = 'auto';
   const next = Math.max(34, Math.min((el.scrollHeight || 0) + 4, 164));
   el.style.height = `${next}px`;
+};
+
+let _boundStrategyChatDockedComposer = false;
+
+const syncStrategyChatDockedComposer = () => {
+  const host = document.querySelector<HTMLElement>('.serviceContent.serviceContentChatMode');
+  const page = host?.querySelector<HTMLElement>('.strategyChatPage');
+  const shell = host?.querySelector<HTMLElement>('.strategyChatOnlyShell');
+  const thread = host?.querySelector<HTMLElement>('.strategyChatThreadOnly');
+  const composer = host?.querySelector<HTMLElement>('.strategyChatOnlyComposer');
+
+  if (!host || !page || !shell || !thread || !composer) return;
+
+  const hostHeight = Math.floor(host.clientHeight || 0);
+  if (hostHeight <= 0) return;
+
+  host.style.overflow = 'hidden';
+  page.style.height = `${hostHeight}px`;
+  page.style.minHeight = `${hostHeight}px`;
+  shell.style.height = `${hostHeight}px`;
+  shell.style.minHeight = `${hostHeight}px`;
+
+  composer.style.position = 'relative';
+  composer.style.left = 'auto';
+  composer.style.width = '100%';
+  composer.style.right = 'auto';
+  composer.style.bottom = 'auto';
+  composer.style.margin = '0';
+  composer.style.maxWidth = 'none';
+  composer.style.transform = 'none';
+  composer.style.zIndex = '1';
+
+  const shellStyles = window.getComputedStyle(shell);
+  const gap = parseFloat(shellStyles.rowGap || shellStyles.gap || '0') || 0;
+  const paddingTop = parseFloat(shellStyles.paddingTop || '0') || 0;
+  const paddingBottom = parseFloat(shellStyles.paddingBottom || '0') || 0;
+  const composerHeight = Math.ceil(composer.getBoundingClientRect().height);
+  const threadHeight = Math.max(180, hostHeight - paddingTop - paddingBottom - gap - composerHeight);
+
+  thread.style.height = `${threadHeight}px`;
+  thread.style.minHeight = `${threadHeight}px`;
+  thread.style.maxHeight = `${threadHeight}px`;
+  thread.style.overflowY = 'auto';
+  thread.style.overflowX = 'hidden';
+  thread.style.paddingBottom = '16px';
+  thread.style.scrollPaddingBottom = '24px';
+};
+
+const queueStrategyChatDockedComposerSync = () => {
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
+      syncStrategyChatDockedComposer();
+    });
+  });
+};
+
+const bindStrategyChatDockedComposer = () => {
+  if (_boundStrategyChatDockedComposer) return;
+  _boundStrategyChatDockedComposer = true;
+  window.addEventListener('resize', () => {
+    queueStrategyChatDockedComposerSync();
+  });
 };
 
 const updateContentProofUI = () => {
@@ -667,12 +933,12 @@ const applyClassRosterPaste = (startIndex: number, rawText: string) => {
 };
 
 const SUMMARY_PART_LABELS = [
-  ['overview', '사안개요'],
-  ['background', '사안경위'],
-  ['issues', '쟁점별정리'],
-  ['evidenceList', '증거 목록'],
-  ['teacherActions', '교사의 조치 기록'],
-  ['other', '기타 내용'],
+  ['overview', '상황 요약'],
+  ['background', '배경 흐름'],
+  ['issues', '핵심 포인트'],
+  ['evidenceList', '관련 자료'],
+  ['teacherActions', '내 대응 메모'],
+  ['other', '추가 메모'],
 ] as const;
 
 type DraftRecordLike = typeof draftRecord;
@@ -793,7 +1059,7 @@ function updateRecordEditUI() {
 
   const reqMissing: string[] = [];
   if (!okSummary) reqMissing.push('내용');
-  if (!okTs) reqMissing.push('사건시각');
+  if (!okTs) reqMissing.push('기록시각');
   if (!okActor) reqMissing.push('주체');
   const canSave = okSummary && okTs && okActor;
   const reqLabel = canSave ? '정정 봉인 가능' : `필수: ${reqMissing.join(' · ')}`;
@@ -806,7 +1072,7 @@ function updateRecordEditUI() {
   if (btn) {
     btn.disabled = !canSave;
     btn.setAttribute('aria-disabled', canSave ? 'false' : 'true');
-    if (!canSave) btn.setAttribute('title', '내용/사건시각/주체를 채우면 정정 봉인할 수 있어요');
+    if (!canSave) btn.setAttribute('title', '내용/기록시각/사람을 채우면 정정 봉인할 수 있어요');
     else btn.removeAttribute('title');
   }
   if (wSum) (wSum as any).hidden = okSummary;
@@ -912,6 +1178,7 @@ const render = () => {
   const focusedSimulationFieldState = captureFocusedSimulationFieldState();
   _isRerendering = true;
   renderView();
+  bindWindowDragRegionFallback();
   syncDialogs();
   restoreRenderScrollState(scrollState);
   restoreFocusedSimulationFieldState(focusedSimulationFieldState);
@@ -919,13 +1186,15 @@ const render = () => {
   updateRecordEditUI();
   updateContentProofUI();
   autoResizeStrategyChatArea(document.querySelector<HTMLTextAreaElement>('[data-action="draft-strategy-chat"][data-field="input"]'));
+  bindStrategyChatDockedComposer();
+  queueStrategyChatDockedComposerSync();
   window.setTimeout(() => { _isRerendering = false; }, 0);
 };
 
 const SR = async () => { await saveState(S); render(); };
 const toastUndo = (msg: string, undo: () => Promise<void>) => toast(msg, { label: '되돌리기', onClick: undo });
 const flash = (id: string) => { ui.flashStepId = id; ui.flashStepTimer && clearTimeout(ui.flashStepTimer); ui.flashStepTimer = window.setTimeout(() => (ui.flashStepId = null, render()), 1800); };
-const mustCase = (msg = '사건을 먼저 선택하세요') => { const c = getSelectedCase(); if (!c) toast(msg); return c; };
+const mustCase = (msg = '컬렉션을 먼저 선택하세요') => { const c = getSelectedCase(); if (!c) toast(msg); return c; };
 const openUpdate = (caseId: string) => (
   ui.updateCaseId = caseId,
   ui.qUpdate = '',
@@ -1033,9 +1302,9 @@ async function refreshRiskPredictionsOnState(force = true) {
 
 /* ---------- defaults (draft) ---------- */
 const DEFAULT_RECORD = () => ({
-  intake: '상담', actorTypeText: '학생', actorType: '학생', actorNameChoice: OTHER, actorNameOther: '', actors: [],
-  relTypeText: '학부모', relType: '학부모', relNameChoice: OTHER, relNameOther: '', related: [],
-  placeText: '교실', place: '교실', placeOther: '',
+  intake: '상담', actorTypeText: '당사자', actorType: '학생', actorNameChoice: OTHER, actorNameOther: '', actors: [],
+  relTypeText: '상대방', relType: '학부모', relNameChoice: OTHER, relNameOther: '', related: [],
+  placeText: '온라인', place: '온라인', placeOther: '',
   storeTypeText: '전화', storeType: '전화', storeOther: '',
   lvText: 'LV2', lv: 'LV2', ts: toLocalInputValue(nowISO()), summary: '',
   summaryOverview: '', summaryBackground: '', summaryIssues: '', summaryEvidenceList: '', summaryTeacherActions: '', summaryOther: '',
@@ -1045,7 +1314,7 @@ const DEFAULT_CASE = () => ({
   title: '', query: '', timeFrom: '', timeTo: '', maxResults: 80, actors: [],
   onlyMainActor: false,
   sensFilterText: 'any', sensFilter: 'any', statusText: '진행중', status: '진행중',
-  addTypeText: '학생', addType: '학생', addNameChoice: OTHER, addNameOther: ''
+  addTypeText: '당사자', addType: '학생', addNameChoice: OTHER, addNameOther: ''
 });
 
 function prepareRecordDraftForSeal() {
@@ -1094,7 +1363,7 @@ function prepareRecordEditForSeal() {
   const summaryPack = buildSummaryFromDraftParts(draftRecordEdit as any);
   const actorsClean = getDraftActorsForSave(draftRecordEdit as any);
 
-  if (tsTxt.length < 10) return { error: '사건시각을 입력하세요' };
+  if (tsTxt.length < 10) return { error: '기록 시각을 입력하세요' };
   if (!actorsClean.length) return { error: '주체를 1명 이상 추가하세요' };
   if (summaryPack.text.length < 4) return { error: '내용을 4글자 이상 입력하세요' };
   if (!placeText || !storeText || !lvText) return { error: '필수 정보를 입력하세요' };
@@ -1191,7 +1460,7 @@ function bindEvents() {
 
     openSignSuccessModal(
       '성공적으로 서명 및 인증이 완료되었습니다!',
-      sel ? '증거가 저장되고 선택한 사건에도 자동 반영되었어요.' : '증거가 저장되었습니다.'
+      sel ? '기록이 저장되고 선택한 컬렉션에도 자동 반영되었어요.' : '기록이 저장되었습니다.'
     );
 
     const sealVerify = verifyRecordIntegrity(sealed as any) as any;
@@ -1296,20 +1565,17 @@ function bindEvents() {
       log('case tab ->', next);
     },
     'switch-legal-tab': (btn) => {
-      const raw = String(btn.dataset.legalTab || '').trim();
-      const next = raw === 'advisor' ? 'advisor' : 'simulation';
+      const next = 'simulation';
       (ui as any).legalTab = next;
-      if (next === 'simulation') {
-        ensureSimulationDraft();
-        const currentSimulationCaseId = String((ui as any).simulationCaseId || '').trim();
-        if (currentSimulationCaseId && S.cases[currentSimulationCaseId]) {
-          (ui as any).simulationSelectedRecordIds = getSimulationCaseRecordIds(currentSimulationCaseId);
-        } else if (S.selectedCaseId && S.cases[S.selectedCaseId] && !(Array.isArray((ui as any).simulationSelectedRecordIds) && ((ui as any).simulationSelectedRecordIds as string[]).length)) {
-          (ui as any).simulationCaseId = S.selectedCaseId;
-          (ui as any).simulationSelectedRecordIds = getSimulationCaseRecordIds(S.selectedCaseId);
-        } else {
-          reseedSimulationSelection(false);
-        }
+      ensureSimulationDraft();
+      const currentSimulationCaseId = String((ui as any).simulationCaseId || '').trim();
+      if (currentSimulationCaseId && S.cases[currentSimulationCaseId]) {
+        (ui as any).simulationSelectedRecordIds = getSimulationCaseRecordIds(currentSimulationCaseId);
+      } else if (S.selectedCaseId && S.cases[S.selectedCaseId] && !(Array.isArray((ui as any).simulationSelectedRecordIds) && ((ui as any).simulationSelectedRecordIds as string[]).length)) {
+        (ui as any).simulationCaseId = S.selectedCaseId;
+        (ui as any).simulationSelectedRecordIds = getSimulationCaseRecordIds(S.selectedCaseId);
+      } else {
+        reseedSimulationSelection(false);
       }
       S.tab = 'legal' as any;
       render();
@@ -1340,7 +1606,7 @@ function bindEvents() {
       (ui as any).simulationPickerSelectedRecordIds = [];
       closeDlg('simulationPickerModal');
       render();
-      toast(`증거 선택 ${appliedIds.length}개를 적용했어요`);
+      toast(`기록 선택 ${appliedIds.length}개를 적용했어요`);
       log('simulation picker apply', String(appliedIds.length));
     },
 
@@ -1377,18 +1643,18 @@ function bindEvents() {
 },
 'simulation-reset-to-case': () => {
   const caseId = String((ui as any).simulationCaseId || '').trim();
-  if (!caseId || !S.cases[caseId]) return toast('기준 사건을 먼저 선택하세요');
+  if (!caseId || !S.cases[caseId]) return toast('기준 컬렉션을 먼저 선택하세요');
   if ((ui as any).simulationPickerOpen) {
     const nextIds = getSimulationCaseRecordIds(caseId);
     setSimulationPickerSelectedIds(nextIds);
     render();
-    toast('선택 모달 안에서 사건 증거로 다시 채웠어요');
+    toast('선택 모달 안에서 컬렉션 기록으로 다시 채웠어요');
     log('simulation picker reset to case', caseId);
     return;
   }
   applySimulationCaseSelection(caseId);
   render();
-  toast('선택한 사건의 증거로 다시 채웠어요');
+  toast('선택한 컬렉션의 기록으로 다시 채웠어요');
   log('simulation reset to case', caseId);
 },
 'simulation-auto-pick': () => {
@@ -1397,7 +1663,7 @@ function bindEvents() {
   if ((ui as any).simulationPickerOpen) {
     setSimulationPickerSelectedIds(nextIds);
     render();
-    toast('선택 모달 안에서 최근/핵심 증거를 다시 골랐어요');
+    toast('선택 모달 안에서 최근/핵심 기록을 다시 골랐어요');
     log('simulation picker auto pick');
     return;
   }
@@ -1406,14 +1672,14 @@ function bindEvents() {
   (ui as any).simulationResult = null;
   markSimulationDirty();
   render();
-  toast('전체 기록에서 최근/핵심 증거를 다시 묶었어요');
+  toast('전체 기록에서 최근/핵심 기록을 다시 묶었어요');
   log('simulation auto pick');
 },
 'simulation-clear-selection': () => {
   if ((ui as any).simulationPickerOpen) {
     (ui as any).simulationPickerSelectedRecordIds = [];
     render();
-    toast('선택 모달 안의 증거를 비웠어요');
+    toast('선택 모달 안의 기록을 비웠어요');
     log('simulation picker clear selection');
     return;
   }
@@ -1421,7 +1687,7 @@ function bindEvents() {
   (ui as any).simulationResult = null;
   markSimulationDirty();
   render();
-  toast('선택한 증거를 비웠어요');
+  toast('선택한 기록을 비웠어요');
   log('simulation clear selection');
 },
 'simulation-reset-scenario': () => {
@@ -1431,17 +1697,17 @@ function bindEvents() {
   (ui as any).simulationResult = null;
   markSimulationDirty();
   render();
-  toast('시나리오 값을 기본값으로 되돌렸어요');
+  toast('대응 시나리오 값을 기본값으로 되돌렸어요');
   log('simulation reset');
 },
 'simulation-calc': () => {
   reseedSimulationSelection(false);
   const result = computeSimulationResult();
-  if (!result) return toast('먼저 증거를 1개 이상 묶어주세요');
+  if (!result) return toast('먼저 기록을 1개 이상 묶어주세요');
   (ui as any).simulationResult = result;
   (ui as any).simulationDirty = false;
   render();
-  toast('시나리오 계산 완료');
+  toast('대응 시나리오 계산 완료');
   log('simulation calculated', String(result.responseIndex));
 },
     'send-strategy-chat': async () => {
@@ -1451,19 +1717,51 @@ function bindEvents() {
     'clear-strategy-chat': () => {
       clearStrategyChat();
       render();
-      toast('전략자문 대화를 비웠어요');
+      toast('AI 분석 대화를 비웠어요');
       log('strategy chat cleared');
     },
     'prime-strategy-chat': async () => {
       if ((ui as any).strategyChatPending) return;
       await sendStrategyAgentMessage(STRATEGY_DEFAULT_PROMPT);
     },
+    'save-strategy-thread-package': async () => {
+      const activeId = getActiveStrategyThreadPackageId();
+      const saved = await persistStrategyThreadPackage(activeId || undefined, { activate: true });
+      if (!saved) return;
+      render();
+    },
+    'detach-strategy-thread-package': () => {
+      startFreshStrategyThread();
+    },
+    'open-strategy-thread-package': async (btn) => {
+      const id = String(btn.dataset.id || '').trim();
+      if (!id) return;
+      await openStrategyThreadPackage(id);
+    },
+    'delete-strategy-thread-package': async (btn) => {
+      const id = String(btn.dataset.id || '').trim();
+      if (!id) return;
+      await deleteStrategyThreadPackage(id);
+    },
+    'window-minimize': async () => {
+      const win = currentDesktopWindow();
+      if (!win) return;
+      try { await win.minimize(); } catch (e) { log('window minimize failed', e); }
+    },
+    'window-toggle-maximize': async () => {
+      const win = currentDesktopWindow();
+      if (!win) return;
+      try { await win.toggleMaximize(); } catch (e) { log('window toggle maximize failed', e); }
+    },
+    'window-close': async () => {
+      const win = currentDesktopWindow();
+      if (!win) return;
+      try { await win.close(); } catch (e) { log('window close failed', e); }
+    },
     'open-settings': () => (ui.settingsOpen = true, render(), log('settings modal open')),
     'close-settings': () => (ui.settingsOpen = false, resetScreenPinSettingsDraft(), closeDlg('settingsModal'), log('settings modal close')),
     'open-updates-note': () => (ui.updatesNoteOpen = true, render(), log('updates note modal open')),
     'close-updates-note': () => (ui.updatesNoteOpen = false, closeDlg('updateNotesModal'), render(), log('updates note modal close')),
-    'open-teacher-account-modal': () => ((ui as any).teacherAccountOpen = true, render(), log('teacher account modal open')),
-    'close-teacher-account-modal': () => ((ui as any).teacherAccountOpen = false, closeDlg(TEACHER_ACCOUNT_MODAL_ID), render(), log('teacher account modal close')),
     'open-screen-lock': () => {
       resetScreenPinModalDraft();
       if (!hasScreenPin()) {
@@ -1479,7 +1777,7 @@ function bindEvents() {
       ui.pinModalOpen = true;
       render();
       focusScreenPinInput();
-      toast('잠금 화면이 켜졌어요');
+      toast('앱 잠금이 켜졌어요');
       log('screen locked');
     },
     'close-screen-pin': () => {
@@ -1519,7 +1817,7 @@ function bindEvents() {
       resetScreenPinModalDraft();
       closeDlg(SCREEN_PIN_MODAL_ID);
       render();
-      toast('잠금이 해제되었어요');
+      toast('앱 잠금이 해제되었어요');
       log('screen unlocked');
     },
     'save-screen-pin': async () => {
@@ -1555,7 +1853,7 @@ function bindEvents() {
       ui.classRosterDraft = S.classRoster.slice();
       ui.classRosterOpen = false;
       await SR();
-      toast(`학생 명부 저장 완료 ✅ ${draft.filter(Boolean).length}명 등록`);
+      toast(`프로필 템플릿 저장 완료 ✅ ${draft.filter(Boolean).length}개 등록`);
       log('class roster saved', draft.filter(Boolean).length);
     },
 
@@ -1772,8 +2070,8 @@ function bindEvents() {
     'remove-related-edit': (btn) => { const idx = Number(btn.dataset.idx ?? '-1'); if (!Number.isNaN(idx) && idx >= 0) (draftRecordEdit.related = (draftRecordEdit.related || []).filter((_, i) => i !== idx), render()); },
     'clear-record-draft': () => (Object.assign(draftRecord, DEFAULT_RECORD()), render()),
 
-    'set-record-now': () => { draftRecord.ts = toLocalInputValue(nowISO()); render(); toast('사건시각: 지금'); log('record ts set now'); },
-    'set-record-edit-now': () => { draftRecordEdit.ts = toLocalInputValue(nowISO()); render(); toast('사건시각: 지금'); log('record edit ts set now'); },
+    'set-record-now': () => { draftRecord.ts = toLocalInputValue(nowISO()); render(); toast('기록 시각: 지금'); log('record ts set now'); },
+    'set-record-edit-now': () => { draftRecordEdit.ts = toLocalInputValue(nowISO()); render(); toast('기록 시각: 지금'); log('record edit ts set now'); },
     'start-edit-record': (btn) => {
       const id = String(btn.dataset.id || '').trim();
       if (!id) return;
@@ -1825,7 +2123,7 @@ function bindEvents() {
       const id = btn.dataset.id; if (!id) return;
       const r = S.records.find((x) => x.id === id); if (!r) return;
       const holders = casesContainingRecord(r, S.cases);
-      if (holders.length) return void (toast(`사건 ${holders.length}개에 포함된 기록이라 삭제할 수 없어요.`), log('delete-record blocked (in cases)', id));
+      if (holders.length) return void (toast(`컬렉션 ${holders.length}개에 포함된 기록이라 삭제할 수 없어요.`), log('delete-record blocked (in cases)', id));
       if (!(await openConfirm('이 기록을 삭제할까요?'))) return;
       S.records = S.records.filter((x) => x.id !== id); await SR();
       toastUndo('기록 삭제됨', async () => (S.records.unshift(r), await SR(), toast('복구 완료')));
@@ -1835,7 +2133,7 @@ function bindEvents() {
     'remove-record-from-case': async (btn) => {
       const c = mustCase(); if (!c) return;
       const id = btn.dataset.id; if (!id) return;
-      if (!(await openConfirm('이 증거를 이 사건에서 뺄까요? (증거 자체가 삭제되진 않아요)'))) return;
+      if (!(await openConfirm('이 기록을 이 컬렉션에서 뺄까요? (기록 자체가 삭제되진 않아요)'))) return;
       
       const prevIds = (c.recordIds || []).slice();
       c.recordIds = prevIds.filter((x) => x !== id);
@@ -1856,30 +2154,30 @@ function bindEvents() {
       const type = actorTypeInternalFromText(typeText);
       (draftCase as any).addType = type; (draftCase as any).addTypeText = preserveActorTypeText(typeText, type);
       const name = String(draftCase.addNameOther || '').trim();
-      if (!typeText || !name) return toast('Actor 정보를 입력하세요');
+      if (!typeText || !name) return toast('대상 정보를 입력하세요');
       draftCase.addNameChoice = OTHER;
       draftCase.actors = addActorToList(draftCase.actors || [], { type, name });
-      draftCase.addNameOther = ''; render(); toast('Actor 추가');
+      draftCase.addNameOther = ''; render(); toast('대상 추가');
     },
     'remove-case-actor': (btn) => { const idx = Number(btn.dataset.idx ?? '-1'); if (!Number.isNaN(idx) && idx >= 0) (draftCase.actors = (draftCase.actors || []).filter((_, i) => i !== idx), render()); },
     'clear-case-draft': () => (Object.assign(draftCase, DEFAULT_CASE()), render()),
 
     'create-case': async () => {
-      if (!(draftCase.actors || []).length) return toast('Actor를 1명 이상 추가한 뒤 시작할 수 있어요');
+      if (!(draftCase.actors || []).length) return toast('대상을 1명 이상 추가한 뒤 시작할 수 있어요');
 
       // ✅ [제목 자동 생성 로직]
       let title = String(draftCase.title || '').trim();
       const query = String(draftCase.query || '').trim();
 
       if (!title) {
-        // 제목이 비어있으면 "{주체} {요약(키워드)} 관련 사건" 포맷으로 생성
+        // 제목이 비어있으면 "{주체} {요약(키워드)} 컬렉션" 포맷으로 생성
         const mainActor = draftCase.actors[0];
-        const actorName = mainActor ? actorShort(mainActor) : '미정'; // ex: "학생 홍길동"
+        const actorName = mainActor ? actorShort(mainActor) : '미정';
         
         // 요약이 너무 길면 잘라서 사용
         const shortQuery = query.length > 12 ? query.slice(0, 12) + '...' : query;
         
-        title = `${actorName} ${shortQuery} 관련 사건`.replace(/\s+/g, ' ').trim();
+        title = `${actorName} ${shortQuery} 컬렉션`.replace(/\s+/g, ' ').trim();
       }
 
       const { caseItem, error, pickedCount } = await createCaseWithAdvisors({
@@ -1897,8 +2195,8 @@ function bindEvents() {
       if (error) return toast(error);
       const c = caseItem!; S.cases[c.id] = c; S.selectedCaseId = c.id; S.tab = 'cases'; ui.caseTab = 'list';
       Object.assign(draftCase, DEFAULT_CASE()); await SR(); closeCaseCreateModal(); render();
-      setText('caseCreatedMsg', `“${String(c.title || '').trim() || '사건'}” 생성됨`);
-      setText('caseCreatedSub', pickedCount ? `AI가 증거 ${pickedCount}개를 모았어요.` : 'AI가 포함할 증거를 찾지 못했어요.');
+      setText('caseCreatedMsg', `“${String(c.title || '').trim() || '컬렉션'}” 생성됨`);
+      setText('caseCreatedSub', pickedCount ? `AI가 기록 ${pickedCount}개를 모았어요.` : 'AI가 포함할 기록을 찾지 못했어요.');
       openDlg('caseCreatedModal'); window.setTimeout(() => closeDlg('caseCreatedModal'), 2000);
       toast('생성 완료 ✅'); log('case created', c.id);
     },
@@ -1906,7 +2204,7 @@ function bindEvents() {
     'select-case': async (btn) => { const id = btn.dataset.id; if (!id || !S.cases[id]) return; S.selectedCaseId = id; S.tab = 'cases'; ui.caseTab = 'list'; await SR(); log('case selected', id); },
     'clear-case': async () => { S.selectedCaseId = null; ui.qTimeline = ''; ui.caseTab = 'list'; await SR(); log('case cleared'); },
 
-    'open-paper-picker': () => { if (!Object.keys(S.cases || {}).length) return toast('먼저 사건을 만들어주세요'); S.tab = 'cases' as any; ui.caseTab = 'proof' as any; ui.paperPickOpen = false; ui.paperPickQuery = ''; render(); void saveState(S); log('content proof section open'); },
+    'open-paper-picker': () => { if (!Object.keys(S.cases || {}).length) return toast('먼저 컬렉션을 만들어주세요'); S.tab = 'cases' as any; ui.caseTab = 'proof' as any; ui.paperPickOpen = false; ui.paperPickQuery = ''; render(); void saveState(S); log('content proof section open'); },
     'close-paper-picker': () => (closePaperPickModal(), render(), log('paper picker close')),
     'pick-paper-case': async (btn) => { const id = String(btn.dataset.id || '').trim(); const c = id ? (S.cases[id] ?? null) : null; if (!c) return; ui.paperCaseId = c.id; ui.paperHash = await computeCasePaperHash(c); ensureContentProofDraft(); closePaperPickModal(); render(); openPaperModal(); log('content proof open (picker)', c.id); },
     'paper-open-case-create': () => { closePaperPickModal(); S.tab = 'cases' as any; ui.caseTab = 'create'; ui.caseCreateOpen = false; render(); void saveState(S); log('case create section open (from paper picker)'); },
@@ -1915,7 +2213,7 @@ function bindEvents() {
     'pick-proof-case': async (btn) => { const id = String(btn.dataset.id || '').trim(); if (!id || !S.cases[id]) return; S.selectedCaseId = id; ui.paperCaseId = id; ui.caseTab = 'proof' as any; await saveState(S); render(); log('proof case picked', id); },
     'open-paper-preview': async () => {
       const c = (ui.paperCaseId && S.cases[ui.paperCaseId]) ? S.cases[ui.paperCaseId] : null;
-      if (!c) return toast('먼저 사건 목록에서 내용을 선택하세요');
+      if (!c) return toast('먼저 컬렉션 목록에서 항목을 선택하세요');
       ui.paperCaseId = c.id;
       ui.paperHash = await computeCasePaperHash(c);
       ensureContentProofDraft();
@@ -1931,7 +2229,7 @@ function bindEvents() {
         if (!String(proof.senderName || '').trim() || !String(proof.senderAddress || '').trim() || !String(proof.recipientName || '').trim() || !String(proof.recipientAddress || '').trim()) {
           return toast('발신인/수신인 이름과 주소를 모두 입력해주세요');
         }
-        const suggested = `${c.title}__내용증명.pdf`.replace(/\s+/g, ' ').trim();
+        const suggested = `${c.title}__공유문서.pdf`.replace(/\s+/g, ' ').trim();
         const path = await saveDialog({ defaultPath: suggested, filters: [{ name: 'PDF', extensions: ['pdf'] }] });
         if (!path) return toast('저장 취소됨');
         const generatedAt = nowISO();
@@ -1939,14 +2237,14 @@ function bindEvents() {
         const { events } = buildCaseTimeline(c, S.records, '');
         const payload = buildPaperPayload(c, recs, events, generatedAt, ui.paperHash, proof);
         const savedPath = await invoke<string>('export_case_pdf', { args: { paper: payload, fileName: path } });
-        toast('내용증명 PDF 저장 완료'); log('content proof pdf exported', savedPath);
+        toast('공유 문서 PDF 저장 완료'); log('content proof pdf exported', savedPath);
       } catch (e: any) { console.error(e); toast(`PDF 저장 실패: ${String(e?.message || e)}`); }
     },
 
     'open-case-update': () => { const c = mustCase(); if (c) (openUpdate(c.id), log('case update modal open', c.id)); },
     'close-case-update': () => (closeCaseUpdateModal(), render()),
     'apply-case-update': async () => {
-      const c = ui.updateCaseId ? S.cases[ui.updateCaseId] ?? null : null; if (!c) return toast('사건을 찾을 수 없어요');
+      const c = ui.updateCaseId ? S.cases[ui.updateCaseId] ?? null : null; if (!c) return toast('컬렉션을 찾을 수 없어요');
       const ids = (ui.updatePickIds || []).slice();
       // fallback (혹시 state가 비어있을 때)
       if (!ids.length) {
@@ -1955,13 +2253,13 @@ function bindEvents() {
       }
       if (!ids.length) return toast('선택된 항목이 없어요');
       S.cases[c.id] = await addRecordsToCase(c, S.records, ids);
-      await SR(); closeCaseUpdateModal(); render(); toast(`${ids.length}개 증거 추가됨`); log('case records added', c.id, ids.length);
+      await SR(); closeCaseUpdateModal(); render(); toast(`${ids.length}개 기록 추가됨`); log('case records added', c.id, ids.length);
     },
     'delete-case': async (btn) => {
       const id = btn.dataset.id; if (!id || !S.cases[id]) return;
-      if (!(await openConfirm('이 사건을 삭제할까요?'))) return;
+      if (!(await openConfirm('이 컬렉션을 삭제할까요?'))) return;
       const deleted = S.cases[id]; delete S.cases[id]; if (S.selectedCaseId === id) S.selectedCaseId = null;
-      await SR(); toastUndo('사건 삭제됨', async () => (S.cases[deleted.id] = deleted, await SR(), toast('복구 완료'))); log('case deleted', id);
+      await SR(); toastUndo('컬렉션 삭제됨', async () => (S.cases[deleted.id] = deleted, await SR(), toast('복구 완료'))); log('case deleted', id);
     },
 
     'add-step': async () => {
@@ -2248,7 +2546,7 @@ function bindEvents() {
           if ((ui as any).simulationPickerOpen) {
             setSimulationPickerSelectedIds(getSimulationCaseRecordIds(nextCaseId));
           }
-          toast(`사건 증거 ${getSimulationCaseRecordIds(nextCaseId).length}개를 기본으로 불러왔어요`);
+          toast(`컬렉션 기록 ${getSimulationCaseRecordIds(nextCaseId).length}개를 기본으로 불러왔어요`);
         } else {
           (ui as any).simulationCaseId = null;
           (ui as any).simulationResult = null;
@@ -2301,6 +2599,7 @@ function bindEvents() {
     const el = (e.target as HTMLElement | null)?.closest<HTMLTextAreaElement>('[data-action="draft-strategy-chat"][data-field="input"]');
     if (!el) return;
     autoResizeStrategyChatArea(el);
+    queueStrategyChatDockedComposerSync();
   });
 
   document.addEventListener('input', (e) => {
@@ -2323,7 +2622,7 @@ function bindEvents() {
     if (Number.isNaN(index) || index < 0 || index >= CLASS_ROSTER_SIZE) return;
     e.preventDefault();
     const applied = applyClassRosterPaste(index, raw);
-    if (applied > 0) toast(`학생 ${applied}명 붙여넣기 완료`);
+    if (applied > 0) toast(`템플릿 ${applied}개 붙여넣기 완료`);
   });
 
   document.addEventListener('cancel', (e) => {
@@ -2343,7 +2642,6 @@ function bindEvents() {
     if ((t as any).id === 'caseUpdateModal') (ui.updateCaseId = null, ui.updatePickIds = [], ui.updFilterActor = ui.updFilterPlace = ui.updFilterKeyword = '', ui.updFilterActorDraft = ui.updFilterPlaceDraft = ui.updFilterKeywordDraft = '', ui.updateCandidatesForCaseId = null, ui.updateCandidates = null, ui.updateCandidatesLoading = false);
     if ((t as any).id === 'settingsModal') { ui.settingsOpen = false; resetScreenPinSettingsDraft(); }
     if ((t as any).id === 'updateNotesModal') ui.updatesNoteOpen = false;
-    if ((t as any).id === TEACHER_ACCOUNT_MODAL_ID) (ui as any).teacherAccountOpen = false;
     if ((t as any).id === 'simulationPickerModal') { (ui as any).simulationPickerOpen = false; (ui as any).simulationPickerQuery = ''; (ui as any).simulationPickerSelectedRecordIds = []; }
     if ((t as any).id === 'classRosterModal') { ui.classRosterOpen = false; ui.classRosterDraft = getClassRoster().slice(); }
     if ((t as any).id === SIGNATURE_MODAL_ID) ui.signatureModalMode = null;
@@ -2401,7 +2699,6 @@ function bindEvents() {
       closeDlg('restoreModal'); closeDlg('logsModal');
       const st = dlg('settingsModal'); if (isDialogEl(st) && st.open) return void (e.preventDefault(), ui.settingsOpen = false, closeDlg('settingsModal'));
       const un = dlg('updateNotesModal'); if (isDialogEl(un) && un.open) return void (e.preventDefault(), ui.updatesNoteOpen = false, closeDlg('updateNotesModal'), render());
-      const teacher = dlg(TEACHER_ACCOUNT_MODAL_ID); if (isDialogEl(teacher) && teacher.open) return void (e.preventDefault(), (ui as any).teacherAccountOpen = false, closeDlg(TEACHER_ACCOUNT_MODAL_ID), render());
       const picker = dlg('simulationPickerModal'); if (isDialogEl(picker) && picker.open) return void (e.preventDefault(), (ui as any).simulationPickerOpen = false, (ui as any).simulationPickerQuery = '', (ui as any).simulationPickerSelectedRecordIds = [], closeDlg('simulationPickerModal'), render());
       const roster = dlg('classRosterModal'); if (ui.classRosterOpen || (isDialogEl(roster) && roster.open)) return void (e.preventDefault(), ui.classRosterOpen = false, ui.classRosterDraft = getClassRoster().slice(), closeDlg('classRosterModal'), render());
       const composer = dlg('recordComposerModal'); if (isDialogEl(composer) && composer.open) return void (e.preventDefault(), ui.recordComposerOpen = false, closeDlg('recordComposerModal'), render());
@@ -2431,7 +2728,6 @@ function syncDraftDefaults() {
 export function initApp() {
   bindEvents(); ensurePaperStyles(); syncDraftDefaults();
   ensureStrategyChatProgressListener();
-  void ensureStrategyModelBootstrap();
 
   const focusRecordComposer = () => window.setTimeout(() => {
     (document.getElementById('recordSummaryOverview') as HTMLTextAreaElement | null)?.focus();

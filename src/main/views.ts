@@ -16,10 +16,8 @@ import {
 } from './state';
 import { renderCasePaperModal } from './paper';
 
-const feedImageUrl = new URL('./feed.png', import.meta.url).href;
-const lawyerProfileImageUrl = new URL('./lawyer-profile.png', import.meta.url).href;
 const ENABLE_BACKUP_RESTORE = true; // 설정에서 백업/복구 UI 노출
-const HIDE_CASE_ACTIONS_AND_GUIDES = true; // 사건조회하기에서 내조치로그/대응가이드 임시 비노출
+const HIDE_CASE_ACTIONS_AND_GUIDES = true; // 컬렉션 보기에서 실행 로그/권장 가이드 임시 비노출
 
 
 /** ultra-light view helpers (single-file) */
@@ -75,7 +73,7 @@ function riskInlineCardStyle(label: number) {
 function normalizeRisk(risk: any) {
   if (!risk || typeof risk !== 'object') return null;
   const label = Number(risk.label) === 2 ? 2 : Number(risk.label) === 1 ? 1 : 0;
-  const labelText = label === 2 ? '위험' : label === 1 ? '경고' : '평범';
+  const labelText = label === 2 ? '높음' : label === 1 ? '주의' : '안정';
   const probs = Array.isArray(risk.probs) ? risk.probs : [0, 0, 0];
   const confidence = Number.isFinite(+risk.confidence) ? Math.max(0, Math.min(1, +risk.confidence)) : Math.max(...probs.map((x: any) => Number(x) || 0));
   const reasons = Array.isArray(risk.reasons) ? risk.reasons.map((x: any) => String(x || '').trim()).filter(Boolean).slice(0, 4) : [];
@@ -85,12 +83,12 @@ function normalizeRisk(risk: any) {
 function renderRiskTag(risk: any) {
   const rr = normalizeRisk(risk);
   if (!rr) return '';
-  return `<span class="tag ${riskToneClass(rr.label)}" style="${riskInlineTagStyle(rr.label)}">민원 ${esc(rr.labelText)}</span>`;
+  return `<span class="tag ${riskToneClass(rr.label)}" style="${riskInlineTagStyle(rr.label)}">리스크 ${esc(rr.labelText)}</span>`;
 }
 
 function renderRiskSummary(risk: any) {
   const rr = normalizeRisk(risk);
-  if (!rr) return `<div class="muted">아직 분석되지 않았어요.</div>`;
+  if (!rr) return `<div class="muted">아직 리스크 신호가 계산되지 않았어요.</div>`;
   const confidencePct = Math.round(rr.confidence * 100);
   const reasonTags = rr.reasons.length
     ? `<div class="tags mini" style="margin-top:8px">${rr.reasons.map((x: any) => `<span class="tag aiReason">${esc(String(x))}</span>`).join('')}</div>`
@@ -98,7 +96,7 @@ function renderRiskSummary(risk: any) {
   return `
     <div class="riskBlock">
       <div class="riskHead">
-        <span class="tag ${riskToneClass(rr.label)}" style="${riskInlineTagStyle(rr.label)}">민원 ${esc(rr.labelText)}</span>
+        <span class="tag ${riskToneClass(rr.label)}" style="${riskInlineTagStyle(rr.label)}">리스크 ${esc(rr.labelText)}</span>
         <span class="muted">신뢰도 ${esc(String(confidencePct))}%</span>
       </div>
       ${reasonTags}
@@ -152,11 +150,117 @@ function strategyTextHtml(text: string) {
   return esc(cleanStrategyDisplayText(text)).replace(/\n/g, "<br/>");
 }
 
+function windowPlatform() {
+  if (typeof navigator === 'undefined') return 'other';
+  const ua = String(navigator.userAgent || '');
+  if (/Windows/i.test(ua)) return 'windows';
+  if (/Macintosh|Mac OS X|MacIntel/i.test(ua)) return 'macos';
+  return 'other';
+}
+
+function renderWindowControls() {
+  if (windowPlatform() !== 'windows') return '';
+  return `
+    <div class="windowControls" aria-label="창 제어">
+      <button class="windowControlBtn" data-action="window-minimize" type="button" aria-label="최소화">
+        <span class="windowControlGlyph" aria-hidden="true">─</span>
+      </button>
+      <button class="windowControlBtn" data-action="window-toggle-maximize" type="button" aria-label="최대화 또는 복원">
+        <span class="windowControlGlyph windowControlGlyphSquare" aria-hidden="true"></span>
+      </button>
+      <button class="windowControlBtn close" data-action="window-close" type="button" aria-label="닫기">
+        <span class="windowControlGlyph" aria-hidden="true">×</span>
+      </button>
+    </div>
+  `;
+}
+
+function formatSidebarThreadAge(iso: string) {
+  const d = new Date(String(iso || ''));
+  if (Number.isNaN(d.getTime())) return '';
+  const diffDays = Math.max(0, Math.floor((Date.now() - d.getTime()) / 86400000));
+  if (diffDays <= 0) return '오늘';
+  if (diffDays < 7) return `${diffDays}일`;
+  return `${d.getMonth() + 1}/${d.getDate()}`;
+}
+
 
 function renderAppSidebar(currentTab: string) {
   const isHome = currentTab === 'home';
+  const strategyPackages = Array.isArray((S as any).strategyThreadPackages)
+    ? [ ...((S as any).strategyThreadPackages as any[]) ].sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')))
+    : [];
+  const activeThreadPackageId = String((ui as any).strategyThreadPackageId || '').trim();
+  const activeThreadPackage = strategyPackages.find((item) => String(item.id || '') === activeThreadPackageId) || null;
+  const currentThreadMessages = Array.isArray((ui as any).strategyChatMessages) ? ((ui as any).strategyChatMessages as any[]) : [];
+  const hasDraftThread = currentThreadMessages.some((item) => String(item?.content || '').trim()) && !activeThreadPackage;
+  const packageFolders = uniq(
+    strategyPackages.map((item) => String(item?.caseTitle || '').trim() || '직접 분석').filter(Boolean)
+  ).slice(0, 4);
+  const packageFolderHtml = packageFolders.length
+    ? packageFolders.map((name) => `
+      <div class="sidebarThreadFolder">
+        <span class="sidebarThreadFolderIcon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M4.75 7.75C4.75 6.7835 5.5335 6 6.5 6H9.3886C9.85293 6 10.2982 6.18437 10.6265 6.51256L11.4874 7.37348C11.8156 7.70167 12.2609 7.88604 12.7252 7.88604H17.5C18.4665 7.88604 19.25 8.66954 19.25 9.63604V16.5C19.25 17.4665 18.4665 18.25 17.5 18.25H6.5C5.5335 18.25 4.75 17.4665 4.75 16.5V7.75Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <span class="sidebarThreadFolderLabel">${esc(name)}</span>
+      </div>
+    `).join('')
+    : '';
+  const draftThreadHtml = hasDraftThread ? `
+    <div class="sidebarThreadPackageRow draft">
+      <div class="sidebarThreadPackageCard draft" aria-label="현재 작업 중인 대화">
+        <span class="sidebarThreadPackageGlyph" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="5.25" y="4.75" width="13.5" height="14.5" rx="2.25" stroke="currentColor" stroke-width="1.6"/>
+            <path d="M8.5 9H15.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            <path d="M8.5 12.5H13.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <span class="sidebarThreadPackageMain">
+          <span class="sidebarThreadPackageTitle">현재 작업 중인 대화</span>
+          <span class="sidebarThreadPackageSub">${esc(trunc(String(currentThreadMessages[currentThreadMessages.length - 1]?.content || '대화를 이어가고 있어요.'), 56))}</span>
+        </span>
+        <span class="sidebarThreadPackageStamp">임시</span>
+      </div>
+    </div>
+  ` : '';
+  const packageListHtml = strategyPackages.length
+    ? strategyPackages.slice(0, 7).map((item) => {
+      const isActive = String(item.id || '') === activeThreadPackageId;
+      const itemCaseTitle = String(item.caseTitle || '').trim();
+      const stamp = formatSidebarThreadAge(String(item.updatedAt || item.createdAt || ''));
+      return `
+        <div class="sidebarThreadPackageRow ${isActive ? 'active' : ''}">
+          <button class="sidebarThreadPackageCard ${isActive ? 'active' : ''}" data-action="open-strategy-thread-package" data-id="${esc(String(item.id || ''))}" type="button">
+            <span class="sidebarThreadPackageGlyph" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="5.25" y="4.75" width="13.5" height="14.5" rx="2.25" stroke="currentColor" stroke-width="1.6"/>
+                <path d="M8.5 9H15.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                <path d="M8.5 12.5H13.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+              </svg>
+            </span>
+            <span class="sidebarThreadPackageMain">
+              <span class="sidebarThreadPackageTitle">${esc(String(item.title || '사건분석 스레드'))}</span>
+              <span class="sidebarThreadPackageSub">${esc(itemCaseTitle || trunc(String(item.summary || '저장된 분석 스레드'), 54))}</span>
+            </span>
+            <span class="sidebarThreadPackageStamp">${esc(stamp)}</span>
+          </button>
+          <button class="sidebarThreadPackageRemove" data-action="delete-strategy-thread-package" data-id="${esc(String(item.id || ''))}" type="button" aria-label="${esc(`${String(item.title || '사건분석 스레드')} 삭제`)}">
+            <span aria-hidden="true">×</span>
+          </button>
+        </div>
+      `;
+    }).join('')
+    : `
+      <div class="sidebarThreadEmpty">
+        아직 저장된 스레드가 없어요. 현재 대화를 저장하면 사건별로 다시 열어 자연스럽게 이어갈 수 있어요.
+      </div>
+    `;
   return `
-    <aside class="serviceSidebar" aria-label="서비스 메뉴">
+    <aside class="serviceSidebar" aria-label="작업 메뉴">
       <button class="serviceLogo ${isHome ? 'active' : ''}" data-action="tab" data-tab="home" data-route-tab="home" type="button" aria-label="홈으로 이동">
         <span class="serviceLogoGlyph" aria-hidden="true">R</span>
       </button>
@@ -169,27 +273,30 @@ function renderAppSidebar(currentTab: string) {
               <path d="M9.25 19.75V13.75H14.75V19.75" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
             </svg>
           </span>
+          <span class="sidebarLabel">홈</span>
         </button>
 
-        <button class="sidebarIconBtn accent" data-action="open-record-composer" type="button" aria-label="증거 기록하기">
+        <button class="sidebarIconBtn accent" data-action="open-record-composer" type="button" aria-label="빠른 캡처 열기">
           <span class="sidebarIcon" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M12 5V19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
               <path d="M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
             </svg>
           </span>
+          <span class="sidebarLabel">빠른 캡처</span>
         </button>
 
-        <button class="sidebarIconBtn ${ui.classRosterOpen ? 'active' : ''}" data-action="open-class-roster" type="button" aria-label="학생 명부 등록" title="학생 명부 등록">
+        <button class="sidebarIconBtn ${ui.classRosterOpen ? 'active' : ''}" data-action="open-class-roster" type="button" aria-label="관계 템플릿 열기" title="관계 템플릿">
           <span class="sidebarIcon" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M12 12.25C14.3472 12.25 16.25 10.3472 16.25 8C16.25 5.65279 14.3472 3.75 12 3.75C9.65279 3.75 7.75 5.65279 7.75 8C7.75 10.3472 9.65279 12.25 12 12.25Z" stroke="currentColor" stroke-width="1.8"/>
               <path d="M5 19.25C5.88949 16.5609 8.66368 14.75 12 14.75C15.3363 14.75 18.1105 16.5609 19 19.25" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
             </svg>
           </span>
+          <span class="sidebarLabel">관계 관리</span>
         </button>
 
-        <button class="sidebarIconBtn ${ui.pinLocked ? 'active lockActive' : ''}" data-action="open-screen-lock" type="button" aria-label="화면 잠금" title="${ui.pinLocked ? '잠금 중' : '화면 잠금'}">
+        <button class="sidebarIconBtn ${ui.pinLocked ? 'active lockActive' : ''}" data-action="open-screen-lock" type="button" aria-label="앱 잠금" title="${ui.pinLocked ? '잠금 중' : '앱 잠금'}">
           <span class="sidebarIcon" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M8.25 10V7.75C8.25 5.67893 9.92893 4 12 4C14.0711 4 15.75 5.67893 15.75 7.75V10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
@@ -197,11 +304,44 @@ function renderAppSidebar(currentTab: string) {
               <path d="M12 14.25V15.75" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
             </svg>
           </span>
+          <span class="sidebarLabel">잠금</span>
           <span class="sidebarPinDot ${ui.pinLocked ? 'isLocked' : hasScreenPin() ? 'isReady' : 'isEmpty'}" aria-hidden="true"></span>
         </button>
       </div>
 
+      <section class="serviceSidebarSection serviceSidebarThreadSection" aria-label="사건분석 스레드">
+        <div class="serviceSidebarThreadHeader">
+          <div class="serviceSidebarThreadTitleWrap">
+            <div class="serviceSidebarThreadTitle">사건분석 스레드</div>
+            <div class="serviceSidebarThreadMeta">${activeThreadPackage ? '열린 패키지에서 이어서 정리 중' : '저장한 분석 대화를 간결하게 모아보기'}</div>
+          </div>
+          <div class="serviceSidebarThreadHeaderActions">
+            <button class="sidebarThreadHeaderBtn" data-action="save-strategy-thread-package" type="button" aria-label="${esc(activeThreadPackage ? '현재 패키지 업데이트' : '현재 대화 저장')}" title="${esc(activeThreadPackage ? '현재 패키지 업데이트' : '현재 대화 저장')}">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M6.75 5.75H15.6287C16.093 5.75 16.5383 5.93437 16.8665 6.26256L18.7374 8.13348C19.0656 8.46167 19.25 8.90696 19.25 9.37129V17.25C19.25 18.2165 18.4665 19 17.5 19H6.5C5.5335 19 4.75 18.2165 4.75 17.25V7.75C4.75 6.64543 5.64543 5.75 6.75 5.75Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+                <path d="M8 5.75V10.25H15.5V6.25" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+                <path d="M8.75 14.25H15.25" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+              </svg>
+            </button>
+            <button class="sidebarThreadHeaderBtn" data-action="detach-strategy-thread-package" type="button" aria-label="새 스레드" title="새 스레드">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M12 5V19" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                <path d="M5 12H19" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        ${packageFolderHtml ? `<div class="sidebarThreadFolderList" aria-label="패키지 묶음">${packageFolderHtml}</div>` : ''}
+
+        <div class="sidebarThreadPackageList">
+          ${draftThreadHtml}
+          ${packageListHtml}
+        </div>
+      </section>
+
       <div class="serviceSidebarBottom">
+
         <button class="sidebarIconBtn sidebarSettingsBtn ${ui.settingsOpen ? 'active' : ''}" data-action="open-settings" type="button" aria-label="설정" title="설정">
           <span class="sidebarIcon" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -209,6 +349,7 @@ function renderAppSidebar(currentTab: string) {
               <path d="M19.2499 13.1875V10.8125L17.5231 10.2418C17.3597 9.72838 17.1524 9.23572 16.9043 8.76765L17.7141 7.13575L16.0357 5.45737L14.4038 6.26718C13.9358 6.01911 13.4431 5.81181 12.9297 5.64844L12.359 3.92163H9.984L9.41327 5.64844C8.89986 5.81181 8.4072 6.01911 7.93913 6.26718L6.30724 5.45737L4.62885 7.13575L5.43866 8.76765C5.19059 9.23572 4.9833 9.72838 4.81992 10.2418L3.09311 10.8125V13.1875L4.81992 13.7582C4.9833 14.2716 5.19059 14.7643 5.43866 15.2323L4.62885 16.8642L6.30724 18.5426L7.93913 17.7328C8.4072 17.9809 8.89986 18.1882 9.41327 18.3516L9.984 20.0784H12.359L12.9297 18.3516C13.4431 18.1882 13.9358 17.9809 14.4038 17.7328L16.0357 18.5426L17.7141 16.8642L16.9043 15.2323C17.1524 14.7643 17.3597 14.2716 17.5231 13.7582L19.2499 13.1875Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
             </svg>
           </span>
+          <span class="sidebarLabel">설정</span>
         </button>
       </div>
     </aside>
@@ -218,30 +359,30 @@ function renderAppSidebar(currentTab: string) {
 function renderUpdateNotesModal() {
   return H.modal(
     'updateNotesModal',
-    H.modalHead('업데이트 노트', '이번 버전에서 바로 확인할 수 있는 핵심 변화만 짧게 정리했어요.', H.btn('닫기', 'close-updates-note')),
+    H.modalHead('업데이트 노트', '개인용 AI 기록 워크플로에 맞춘 핵심 변화만 짧게 정리했어요.', H.btn('닫기', 'close-updates-note')),
     `
       <div class="updatesNoteModalBody">
         <article class="updatesNoteItem">
           <div class="updatesNoteIndex">1</div>
           <div>
-            <div class="updatesNoteTitle">증거기록의 세분화</div>
-            <div class="updatesNoteDesc">증거 입력을 사안개요·사안경위·쟁점·증거 목록·교사 조치·기타로 나눠서 더 빠르게 정리할 수 있어요.</div>
+            <div class="updatesNoteTitle">빠른 캡처 중심 기록 입력</div>
+            <div class="updatesNoteDesc">무슨 일이 있었는지부터 적고, 배경·핵심 포인트·메모를 뒤에서 보강하는 흐름으로 더 빠르게 기록할 수 있어요.</div>
           </div>
         </article>
 
         <article class="updatesNoteItem">
           <div class="updatesNoteIndex">2</div>
           <div>
-            <div class="updatesNoteTitle">내용증명 생성 기능</div>
-            <div class="updatesNoteDesc">사건을 선택하고 발신인·수신인 정보를 입력하면 증거 요약과 검증 정보가 포함된 내용증명 PDF를 만들 수 있어요.</div>
+            <div class="updatesNoteTitle">공유/제출 문서 생성</div>
+            <div class="updatesNoteDesc">컬렉션을 선택하고 송달 정보를 입력하면 기록 요약과 무결성 검증 정보가 포함된 PDF를 바로 만들 수 있어요.</div>
           </div>
         </article>
 
         <article class="updatesNoteItem">
           <div class="updatesNoteIndex">3</div>
           <div>
-            <div class="updatesNoteTitle">원스톱 법률자문 변호사 소개</div>
-            <div class="updatesNoteDesc">학교 현장 분쟁 대응용 법률자문 탭에서 전서현 변호사 프로필과 자문 연결용 안내를 바로 볼 수 있어요.</div>
+            <div class="updatesNoteTitle">AI 분석 에이전트</div>
+            <div class="updatesNoteDesc">컬렉션에 연결된 기록을 바탕으로 답장 초안, 정리 포인트, 다음 행동 순서를 채팅형으로 빠르게 정리할 수 있어요.</div>
           </div>
         </article>
 
@@ -256,8 +397,8 @@ function renderUpdateNotesModal() {
         <article class="updatesNoteItem">
           <div class="updatesNoteIndex">5</div>
           <div>
-            <div class="updatesNoteTitle">학생명렬표 추가 기능</div>
-            <div class="updatesNoteDesc">최대 40명까지 학생 명부를 저장하고, 여러 이름을 한 번에 붙여넣어 빠르게 등록할 수 있어요.</div>
+            <div class="updatesNoteTitle">관계 템플릿 저장</div>
+            <div class="updatesNoteDesc">자주 등장하는 사람이나 대상 이름을 템플릿으로 저장하고, 여러 이름을 한 번에 붙여넣어 빠르게 불러올 수 있어요.</div>
           </div>
         </article>
       </div>
@@ -266,86 +407,313 @@ function renderUpdateNotesModal() {
   );
 }
 
-
-function renderTeacherAccountModal() {
-  return H.modal(
-    'teacherAccountModal',
-    H.modalHead('교사계정생성 안내', '후기 작성 후 계정 생성을 요청하시면 순서대로 도와드릴게요.', H.btn('닫기', 'close-teacher-account-modal', '', 'btn ghost')),
-    `
-      <div class="teacherAccountModalBody">
-        <div class="teacherAccountHero">
-          <div class="teacherAccountHeroBadge">교사 전용 계정</div>
-          <div class="teacherAccountHeroTitle">교사계정이 생성되면 4월에 추가될 법률상담서비스를 이용할 수 있어요.</div>
-          <div class="teacherAccountHeroDesc">아래 순서대로 진행해주시면 확인 후 교사계정을 생성해드립니다.</div>
-        </div>
-
-        <ol class="teacherAccountSteps">
-          <li class="teacherAccountStep">
-            <div class="teacherAccountStepNo">1</div>
-            <div class="teacherAccountStepBody">
-              <div class="teacherAccountStepTitle">교사계정 생성 혜택</div>
-              <div class="teacherAccountStepDesc">교사계정이 생성되면 4월에 추가될 법률상담서비스 이용 대상에 포함됩니다.</div>
-            </div>
-          </li>
-          <li class="teacherAccountStep">
-            <div class="teacherAccountStepNo">2</div>
-            <div class="teacherAccountStepBody">
-              <div class="teacherAccountStepTitle">사용후기 작성</div>
-            <div class="teacherAccountStepDesc">
-              인디스쿨 커뮤니티 - 함께해요 - 도구 게시판에 사용후기 글을 작성해주세요. </br>
-              후기 본문에 프로그램 링크 <b>www.roosycozy.com</b> 도 함께 꼭! 적어주세요.
-            </div>            </div>
-          </li>
-          <li class="teacherAccountStep">
-            <div class="teacherAccountStepNo">3</div>
-            <div class="teacherAccountStepBody">
-              <div class="teacherAccountStepTitle">쪽지 보내기</div>
-              <div class="teacherAccountStepDesc"><b>[루지코지by노명성]</b>에게 쪽지로 생성하고 싶은 ID와 비밀번호를 보내주시면 계정을 생성해드립니다.</div>
-            </div>
-          </li>
-        </ol>
-
-        <div class="teacherAccountFootNote">후기 확인 후 순차적으로 교사계정이 생성됩니다.</div>
-      </div>
-    `,
-    'modal teacherAccountModal'
-  );
-}
-
 function renderHomeMain() {
-  return `
-    <section class="homeSectionStack" aria-label="홈">
-      <button class="updatesHeroCard" data-action="open-updates-note" type="button" aria-label="업데이트 노트 열기">
-        <div class="updatesHeroCopy">
-          <div class="updatesHeroEyebrow">업데이트 노트</div>
-          <div class="updatesHeroTitle">최근 추가된 기능을 한 번에 확인하세요</div>
-          <div class="updatesHeroMeta">증거기록 세분화 · 내용증명 · 법률자문 · 잠금 · 학생명렬표</div>
-        </div>
-        <span class="updatesHeroArrow" aria-hidden="true">열기</span>
-      </button>
+  const allRecords = S.records.slice().sort((a, b) => String(b.ts || '').localeCompare(String(a.ts || '')));
+  const collectionIds = visibleCases();
+  const collections = collectionIds.map((id) => S.cases[id]).filter(Boolean);
+  const collectionRecordCounts = new Map(collections.map((item) => [String(item.id || ''), recordsForCase(S.records, item).length]));
+  const recentRecords = allRecords.slice(0, 4);
+  const recentCollections = collections.slice(0, 4);
+  const riskyRecords = allRecords
+    .filter((record) => (normalizeRisk((record as any).risk)?.label || 0) > 0)
+    .slice(0, 4);
+  const selectedCollection = getSelectedCase();
+  const selectedCollectionRecords = selectedCollection ? recordsForCase(S.records, selectedCollection) : [];
+  const selectedCollectionRecordCount = selectedCollectionRecords.length;
+  const selectedCollectionLatestTs = selectedCollectionRecords
+    .slice()
+    .sort((a, b) => String(b.ts || '').localeCompare(String(a.ts || '')))[0]?.ts || '';
+  const sharedReadyCount = collections.filter((item) => (collectionRecordCounts.get(String(item.id || '')) || 0) > 0).length;
+  const strategyResult = ((ui as any).simulationResult || null) as any;
+  const strategyMessages = Array.isArray((ui as any).strategyChatMessages) ? ((ui as any).strategyChatMessages as any[]) : [];
+  const progressState = (() => {
+    if (!allRecords.length) {
+      return {
+        label: '시작 전',
+        title: '첫 기록을 남기면 워크스페이스가 바로 살아나요',
+        desc: '대화, 파일, 사진, 메모 중 하나만 빠르게 캡처해도 홈에서 흐름을 자동으로 정리해드려요.',
+        tone: 'is-idle',
+      };
+    }
+    if (!collections.length) {
+      return {
+        label: '정리 단계',
+        title: '관련 기록을 묶어 첫 컬렉션을 만들 시점이에요',
+        desc: '비슷한 기록 3~5개만 모아도 타임라인과 AI 분석의 맥락이 훨씬 또렷해집니다.',
+        tone: 'is-active',
+      };
+    }
+    if (!selectedCollection) {
+      return {
+        label: '포커스 필요',
+        title: '최근 컬렉션 하나를 열어 흐름을 잡아보세요',
+        desc: '선택된 컬렉션이 있으면 홈과 AI 분석이 지금 무엇을 먼저 해야 하는지 더 선명하게 보여줍니다.',
+        tone: 'is-calm',
+      };
+    }
+    if (!strategyMessages.length && !strategyResult) {
+      return {
+        label: '분석 준비',
+        title: '현재 컬렉션은 AI 분석을 시작할 준비가 되어 있어요',
+        desc: '질문 한 줄만 보내도 답변 초안과 다음 행동 순서를 정리해주는 흐름으로 넘어갈 수 있습니다.',
+        tone: 'is-accent',
+      };
+    }
+    if (!sharedReadyCount) {
+      return {
+        label: '문서화 단계',
+        title: '이제 공유 또는 제출용 문서 초안을 만들어둘 차례예요',
+        desc: '컬렉션 흐름이 어느 정도 쌓였으니 PDF로 정리해두면 전달과 보관이 훨씬 수월해집니다.',
+        tone: 'is-calm',
+      };
+    }
+    return {
+      label: '안정화',
+      title: '기록, 분석, 문서화 흐름이 안정적으로 이어지고 있어요',
+      desc: '최근 캡처와 리스크 신호만 꾸준히 확인하면 전체 맥락을 차분하게 유지할 수 있습니다.',
+      tone: 'is-ready',
+    };
+  })();
 
-      <section class="homeFeedWrap" aria-label="홈 피드">
-        <article class="homeFeedCard homeFeedCardCompact">
-          <div class="homeFeedHead">
-            <div class="homeFeedUser">
-              <div class="homeAvatar">R</div>
-              <div>
-                <div class="homeFeedName">Roosycozy</div>
-                <div class="homeFeedMeta">오늘의 홈 피드</div>
-              </div>
+  const todoItems = [
+    !allRecords.length ? '빠른 캡처로 첫 기록을 남겨보세요.' : '',
+    allRecords.length > 0 && !collections.length ? '관련 기록 몇 개를 묶어 첫 컬렉션을 만들어보세요.' : '',
+    collections.length > 0 && !selectedCollection ? '최근 컬렉션 하나를 열어 흐름과 타임라인을 점검해보세요.' : '',
+    selectedCollection && selectedCollectionRecordCount < 2 ? '현재 컬렉션에 기록을 더 연결해 맥락을 보강해보세요.' : '',
+    selectedCollection && !strategyMessages.length ? 'AI 분석 탭에서 질문 한 줄을 보내 답장 초안과 다음 행동을 받아보세요.' : '',
+    sharedReadyCount > 0 ? '공유가 필요하면 공유/제출 문서 탭에서 PDF를 저장해두세요.' : '',
+  ].filter(Boolean).slice(0, 4);
+
+  const aiRecommendations = strategyResult
+    ? [
+        cleanStrategyDisplayText(String(strategyResult.recommendedTone || '')),
+        cleanStrategyDisplayText(String(strategyResult.recommendedAction || '')),
+      ].filter(Boolean)
+    : [
+        riskyRecords.length ? '리스크가 높은 기록부터 시각, 원본, 관련 대화 흐름을 다시 확인해보세요.' : '',
+        collections.length ? '가장 최근 컬렉션을 기준으로 AI 분석을 실행해 다음 행동 순서를 정리해보세요.' : '',
+        allRecords.length ? '비슷한 기록 3~5개를 묶으면 AI 분석과 공유 문서 품질이 훨씬 안정적으로 올라갑니다.' : '첫 기록을 남기면 홈에서 최근 캡처와 AI 추천 행동을 자동으로 보여드려요.',
+      ].filter(Boolean).slice(0, 3);
+
+  const nextActions = todoItems.length ? todoItems : ['최근 기록을 확인하고 필요한 항목을 컬렉션으로 묶어보세요.'];
+  const heroHighlights = [
+    selectedCollection
+      ? `${selectedCollectionRecordCount}개 기록이 현재 선택된 컬렉션에 연결되어 있어요.`
+      : allRecords.length
+        ? `최근 캡처 ${allRecords.length}건이 워크스페이스에 정리돼 있어요.`
+        : '첫 기록을 남기면 홈이 현재 상황을 자동으로 요약해드려요.',
+    riskyRecords.length
+      ? `우선 확인할 리스크 항목 ${riskyRecords.length}건이 감지됐어요.`
+      : '지금은 눈에 띄는 고위험 신호가 많지 않아요.',
+    strategyResult
+      ? cleanStrategyDisplayText(String(strategyResult.recommendedAction || 'AI 분석 결과가 다음 행동을 제안할 준비가 됐어요.'))
+      : collections.length
+        ? 'AI 분석 탭에서 다음 대응 순서를 바로 정리할 수 있어요.'
+        : '컬렉션을 만들면 분석과 공유 문서 품질이 더 안정적으로 올라가요.',
+  ].filter(Boolean).slice(0, 3);
+
+  const recentRecordItems = recentRecords.length
+    ? recentRecords.map((record) => `
+        <button class="homeEntryButton" data-action="view-record" data-id="${esc(String(record.id || ''))}" type="button">
+          <div class="homeEntryTop">
+            <span class="homeEntryTitle">${esc(trunc(String(record.summary || '제목 없는 기록'), 56))}</span>
+            <span class="homeEntryMeta">${esc(fmt(String(record.ts || '')))}</span>
+          </div>
+          <div class="homeEntrySub">${esc(trunc(`${recordActorText(record)} · ${placeLabel(record.place, record.placeOther)} · ${storeLabel(record.storeType, record.storeOther)}`, 72))}</div>
+        </button>
+      `).join('')
+    : `<div class="homeEntryEmpty">아직 캡처된 기록이 없어요. 사이드바의 빠른 캡처부터 시작해보세요.</div>`;
+
+  const recentCollectionItems = recentCollections.length
+    ? recentCollections.map((item) => {
+        const count = collectionRecordCounts.get(String(item.id || '')) || 0;
+        return `
+          <button class="homeEntryButton" data-action="select-case" data-id="${esc(String(item.id || ''))}" type="button">
+            <div class="homeEntryTop">
+              <span class="homeEntryTitle">${esc(trunc(String(item.title || '제목 없는 컬렉션'), 48))}</span>
+              <span class="homeEntryMeta">${esc(String(count))}개 기록</span>
             </div>
-            <button class="homeGhostBtn" data-action="open-updates-note" type="button" aria-label="업데이트 노트 보기">노트</button>
-          </div>
+            <div class="homeEntrySub">${esc(trunc(String(item.query || '주제 설명이 아직 없어요.'), 76))}</div>
+          </button>
+        `;
+      }).join('')
+    : `<div class="homeEntryEmpty">아직 컬렉션이 없어요. 관련 기록을 묶어 흐름별로 관리해보세요.</div>`;
 
-          <div class="homePhotoFrame homePhotoFrameCompact">
-            <img class="homeFeedImage homeFeedImageCompact" src="${feedImageUrl}" alt="메인 피드 이미지" />
-          </div>
+  const riskyItems = riskyRecords.length
+    ? riskyRecords.map((record) => {
+      const rr = normalizeRisk((record as any).risk);
+      return `
+          <button class="homeEntryButton homeEntryButtonRisk" data-action="view-record" data-id="${esc(String(record.id || ''))}" type="button">
+            <div class="homeEntryTop homeEntryTopLoose">
+              ${renderRiskTag((record as any).risk)}
+              <span class="homeEntryMeta">${esc(fmt(String(record.ts || '')))}</span>
+            </div>
+            <div class="homeEntryTitle homeRiskTitle">${esc(trunc(String(record.summary || '제목 없는 기록'), 70))}</div>
+            <div class="homeEntrySub">${esc(trunc(`${recordActorText(record)} · ${placeLabel(record.place, record.placeOther)}${rr?.reasons?.length ? ` · ${rr.reasons[0]}` : ''}`, 78))}</div>
+          </button>
+        `;
+    }).join('')
+    : `<div class="homeEntryEmpty">지금은 리스크가 높게 표시된 기록이 없어요.</div>`;
 
-          <div class="homeFeedBody homeFeedBodyCompact">
-            <div class="homeFeedStat">좋아요 1</div>
-            <div class="homeFeedCaption"><b>roosycozy</b> 봄이왔으면.</div>
-            <div class="homeFeedSub">선생님들을 위한 지능형 악성민원방어 시스템 Roosycozy.</div>
+  const collectionFocusHtml = selectedCollection
+    ? `
+      <div class="homeFocusMetaRow">
+        <span class="homeProgressPill ${progressState.tone}">선택된 컬렉션</span>
+        ${selectedCollectionLatestTs ? `<span class="homeEntryMeta">${esc(fmt(selectedCollectionLatestTs))}</span>` : ''}
+      </div>
+      <div class="homeFocusTitle">${esc(String(selectedCollection.title || '제목 없는 컬렉션'))}</div>
+      <div class="homeFocusSummary">${esc(String(selectedCollection.query || '주제 설명이 아직 없어요. 관련 기록을 더 연결하면 맥락이 훨씬 선명해집니다.'))}</div>
+      <div class="homeFocusTags">
+        <span class="homeInlineStat">기록 ${esc(String(selectedCollectionRecordCount))}개</span>
+        <span class="homeInlineStat">${sharedReadyCount > 0 ? '공유 문서 흐름 준비 가능' : '문서 초안은 아직 준비 전'}</span>
+      </div>
+      <div class="homeFocusActionRow">
+        ${H.btnData('컬렉션 열기', 'select-case', { id: String(selectedCollection.id || '') }, 'btn primary')}
+        ${H.btnData('AI 분석', 'switch-legal-tab', { 'legal-tab': 'simulation' }, 'btn ghost')}
+      </div>
+    `
+    : `
+      <div class="homeFocusMetaRow">
+        <span class="homeProgressPill ${progressState.tone}">현재 포커스</span>
+      </div>
+      <div class="homeFocusTitle">${esc(progressState.title)}</div>
+      <div class="homeFocusSummary">${esc(progressState.desc)}</div>
+      <div class="homeFocusTags">
+        <span class="homeInlineStat">최근 캡처 ${esc(String(allRecords.length))}건</span>
+        <span class="homeInlineStat">컬렉션 ${esc(String(collections.length))}개</span>
+      </div>
+      <div class="homeFocusActionRow">
+        ${collections.length
+          ? H.btnData('컬렉션 보기', 'switch-case-tab', { 'case-tab': 'list' }, 'btn primary')
+          : H.btnData('컬렉션 만들기', 'switch-case-tab', { 'case-tab': 'create' }, 'btn primary')}
+        ${allRecords.length
+          ? H.btnData('AI 분석', 'switch-legal-tab', { 'legal-tab': 'simulation' }, 'btn ghost')
+          : H.btn('빠른 캡처', 'open-record-composer', '', 'btn ghost')}
+      </div>
+    `;
+
+  return `
+    <section class="homeSectionStack homeDashboard homeWorkspace" aria-label="홈 대시보드">
+      <article class="homeHeroPanel" aria-label="홈 핵심 안내">
+        <div class="homeHeroContent">
+          <div class="homeHeroEyebrow">Evidence Workspace</div>
+          <div class="homeHeroTitle">차분하게 기록하고, 필요한 순간 바로 꺼내 쓰는 모던 워크스페이스</div>
+          <div class="homeHeroText">흩어진 대화, 사진, 파일, 메모를 한곳에 정리하고 컬렉션, AI 분석, 공유 문서 흐름으로 자연스럽게 이어가세요.</div>
+          <div class="homeHeroActions" aria-label="빠른 작업">
+            ${H.btn('빠른 캡처', 'open-record-composer', '', 'btn primary')}
+            ${H.btnData('컬렉션 만들기', 'switch-case-tab', { 'case-tab': 'create' }, 'btn ghost')}
+            ${H.btnData('AI 분석', 'switch-legal-tab', { 'legal-tab': 'simulation' }, 'btn ghost')}
+            ${H.btn('업데이트 노트', 'open-updates-note', ' aria-label="업데이트 노트 보기"', 'btn ghost homeHeroQuietAction')}
           </div>
+        </div>
+        <div class="homeHeroAside">
+          <div class="homeHeroAsideTop">
+            <span class="homeProgressPill ${progressState.tone}">${esc(progressState.label)}</span>
+            <span class="homeHeroAsideMeta">${selectedCollection ? '선택된 컬렉션 기준' : '현재 워크플로 상태'}</span>
+          </div>
+          <div class="homeHeroAsideTitle">${esc(progressState.title)}</div>
+          <div class="homeHeroAsideText">${esc(progressState.desc)}</div>
+          <div class="homeProgressList">
+            ${heroHighlights.map((item) => `<div class="homeProgressItem">${esc(item)}</div>`).join('')}
+          </div>
+          <div class="homeHeroAsideFooter">
+            <span>${selectedCollection ? `포커스: ${esc(trunc(String(selectedCollection.title || '제목 없는 컬렉션'), 30))}` : '포커스 컬렉션을 고르면 더 선명하게 정리돼요.'}</span>
+          </div>
+        </div>
+      </article>
+
+      <section class="homeStatRail" aria-label="현재 상태">
+        <article class="homeStatCard">
+          <span class="homeStatLabel">최근 캡처</span>
+          <strong class="homeStatValue">${esc(String(allRecords.length))}</strong>
+          <span class="homeStatNote">${allRecords[0]?.ts ? `마지막 기록 ${esc(fmt(String(allRecords[0].ts || '')))} ` : '아직 기록이 없어요.'}</span>
+        </article>
+        <article class="homeStatCard">
+          <span class="homeStatLabel">컬렉션</span>
+          <strong class="homeStatValue">${esc(String(collections.length))}</strong>
+          <span class="homeStatNote">${selectedCollection ? `현재 포커스 ${esc(String(selectedCollectionRecordCount))}개 기록` : collections.length ? '최근 흐름을 다시 열어볼 수 있어요.' : '첫 컬렉션을 만들 차례예요.'}</span>
+        </article>
+        <article class="homeStatCard">
+          <span class="homeStatLabel">리스크 항목</span>
+          <strong class="homeStatValue">${esc(String(riskyRecords.length))}</strong>
+          <span class="homeStatNote">${riskyRecords.length ? '먼저 확인해야 할 항목이 있어요.' : '지금은 비교적 안정적인 상태예요.'}</span>
+        </article>
+        <article class="homeStatCard">
+          <span class="homeStatLabel">공유 준비</span>
+          <strong class="homeStatValue">${esc(String(sharedReadyCount))}</strong>
+          <span class="homeStatNote">${sharedReadyCount ? '문서 흐름으로 바로 연결할 수 있어요.' : '조금 더 정리하면 문서화가 쉬워져요.'}</span>
+        </article>
+      </section>
+
+      <section class="homeDashboardMatrix" aria-label="대시보드 영역">
+        <article class="homePanel homePanelWide">
+          <div class="homePanelHead">
+            <div>
+              <div class="homePanelTitle">지금 하면 좋은 일</div>
+              <div class="homePanelText">작업 흐름이 끊기지 않도록 우선순위를 차분하게 정리했어요.</div>
+            </div>
+          </div>
+          <div class="homeChecklist">
+            ${nextActions
+              .map((item, index) => `
+                <div class="homeChecklistItem">
+                  <span class="homeChecklistNumber">${index + 1}</span>
+                  <span class="homeChecklistText">${esc(item)}</span>
+                </div>
+              `).join('')}
+          </div>
+        </article>
+
+        <article class="homePanel homePanelSide">
+          <div class="homePanelHead">
+            <div>
+              <div class="homePanelTitle">AI 추천 행동</div>
+              <div class="homePanelText">현재 기록 흐름을 기준으로 다음 행동을 짧고 선명하게 보여드려요.</div>
+            </div>
+          </div>
+          <div class="homeSignalList">
+            ${aiRecommendations.map((item) => `<div class="homeSignalItem">${esc(item)}</div>`).join('')}
+          </div>
+        </article>
+
+        <article class="homePanel homePanelSoft">
+          <div class="homePanelHead">
+            <div>
+              <div class="homePanelTitle">현재 포커스</div>
+              <div class="homePanelText">선택된 컬렉션이나 다음 정리 지점을 기준으로 작업 축을 잡아드려요.</div>
+            </div>
+          </div>
+          ${collectionFocusHtml}
+        </article>
+
+        <article class="homePanel">
+          <div class="homePanelHead">
+            <div>
+              <div class="homePanelTitle">최근 캡처</div>
+              <div class="homePanelText">방금 추가한 기록을 다시 열어 수정하거나 컬렉션에 묶을 수 있어요.</div>
+            </div>
+          </div>
+          <div class="homeEntryList">${recentRecordItems}</div>
+        </article>
+
+        <article class="homePanel">
+          <div class="homePanelHead">
+            <div>
+              <div class="homePanelTitle">최근 컬렉션</div>
+              <div class="homePanelText">비슷한 기록을 묶어 흐름과 타임라인을 이어가세요.</div>
+            </div>
+          </div>
+          <div class="homeEntryList">${recentCollectionItems}</div>
+        </article>
+
+        <article class="homePanel homePanelFull">
+          <div class="homePanelHead">
+            <div>
+              <div class="homePanelTitle">리스크 높은 항목</div>
+              <div class="homePanelText">확인과 정리가 먼저 필요한 기록만 따로 모아 빠르게 볼 수 있게 했어요.</div>
+            </div>
+          </div>
+          <div class="homeEntryList">${riskyItems}</div>
         </article>
       </section>
     </section>
@@ -354,8 +722,7 @@ function renderHomeMain() {
 
 
 function getLegalHubTab() {
-  const legalTab = String((ui as any).legalTab || '').trim();
-  return legalTab === 'advisor' ? 'advisor' : 'simulation';
+  return 'simulation';
 }
 
 function renderLegalSimulationPanel() {
@@ -376,24 +743,28 @@ function renderLegalSimulationPanel() {
   const chatError = String((ui as any).strategyChatError || '').trim();
   const progressLines = Array.isArray((ui as any).strategyChatProgressLines) ? ((ui as any).strategyChatProgressLines as string[]).slice(-6) : [];
   const progressStage = String((ui as any).strategyChatProgressStage || '').trim();
+  const activeThreadPackageId = String((ui as any).strategyThreadPackageId || '').trim();
+  const activeThreadPackage = Array.isArray((S as any).strategyThreadPackages)
+    ? ((S as any).strategyThreadPackages as any[]).find((item) => String(item?.id || '') === activeThreadPackageId) || null
+    : null;
 
   const goalLabelMap: Record<string, string> = {
-    stabilize: '관계를 더 흔들지 않는 답변',
-    document: '공식 대응을 위한 기록 축적',
-    escalate: '학교·기관 공유까지 염두에 둔 대응',
+    stabilize: '상황을 더 키우지 않는 정리',
+    document: '공유를 위한 기록 축적',
+    escalate: '기관·제출까지 고려한 정리',
   };
   const presetItems: { key: string; label: string; desc: string }[] = [
-    { key: 'shield', label: '방어적', desc: '자극 낮추기' },
+    { key: 'shield', label: '완화형', desc: '자극 낮추기' },
     { key: 'balanced', label: '균형형', desc: '설명+기록' },
-    { key: 'assertive', label: '단호형', desc: '공식 대응 준비' },
+    { key: 'assertive', label: '단호형', desc: '공유 준비' },
   ];
   const presetLabel = (presetItems.find((item) => item.key === String(draft.scenarioPreset || 'balanced'))?.label) || '균형형';
   const goalLabel = goalLabelMap[String(draft.goal || 'stabilize')] || goalLabelMap.stabilize;
   const recommendedTone = cleanStrategyDisplayText(result?.recommendedTone || '차분하게 핵심만 정리하는 대응이 좋아 보여요.');
   const recommendedAction = cleanStrategyDisplayText(result?.recommendedAction || '현재 기록을 기준으로 가장 안전한 다음 행동을 정리해드릴게요.');
   const contextSummaryLine = [
-    selectedCase ? String(selectedCase.title || '선택한 사건').trim() || '선택한 사건' : '사건 직접 선택',
-    `증거 ${selectedRecords.length}개`,
+    selectedCase ? String(selectedCase.title || '선택한 컬렉션').trim() || '선택한 컬렉션' : '직접 분석 모드',
+    `기록 ${selectedRecords.length}개`,
     goalLabel,
     presetLabel,
   ].join(' · ');
@@ -405,15 +776,15 @@ function renderLegalSimulationPanel() {
         <div class="strategyBubble">
           <div class="strategyInlineMeta">
             <span>${esc(contextSummaryLine)}</span>
-            <span>${dirty ? '증거 변경됨' : `마지막 분석 ${esc(fmt(result.calculatedAt))}`}</span>
+            <span>${dirty ? '기록 변경됨' : `마지막 분석 ${esc(fmt(result.calculatedAt))}`}</span>
           </div>
           <div class="strategyLead">${esc(recommendedTone)}</div>
           <div class="strategyParagraph">${esc(recommendedAction)}</div>
           <div class="strategyContextRow">
-            <span class="strategyContextPill">증거력 ${esc(String(result.evidencePower || 0))}</span>
+            <span class="strategyContextPill">근거 ${esc(String(result.evidencePower || 0))}</span>
             <span class="strategyContextPill">논리 ${esc(String(result.counterLogic || 0))}</span>
-            <span class="strategyContextPill">확산위험 ${esc(String(result.escalationRisk || 0))}</span>
-            <span class="strategyContextPill">통제력 ${esc(String(result.communicationControl || 0))}</span>
+            <span class="strategyContextPill">확산 ${esc(String(result.escalationRisk || 0))}</span>
+            <span class="strategyContextPill">통제 ${esc(String(result.communicationControl || 0))}</span>
           </div>
         </div>
       </article>
@@ -425,20 +796,20 @@ function renderLegalSimulationPanel() {
           <div class="strategyInlineMeta">
             <span>${esc(contextSummaryLine)}</span>
           </div>
-          <div class="strategyLead">사건을 읽고 어떤 말부터 꺼내야 하는지, 무엇을 먼저 기록해야 하는지 바로 정리해드릴게요.</div>
+          <div class="strategyLead">기록 흐름을 읽고 어떤 말부터 꺼내야 하는지, 무엇을 먼저 정리해야 하는지 바로 정리해드릴게요.</div>
           <div class="strategyParagraph">하단 입력창에 질문만 보내면 답장 초안, 기록 포인트, 다음 행동 순서를 채팅으로 이어서 도와드려요.</div>
         </div>
       </article>
     `;
 
   const caseSummary = selectedCase
-    ? `${String(selectedCase.title || '선택한 사건').trim() || '선택한 사건'} 사건을 기준으로 보고 있어요. 사건 증거 ${selectedCaseRecordCount}개 중 현재 ${selectedRecords.length}개가 자문에 연결돼 있어요.`
+    ? `${String(selectedCase.title || '선택한 컬렉션').trim() || '선택한 컬렉션'} 컬렉션을 기준으로 보고 있어요. 연결된 기록 ${selectedCaseRecordCount}개 중 현재 ${selectedRecords.length}개가 분석에 포함돼 있어요.`
     : selectedRecords.length
-      ? `지금은 사건을 고르지 않고 증거 ${selectedRecords.length}개만 붙여 놓은 상태예요. 이 정도면 빠른 1차 자문은 가능해요.`
-      : '아직 사건이나 증거가 연결되지 않았어요. 하단의 증거 버튼에서 사건을 고르거나 증거 몇 개만 붙이면 바로 자문을 시작할 수 있어요.';
+      ? `지금은 컬렉션을 고르지 않고 기록 ${selectedRecords.length}개만 붙여 놓은 상태예요. 이 정도면 빠른 1차 분석은 가능해요.`
+      : '아직 컬렉션이나 기록이 연결되지 않았어요. 하단의 기록 버튼에서 컬렉션을 고르거나 기록 몇 개만 붙이면 바로 분석을 시작할 수 있어요.';
   const compactProgressHtml = `
     <div class="strategyProgressConsole strategyProgressConsoleMini">
-      ${(progressLines.length ? progressLines.slice(-3) : [`${progressStage || '대기'} · 응답 생성이 시작되면 여기에 최근 단계가 보여요.`])
+      ${(progressLines.length ? progressLines.slice(-3) : [`${progressStage || '대기'} · 분석이 시작되면 여기에 최근 단계가 보여요.`])
         .map((line) => `<div class="strategyProgressLine">${esc(String(line || ''))}</div>`).join('')}
     </div>
   `;
@@ -466,9 +837,9 @@ function renderLegalSimulationPanel() {
       <div class="strategyAvatar">AI</div>
       <div class="strategyBubble soft">
         <div class="strategyInlineMeta">
-          <span>${esc(progressStage || '모델 응답 생성 중')}</span>
+          <span>${esc(progressStage || 'AI 분석 생성 중')}</span>
         </div>
-        <div class="strategyParagraph">연결된 증거와 사건 맥락을 읽고 답변을 정리하고 있어요…</div>
+        <div class="strategyParagraph">연결된 기록과 컬렉션 맥락을 읽고 답변을 정리하고 있어요…</div>
         ${compactProgressHtml}
       </div>
     </article>
@@ -485,6 +856,13 @@ function renderLegalSimulationPanel() {
       </div>
     </article>
   ` : '';
+  const threadPackageBanner = activeThreadPackage ? `
+    <article class="strategyThreadPackageBanner">
+      <div class="strategyThreadPackageBannerLabel">사건분석 스레드 패키지</div>
+      <div class="strategyThreadPackageBannerTitle">${esc(String(activeThreadPackage.title || '사건분석 스레드'))}</div>
+      <div class="strategyThreadPackageBannerMeta">${esc(`${String(activeThreadPackage.caseTitle || '직접 분석')} · 메시지 ${Array.isArray(activeThreadPackage.messages) ? activeThreadPackage.messages.length : 0}개`)}</div>
+    </article>
+  ` : '';
   const starterThread = !chatMessages.length ? `
     <article class="strategyMsg agent strategyIntroMsg">
       <div class="strategyAvatar">AI</div>
@@ -499,9 +877,10 @@ function renderLegalSimulationPanel() {
   ` : '';
 
   return `
-    <article class="legalHubPanel strategyChatPage" aria-label="전략자문 에이전트">
+    <article class="legalHubPanel strategyChatPage" aria-label="AI 분석">
       <section class="strategyChatOnlyShell">
         <div class="strategyChatThread strategyChatThreadOnly">
+          ${threadPackageBanner}
           ${starterThread}
           ${result ? briefingBubble : ''}
           ${renderedChatMessages}
@@ -511,12 +890,12 @@ function renderLegalSimulationPanel() {
 
         <footer class="strategyChatOnlyComposer">
           <label class="strategyComposerTextareaWrap strategyComposerTextareaWrapOnly">
-            <textarea class="strategyComposerTextarea strategyComposerTextareaOnly" rows="1" placeholder="예: 지금 학부모에게 보낼 3문장 답변 초안을 만들어줘" data-action="draft-strategy-chat" data-field="input">${esc(chatInput)}</textarea>
+            <textarea class="strategyComposerTextarea strategyComposerTextareaOnly" rows="1" placeholder="예: 이 상황을 상대방에게 어떻게 정리해 보낼지 3문장으로 써줘" data-action="draft-strategy-chat" data-field="input">${esc(chatInput)}</textarea>
           </label>
           <div class="strategyChatOnlyComposerBar">
             <div class="strategyChatOnlyComposerTools">
-              ${H.btn(selectedRecords.length ? `증거 ${selectedRecords.length}개` : '증거 붙이기', 'open-simulation-picker', '', 'btn ghost')}
-              <div class="strategyChatOnlyComposerHint">${chatPending ? esc(progressStage || '응답 생성 중') : 'Enter 전송 · Shift+Enter 줄바꿈'}</div>
+              ${H.btn(selectedRecords.length ? `기록 ${selectedRecords.length}개` : '기록 붙이기', 'open-simulation-picker', '', 'btn ghost')}
+              <div class="strategyChatOnlyComposerHint">${chatPending ? esc(progressStage || '분석 생성 중') : 'Enter 전송 · Shift+Enter 줄바꿈'}</div>
             </div>
             <div class="strategyComposerActions">
               ${H.btn(chatPending ? '생성 중…' : '보내기', 'send-strategy-chat', chatPending ? ' disabled aria-disabled="true"' : '', 'btn primary')}
@@ -562,8 +941,8 @@ function renderSimulationPickerModal() {
   return H.modal(
     'simulationPickerModal',
     H.modalHead(
-      '분석에 넣을 증거 고르기',
-      selectedCase ? `${String(selectedCase.title || '선택한 사건').trim() || '선택한 사건'} 사건에 연결할 증거를 골라주세요.` : '자문 에이전트가 읽을 증거를 추가하거나 빼주세요.',
+      '분석에 넣을 기록 고르기',
+      selectedCase ? `${String(selectedCase.title || '선택한 컬렉션').trim() || '선택한 컬렉션'} 컬렉션에 연결할 기록을 골라주세요.` : 'AI 분석이 읽을 기록을 추가하거나 빼주세요.',
       H.btn('닫기', 'close-simulation-picker', '', 'btn ghost')
     ),
     `
@@ -571,12 +950,12 @@ function renderSimulationPickerModal() {
         <div class="strategyPickerTopbar">
           <div class="strategyPickerTopbarFields">
             <label class="strategyField strategyPickerCaseField">
-              <span>기준 사건</span>
+              <span>기준 컬렉션</span>
               <select data-action="draft-simulation" data-field="caseId">
-                <option value="">사건 없이 직접 선택</option>
+                <option value="">컬렉션 없이 직접 선택</option>
                 ${visibleCases().map((id) => {
                   const item = S.cases[id];
-                  const label = String(item?.title || '제목 없는 사건').trim() || '제목 없는 사건';
+                  const label = String(item?.title || '제목 없는 컬렉션').trim() || '제목 없는 컬렉션';
                   return `<option value="${esc(id)}" ${simulationCaseId === id ? 'selected' : ''}>${esc(trunc(label, 40))}</option>`;
                 }).join('')}
               </select>
@@ -594,9 +973,9 @@ function renderSimulationPickerModal() {
         </div>
 
         <div class="strategyPickerToolbar">
-          ${selectedCase ? H.btn('사건 증거 다시 불러오기', 'simulation-reset-to-case', '', 'btn') : ''}
+          ${selectedCase ? H.btn('컬렉션 기록 다시 불러오기', 'simulation-reset-to-case', '', 'btn') : ''}
           ${H.btn('비우기', 'simulation-clear-selection', '', 'btn ghost')}
-          <div class="strategyPickerHint">여기서 고른 뒤 적용을 눌러야 자문 화면에 반영돼요.</div>
+          <div class="strategyPickerHint">여기서 고른 뒤 적용을 눌러야 AI 분석 화면에 반영돼요.</div>
           ${H.btn(`적용하기 (${selectedIds.length})`, 'simulation-apply-picker', '', 'btn primary')}
         </div>
 
@@ -607,74 +986,10 @@ function renderSimulationPickerModal() {
   );
 }
 
-function renderLegalAdvisorPanel() {
-  return `
-    <article class="legalHubPanel legalAdvisorPanel legalAdvisorPanelCompact" aria-label="원스톱 법률자문">
-      <section class="legalAdvisorTop">
-        <div class="legalAdvisorIdentity">
-          <div class="legalAdvisorPhotoCol">
-            <div class="legalAdvisorPhotoFrame legalAdvisorPhotoFrameCompact">
-              <img class="legalAdvisorPhoto" src="${lawyerProfileImageUrl}" alt="전서현 변호사 프로필" />
-            </div>
-          </div>
-
-          <div class="legalAdvisorCopyCol legalAdvisorCopyColCompact">
-            <div class="legalAdvisorKicker">원스톱 법률자문</div>
-            <div class="legalAdvisorHeadingRow">
-              <h2 class="legalAdvisorTitle">전서현 변호사</h2>
-              <span class="legalAdvisorMiniBadge">학교폭력 · 형사 · 인권</span>
-            </div>
-            <div class="legalAdvisorLaunchRow" aria-label="오픈 안내">
-              <span class="legalAdvisorOpenBadge">🌸 4월초 오픈예정</span>
-              <span class="legalAdvisorOpenHint">원스톱 법률자문 연결 기능을 곧 이용하실 수 있어요.</span>
-            </div>
-            <div class="legalAdvisorRole">학교 현장 분쟁 대응 자문</div>
-          </div>
-        </div>
-
-      </section>
-
-      <div class="legalAdvisorGrid legalAdvisorGridCompact legalAdvisorGridBalanced">
-        <section class="legalAdvisorCard legalAdvisorCardDense">
-          <div class="legalAdvisorCardLabel">주요 자격 · 위원</div>
-          <ul class="legalAdvisorList legalAdvisorListDense">
-            <li>現 대한변호사협회 인증 학교폭력전문변호사</li>
-            <li>現 대한변호사협회 인증 형사전문변호사</li>
-            <li>現 교육청 학교폭력대책심의위원회 위원</li>
-            <li>現 경기중앙지방변호사회 청소년범죄·학교폭력 대책 위원회</li>
-            <li>現 국가인권위원회 전문상담위원</li>
-          </ul>
-        </section>
-
-        <section class="legalAdvisorCard legalAdvisorCardDense">
-          <div class="legalAdvisorCardLabel">학력</div>
-          <ul class="legalAdvisorList legalAdvisorListDense">
-            <li>한양대학교 정책학 학사</li>
-            <li>서울시립대학교 법학전문대학원 전문석사</li>
-          </ul>
-        </section>
-
-        <section class="legalAdvisorCard legalAdvisorCardDense legalAdvisorCareerCard">
-          <div class="legalAdvisorCardLabel">경력</div>
-          <ul class="legalAdvisorTimeline legalAdvisorTimelineDense">
-            <li><span class="legalAdvisorTimelineTitle">로어스 법률사무소 대표변호사</span></li>
-            <li><span class="legalAdvisorTimelineTitle">법무법인 테헤란 형사팀 소속변호사</span></li>
-            <li><span class="legalAdvisorTimelineTitle">법무법인 동주 소속변호사</span></li>
-          </ul>
-        </section>
-      </div>
-    </article>
-  `;
-}
-
 function renderLegalConsultMain() {
-  const activeTab = getLegalHubTab();
-  const panelHtml = activeTab === 'advisor'
-    ? renderLegalAdvisorPanel()
-    : renderLegalSimulationPanel();
   return `
-    <section class="legalHub legalPartnerHub legalHubCompact" aria-label="법률 도구">
-      <article class="card legalHubShell legalHubShellFlat">${panelHtml}</article>
+    <section class="legalHub legalPartnerHub legalHubCompact legalHubChatMode" aria-label="AI 분석">
+      <article class="card legalHubShell legalHubShellFlat">${renderLegalSimulationPanel()}</article>
     </section>
   `;
 }
@@ -734,7 +1049,7 @@ function renderTimelineRecordMeta(record: RecordItem) {
 
   return `
     <div class="recMiniTimes timelineMetaBlock">
-      <div class="recMiniMetaLine"><span class="metaK">사건시각</span><span>${esc(fmt(meta.vr.ts || ''))}</span></div>
+      <div class="recMiniMetaLine"><span class="metaK">기록 시각</span><span>${esc(fmt(meta.vr.ts || ''))}</span></div>
       <div class="recMiniMetaLine"><span class="metaK">최초 입력봉인</span><span>${esc(meta.originalSealedAt ? fmt(meta.originalSealedAt) : '—')}</span></div>
       <div class="recMiniMetaLine"><span class="metaK">${esc(sealLabel)}</span><span>${esc(meta.lastSealedAt ? fmt(meta.lastSealedAt) : '—')}</span></div>
       <div class="recMiniMetaLine"><span class="metaK">수정이력</span><span>${esc(meta.amendCount ? `정정 ${meta.amendCount}회 / REV ${meta.revisionCount}` : `원본 / REV ${meta.revisionCount}`)}</span></div>
@@ -870,6 +1185,7 @@ export function render() {
   const legalHubTab = getLegalHubTab();
   const isCasesListView = currentTab === 'cases' && activeCaseTab === 'list';
   const showCaseSide = isCasesListView && !!selected && !HIDE_CASE_ACTIONS_AND_GUIDES;
+  const platform = windowPlatform();
 
   const casesMainHtml = renderCasesMain(selected);
   const casesSideHtml = showCaseSide ? renderCaseSidebar(selected) : '';
@@ -884,15 +1200,19 @@ export function render() {
       ? `<section class="serviceSection recordsSection"><main class="recordsMain">${renderRecordsMain()}</main></section>`
       : isLegal
         ? `<section class="serviceSection legalSection"><main class="legalMain">${renderLegalConsultMain()}</main></section>`
-        : renderCasesShell(selected, gridClass, isCasesListView ? gridInner : '');
+        : `<section class="serviceSection casesSection"><main class="casesMain">${renderCasesShell(selected, gridClass, isCasesListView ? gridInner : '')}</main></section>`;
 
   $app.innerHTML = `
-    <div class="container mobileRefined iphonePremium fluidDesktopShell ${ui.pinLocked ? 'appIsLocked' : ''}">
+    <div class="container mobileRefined iphonePremium fluidDesktopShell ${ui.pinLocked ? 'appIsLocked' : ''}" data-window-platform="${platform}">
       <div class="appFrame">
         ${renderAppSidebar(currentTab)}
 
         <div class="serviceMain">
           <header class="topbar">
+            <div class="windowTitlebarStrip">
+              <div class="windowTitlebarDrag" data-tauri-drag-region aria-hidden="true"></div>
+              ${renderWindowControls()}
+            </div>
             <div class="topbarInner topbarCompact">
               <nav class="topNav topNavShifted" aria-label="주요 메뉴">
                 <button class="topNavBtn ${currentTab === 'records' ? 'active' : ''}" data-action="tab" data-tab="records" data-route-tab="records" type="button" ${currentTab === 'records' ? 'aria-current="page"' : ''}>
@@ -904,7 +1224,7 @@ export function render() {
                       <path d="M8.5 15.5H14.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
                     </svg>
                   </span>
-                  <span class="topNavLabel">증거관리</span>
+                  <span class="topNavLabel">기록 보관함</span>
                 </button>
                 <button class="topNavBtn ${currentTab === 'cases' ? 'active' : ''}" data-action="tab" data-tab="cases" data-route-tab="cases" type="button" ${currentTab === 'cases' ? 'aria-current="page"' : ''}>
                   <span class="topNavIcon" aria-hidden="true">
@@ -913,7 +1233,7 @@ export function render() {
                       <path d="M3.75 10H20.25" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
                     </svg>
                   </span>
-                  <span class="topNavLabel">사건</span>
+                  <span class="topNavLabel">컬렉션</span>
                 </button>
                 <button class="topNavBtn topNavBtnLegal ${currentTab === 'legal' && legalHubTab === 'simulation' ? 'active' : ''}" data-action="switch-legal-tab" data-legal-tab="simulation" data-route-tab="legal" type="button" ${currentTab === 'legal' && legalHubTab === 'simulation' ? 'aria-current="page"' : ''}>
                   <span class="topNavIcon" aria-hidden="true">
@@ -923,28 +1243,13 @@ export function render() {
                       <path d="M19 14.5L21 15.75L19 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
                     </svg>
                   </span>
-                  <span class="topNavLabel">전략자문 에이전트</span>
-                </button>
-                <button class="topNavBtn topNavBtnLegal ${currentTab === 'legal' && legalHubTab === 'advisor' ? 'active' : ''}" data-action="switch-legal-tab" data-legal-tab="advisor" data-route-tab="legal" type="button" ${currentTab === 'legal' && legalHubTab === 'advisor' ? 'aria-current="page"' : ''}>
-                  <span class="topNavIcon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M12 5.25L18.75 8.75L12 12.25L5.25 8.75L12 5.25Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
-                      <path d="M7.75 11.5V14.25C7.75 15.7688 9.65279 17 12 17C14.3472 17 16.25 15.7688 16.25 14.25V11.5" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
-                      <path d="M18.75 8.75V14.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                      <path d="M18.75 14.5C19.4404 14.5 20 15.0596 20 15.75C20 16.4404 19.4404 17 18.75 17C18.0596 17 17.5 16.4404 17.5 15.75C17.5 15.0596 18.0596 14.5 18.75 14.5Z" fill="currentColor"/>
-                    </svg>
-                  </span>
-                  <span class="topNavLabel">원스톱 법률자문</span>
-                </button>
-                <button class="topNavBtn topNavBtnTeacherCreate" data-action="open-teacher-account-modal" type="button" aria-haspopup="dialog" aria-label="교사계정생성 안내 열기">
-                  <span class="topNavIcon" aria-hidden="true">✦</span>
-                  <span class="topNavLabel">교사계정생성</span>
+                  <span class="topNavLabel">AI 분석</span>
                 </button>
               </nav>
             </div>
           </header>
 
-          <div class="serviceContent">
+          <div class="serviceContent${currentTab === 'legal' ? ' serviceContentChatMode' : ''}">
             ${contentHtml}
           </div>
         </div>
@@ -953,7 +1258,6 @@ export function render() {
         ${renderScreenPinModal()}
         ${renderSettingsModal()}
         ${renderUpdateNotesModal()}
-        ${renderTeacherAccountModal()}
         ${renderSimulationPickerModal()}
         ${renderLogsModal()}
         ${renderConfirmModal()}
@@ -996,9 +1300,9 @@ function renderCaseContentProofPanel() {
   if (!ids.length) {
     return `
       <div class="caseProofPanel compactMode">
-        <div class="empty" style="height:160px">아직 사건이 없어요. 먼저 증거를 묶어 사건을 만든 뒤 내용증명을 준비할 수 있어요.</div>
+        <div class="empty" style="height:160px">아직 컬렉션이 없어요. 먼저 기록을 묶어 컬렉션을 만든 뒤 공유용 문서를 준비할 수 있어요.</div>
         <div class="rowInline" style="justify-content:flex-end; margin-top:10px">
-          ${H.btnData('증거모으기로 이동', 'switch-case-tab', { 'case-tab': 'create' }, 'btn primary')}
+          ${H.btnData('컬렉션 만들기로 이동', 'switch-case-tab', { 'case-tab': 'create' }, 'btn primary')}
         </div>
       </div>
     `;
@@ -1012,28 +1316,28 @@ function renderCaseContentProofPanel() {
     <div class="caseProofPanel compactMode">
       <div class="caseProofHero compactMode">
         <div>
-          <div class="simulationEyebrow">내용증명</div>
-          <div class="h2">실행할 사건을 먼저 선택하세요</div>
-          <div class="muted" style="margin-top:6px">사건 목록에서 하나를 고른 뒤 <b>내용증명 생성하기</b>를 누르면 미리보기 모달이 열립니다.</div>
+          <div class="simulationEyebrow">공유/제출 문서</div>
+          <div class="h2">출력할 컬렉션을 먼저 선택하세요</div>
+          <div class="muted" style="margin-top:6px">컬렉션 목록에서 하나를 고른 뒤 <b>공유 문서 생성하기</b>를 누르면 미리보기 모달이 열립니다.</div>
         </div>
         <div class="caseProofActionRow compactMode">
-          ${proofCase ? H.btn('내용증명 생성하기', 'open-paper-preview', '', 'btn primary') : '<button class="btn" type="button" disabled>내용증명 생성하기</button>'}
+          ${proofCase ? H.btn('공유 문서 생성하기', 'open-paper-preview', '', 'btn primary') : '<button class="btn" type="button" disabled>공유 문서 생성하기</button>'}
         </div>
       </div>
 
       ${proofCase ? `
         <div class="caseProofTargetCard compactMode">
           <div class="caseProofTargetMain">
-            <div class="caseProofTargetTitle">${esc(String((proofCase as any).title || '제목 없는 사건'))}</div>
-            <div class="caseProofTargetDesc">${esc(trunc(String((proofCase as any).query || ''), 140) || '사건 요약이 아직 비어 있어요.')}</div>
+            <div class="caseProofTargetTitle">${esc(String((proofCase as any).title || '제목 없는 컬렉션'))}</div>
+            <div class="caseProofTargetDesc">${esc(trunc(String((proofCase as any).query || ''), 140) || '컬렉션 설명이 아직 비어 있어요.')}</div>
           </div>
           <div class="caseProofStats compactMode">
-            <div class="caseProofStat"><span class="k">증거</span><span class="v">${esc(String(proofRecords.length))}</span></div>
+            <div class="caseProofStat"><span class="k">기록</span><span class="v">${esc(String(proofRecords.length))}</span></div>
             <div class="caseProofStat"><span class="k">최근</span><span class="v">${lastTs ? esc(fmt(lastTs)) : '—'}</span></div>
           </div>
         </div>
       ` : `
-        <div class="caseProofHintCard">선택된 사건이 없습니다. 아래 사건 카드 중 하나를 눌러주세요.</div>
+        <div class="caseProofHintCard">선택된 컬렉션이 없습니다. 아래 컬렉션 카드 중 하나를 눌러주세요.</div>
       `}
 
       <div class="caseProofCaseGrid">
@@ -1044,11 +1348,11 @@ function renderCaseContentProofPanel() {
           return `
             <button class="caseProofCaseCard ${active ? 'active' : ''}" data-action="pick-proof-case" data-id="${esc(c.id)}" type="button">
               <div class="caseProofCaseCardTop">
-                <span class="caseProofCaseTitle">${esc(trunc(String(c.title || '사건'), 34))}</span>
+                <span class="caseProofCaseTitle">${esc(trunc(String(c.title || '컬렉션'), 34))}</span>
                 <span class="caseProofCaseBadge">${active ? '선택됨' : '선택'}</span>
               </div>
-              <div class="caseProofCaseDesc">${esc(trunc(String(c.query || ''), 92) || '사건 요약이 아직 비어 있어요.')}</div>
-              <div class="caseProofCaseMeta">${esc(String(recs.length))}개 증거 · ${c.status ? esc(String(c.status)) : '진행중'}</div>
+              <div class="caseProofCaseDesc">${esc(trunc(String(c.query || ''), 92) || '컬렉션 설명이 아직 비어 있어요.')}</div>
+              <div class="caseProofCaseMeta">${esc(String(recs.length))}개 기록 · ${c.status ? esc(String(c.status)) : '진행중'}</div>
             </button>
           `;
         }).join('')}
@@ -1075,14 +1379,14 @@ function renderPaperPickContent() {
   return all.length
     ? `
       <div class="paperPickToolbar">
-        <input class="searchInput paperPickSearch" placeholder="사건 제목/요약 검색" value="${esc(q)}" data-action="search-paper-cases" />
+        <input class="searchInput paperPickSearch" placeholder="컬렉션 제목/설명 검색" value="${esc(q)}" data-action="search-paper-cases" />
       </div>
       <div class="paperPickList" role="list">
         ${filtered.length ? filtered.map(({ c, recCount, lastTs }) => `
           <button class="paperPickItem" data-action="pick-paper-case" data-id="${esc((c as any).id)}" type="button" role="listitem">
             <div class="paperPickMain">
               <div class="paperPickTitle">
-                ${esc(String((c as any).title || '제목 없는 사건'))}
+                ${esc(String((c as any).title || '제목 없는 컬렉션'))}
                 ${S.selectedCaseId === (c as any).id ? `<span class="tag butter" style="margin-left:8px;">현재 열림</span>` : ''}
               </div>
               <div class="paperPickMeta">
@@ -1091,7 +1395,7 @@ function renderPaperPickContent() {
             </div>
             <div class="paperPickSide">
               <div class="paperPickStat">${esc(String((c as any).status || ''))}</div>
-              <div class="paperPickStat muted">${esc(String(recCount))}개 증거</div>
+              <div class="paperPickStat muted">${esc(String(recCount))}개 기록</div>
               <div class="paperPickStat muted">${lastTs ? esc(fmt(lastTs)) : '—'}</div>
             </div>
           </button>
@@ -1099,15 +1403,15 @@ function renderPaperPickContent() {
       </div>
 
       <div class="muted" style="margin-top:10px; font-size:12px">
-        선택 즉시 내용증명 미리보기로 넘어가요.
+        선택 즉시 공유/제출 문서 미리보기로 넘어가요.
       </div>
     `
     : `
       <div class="empty" style="height:160px">
-        아직 사건이 없어요. 먼저 사건을 기록한 뒤 출력할 수 있어요.
+        아직 컬렉션이 없어요. 먼저 컬렉션을 만든 뒤 출력할 수 있어요.
       </div>
       <div class="rowInline" style="justify-content:flex-end; margin-top:10px">
-        ${H.btnData('증거모으기로 이동', 'switch-case-tab', { 'case-tab': 'create' }, 'btn primary')}
+        ${H.btnData('컬렉션 만들기로 이동', 'switch-case-tab', { 'case-tab': 'create' }, 'btn primary')}
       </div>
     `;
 }
@@ -1115,12 +1419,12 @@ function renderPaperPickContent() {
 function renderPaperPickModal() {
   const actions = `
     <div class="rowInline">
-      ${H.btn('증거모으기', 'paper-open-case-create', '', 'btn')}
+      ${H.btn('컬렉션 만들기', 'paper-open-case-create', '', 'btn')}
       ${H.btn('닫기', 'close-paper-picker')}
     </div>
   `;
 
-  const head = H.modalHead('내용증명 생성', '어떤 사건으로 내용증명서를 만들까요?', actions);
+  const head = H.modalHead('공유/제출 문서', '어떤 컬렉션으로 PDF를 만들까요?', actions);
   return H.modal('paperPickModal', head, renderPaperPickContent(), 'modal paperPickModal');
 }
 
@@ -1170,7 +1474,7 @@ function renderSettingsModal() {
 
         <button class="settingsAction danger" data-action="wipe" type="button">
           <div class="settingsActionTitle">삭제</div>
-          <div class="muted">모든 증거와 사건 데이터를 삭제합니다.</div>
+          <div class="muted">모든 기록과 컬렉션 데이터를 삭제합니다.</div>
         </button>
       </div>
 
@@ -1308,7 +1612,7 @@ function renderSignatureModal() {
   const subtitle = isAmend ? '수정 저장 전에 전자서명과 봉인 사유를 확인해 주세요.' : '저장 전에 전자서명과 봉인 메모를 확인해 주세요.';
   const primaryLabel = isAmend ? '서명 완료 후 수정 저장' : '서명 완료 후 저장';
   const sealReasonLabel = isAmend ? '정정 사유' : '봉인 메모';
-  const sealReasonPlaceholder = isAmend ? '예: 사건시각 정정 / 표현 보완 / 주체 오기 수정' : '예: 최초 사실기록 / 통화 직후 즉시 기록';
+  const sealReasonPlaceholder = isAmend ? '예: 기록 시각 정정 / 표현 보완 / 이름 수정' : '예: 최초 사실기록 / 통화 직후 즉시 기록';
   const summary = String(activeDraft.summary || '').trim() || '내용 없음';
   const actorText = String((isAmend ? draftRecordEdit.actorNameOther : draftRecord.actorNameOther) || '').trim() || '미입력';
   const placeText = String(((activeDraft as any).placeText || activeDraft.place || '')).trim() || '미입력';
@@ -1323,13 +1627,13 @@ function renderSignatureModal() {
     `
       <div class="signatureFlow">
         <div class="signatureHero">
-          <div class="signatureHeroTitle">${esc(isAmend ? '수정 내용을 서명하고 새 revision으로 저장합니다.' : '입력한 증거를 서명하고 봉인 저장합니다.')}</div>
+          <div class="signatureHeroTitle">${esc(isAmend ? '수정 내용을 서명하고 새 revision으로 저장합니다.' : '입력한 기록을 서명하고 봉인 저장합니다.')}</div>
           <div class="muted">서명 완료 시 즉시 인증 처리되고, 이후에는 수정 이력이 append-only로 누적됩니다.</div>
         </div>
 
         <div class="signatureMetaGrid">
           <div class="signatureMetaCard"><span class="signatureMetaK">내용</span><b>${esc(trunc(summary, 72))}</b></div>
-          <div class="signatureMetaCard"><span class="signatureMetaK">사건시각</span><b>${esc(fmt(fromLocalInputValue(String(activeDraft.ts || ''))))}</b></div>
+          <div class="signatureMetaCard"><span class="signatureMetaK">기록 시각</span><b>${esc(fmt(fromLocalInputValue(String(activeDraft.ts || ''))))}</b></div>
           <div class="signatureMetaCard"><span class="signatureMetaK">주체</span><b>${esc(actorText)}</b></div>
           <div class="signatureMetaCard"><span class="signatureMetaK">장소 / 보관</span><b>${esc(`${placeText} · ${storeText}`)}</b></div>
           ${isAmend ? `<div class="signatureMetaCard span2"><span class="signatureMetaK">현재 해시</span><b>${esc(shortHash(currentHash || ''))}</b></div>` : `<div class="signatureMetaCard span2"><span class="signatureMetaK">저장 방식</span><b>전자서명 완료 후 즉시 봉인 저장</b></div>`}
@@ -1379,10 +1683,10 @@ function renderSignSuccessModal() {
 function renderRecordModal() {
   const raw = ui.viewRecordId ? S.records.find((x) => x.id === ui.viewRecordId) ?? null : null;
   const r = raw ? ensureRecordV8(raw) : null;
-  const title = r ? trunc(r.summary, 32) : '증거 상세';
+  const title = r ? trunc(r.summary, 32) : '기록 상세';
 
   if (!r) {
-    return H.modal('recordModal', H.modalHead('증거관리', String(title), H.btn('닫기', 'close-record')), H.empty('증거를 찾을 수 없어요.'));
+    return H.modal('recordModal', H.modalHead('기록 보관함', String(title), H.btn('닫기', 'close-record')), H.empty('기록을 찾을 수 없어요.'));
   }
 
   const integrity = verifyRecordIntegrity(r as any);
@@ -1398,8 +1702,8 @@ function renderRecordModal() {
     ? `<span class="integrityBadge ok">무결성 확인</span>`
     : `<span class="integrityBadge bad">무결성 경고</span>`;
 
-  const editActorType = String((draftRecordEdit as any).actorTypeText || '학생');
-  const editPlaceText = String((draftRecordEdit as any).placeText || '교실');
+  const editActorType = String((draftRecordEdit as any).actorTypeText || '당사자');
+  const editPlaceText = String((draftRecordEdit as any).placeText || '온라인');
   const editStoreTypeText = String((draftRecordEdit as any).storeTypeText || '전화');
   const editSummaryOverview = String((draftRecordEdit as any).summaryOverview || '').trim();
   const editSummaryBackground = String((draftRecordEdit as any).summaryBackground || '').trim();
@@ -1416,8 +1720,8 @@ function renderRecordModal() {
   const editCanSave = editOkSummary && editOkTs && editOkActor;
   const editReqMissing: string[] = [];
   if (!editOkSummary) editReqMissing.push('내용');
-  if (!editOkTs) editReqMissing.push('사건시각');
-  if (!editOkActor) editReqMissing.push('주체');
+  if (!editOkTs) editReqMissing.push('기록 시각');
+  if (!editOkActor) editReqMissing.push('사람');
   const editReqLabel = editCanSave ? '정정 봉인 가능' : `필수: ${editReqMissing.join(' · ')}`;
   const showEditPlaceOther = editPlaceText === '기타';
   const showEditStoreOther = editStoreTypeText === '기타';
@@ -1426,14 +1730,14 @@ function renderRecordModal() {
     value: String(draftRecordEdit.actorNameOther || ''),
     action: 'draft-record-edit',
     field: 'actorNameOther',
-    placeholder: '이름(예: 학생1 / 1번 모 / 교장 / 김OO)'
+    placeholder: '이름(예: 상대 A / 담당자 / 김OO)'
   });
   const editRelNameField = renderNameFieldForType({
     typeText: String(draftRecordEdit.relTypeText || ''),
     value: String(draftRecordEdit.relNameOther || ''),
     action: 'draft-record-edit',
     field: 'relNameOther',
-    placeholder: '이름(예: 1번 부 / 교감 / 김OO)'
+    placeholder: '이름(예: 관계자 / 담당자 / 김OO)'
   });
   const editActorList =
     editActors.length
@@ -1449,7 +1753,7 @@ function renderRecordModal() {
             )
             .join('')}
         </div>`
-      : `<div class="muted" style="margin-top:6px; font-size:12px">주체를 1명 이상 추가해 주세요. 현재 입력줄은 저장 시 자동 포함돼요.</div>`;
+      : `<div class="muted" style="margin-top:6px; font-size:12px">사람을 1명 이상 추가해 주세요. 현재 입력줄은 저장 시 자동 포함돼요.</div>`;
   const editRelatedList =
     (draftRecordEdit.related || []).length
       ? `<div class="chips mini" style="margin-top:8px">
@@ -1470,35 +1774,35 @@ function renderRecordModal() {
     <section class="recordEditPanel">
       <div class="recordSectionHead">
         <div>
-          <div class="recordSectionTitle">정정 작성</div>
-          <div class="muted">원본은 지워지지 않고, 새 해시와 정정 로그가 위로 추가돼요.</div>
+          <div class="recordSectionTitle">수정안 작성</div>
+          <div class="muted">원본은 유지되고, 새 해시와 변경 로그가 위로 추가돼요.</div>
         </div>
         <span id="recordEditReqPill" class="savePill ${editCanSave ? 'ready' : 'warn'}">${esc(editReqLabel)}</span>
       </div>
 
       <div id="recordEditSummaryParts" class="summaryPartsGrid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-bottom:10px">
         <div class="field">
-          <label>사안개요 <span class="reqStar">*</span></label>
+          <label>상황 한줄 요약 <span class="reqStar">*</span></label>
           <textarea id="recordEditSummaryOverview" class="entryTa composerTa" rows="3" data-action="draft-record-edit" data-field="summaryOverview">${esc((draftRecordEdit as any).summaryOverview || '')}</textarea>
         </div>
         <div class="field">
-          <label>사안경위</label>
+          <label>배경 / 흐름</label>
           <textarea class="entryTa composerTa" rows="3" data-action="draft-record-edit" data-field="summaryBackground">${esc((draftRecordEdit as any).summaryBackground || '')}</textarea>
         </div>
         <div class="field">
-          <label>쟁점별정리</label>
+          <label>핵심 포인트</label>
           <textarea class="entryTa composerTa" rows="3" data-action="draft-record-edit" data-field="summaryIssues">${esc((draftRecordEdit as any).summaryIssues || '')}</textarea>
         </div>
         <div class="field">
-          <label>증거 목록</label>
+          <label>관련 자료 목록</label>
           <textarea class="entryTa composerTa" rows="3" data-action="draft-record-edit" data-field="summaryEvidenceList">${esc((draftRecordEdit as any).summaryEvidenceList || '')}</textarea>
         </div>
         <div class="field">
-          <label>교사의 조치 기록</label>
+          <label>내가 한 대응 / 메모</label>
           <textarea class="entryTa composerTa" rows="3" data-action="draft-record-edit" data-field="summaryTeacherActions">${esc((draftRecordEdit as any).summaryTeacherActions || '')}</textarea>
         </div>
         <div class="field">
-          <label>기타 내용</label>
+          <label>추가 메모</label>
           <textarea class="entryTa composerTa" rows="3" data-action="draft-record-edit" data-field="summaryOther">${esc((draftRecordEdit as any).summaryOther || '')}</textarea>
         </div>
       </div>
@@ -1506,7 +1810,7 @@ function renderRecordModal() {
 
       <div class="metaInputs">
         <div class="field compact">
-          <label>사건시각 <span class="reqStar">*</span></label>
+          <label>기록 시각 <span class="reqStar">*</span></label>
           <div class="rowInline compactRow">
             <input id="recordEditTs" class="${editOkTs ? '' : 'reqWarn'}" type="datetime-local" value="${esc(draftRecordEdit.ts)}" data-action="draft-record-edit" data-field="ts" />
             <button class="btn ghost small" type="button" data-action="set-record-edit-now">방금</button>
@@ -1515,25 +1819,25 @@ function renderRecordModal() {
         </div>
 
         <div class="field compact">
-          <label>주체 <span class="reqStar">*</span></label>
+          <label>사람 <span class="reqStar">*</span></label>
           <div id="recordEditActorRow" class="rowInline compactRow ${editOkActor ? '' : 'reqWarn'}">
             <select data-action="draft-record-edit" data-field="actorTypeText">${renderSelectFromList(UI_ACTOR_TYPES as any, editActorType)}</select>
             <div class="grow">${editMainNameField}</div>
             ${H.btn('추가', 'add-record-actor-edit', '', 'btn small')}
           </div>
-          <div class="mini muted" style="margin-top:6px">복수 주체를 입력할 수 있어요. 저장 시 하나로 묶여 기록됩니다.</div>
+          <div class="mini muted" style="margin-top:6px">복수 인물을 입력할 수 있어요. 저장 시 하나의 기록으로 묶여 관리됩니다.</div>
           ${editActorList}
           <div id="recordEditWarnActor" class="miniWarn" ${editOkActor ? 'hidden' : ''}>⚠ 주체를 1명 이상 추가해 주세요.</div>
         </div>
 
         <div class="field compact">
-          <label>장소</label>
+          <label>위치 / 채널</label>
           <select data-action="draft-record-edit" data-field="placeText">${renderSelectFromList(PLACE_TYPES as any, editPlaceText)}</select>
           ${showEditPlaceOther ? `<input value="${esc(draftRecordEdit.placeOther)}" placeholder="장소 상세(기타)" data-action="draft-record-edit" data-field="placeOther" />` : ''}
         </div>
 
         <div class="field compact">
-          <label>보관</label>
+          <label>자료 형태</label>
           <select data-action="draft-record-edit" data-field="storeTypeText">${renderSelectFromList(STORE_TYPES as any, editStoreTypeText)}</select>
           ${showEditStoreOther ? `<input value="${esc(draftRecordEdit.storeOther)}" placeholder="보관형태 상세(기타)" data-action="draft-record-edit" data-field="storeOther" />` : ''}
         </div>
@@ -1541,13 +1845,13 @@ function renderRecordModal() {
 
       <details id="recordEditRelatedDetails" class="metaMore" ${ui.recEditRelatedOpen ? 'open' : ''}>
         <summary>
-          <span>관련자 정정</span>
+          <span>관계 항목 수정</span>
           <span class="metaMoreCount">${esc(String((draftRecordEdit.related || []).length))}명</span>
         </summary>
         <div class="metaMorePanel">
           <div class="field" style="margin-bottom:0">
             <div class="rowInline">
-              <select data-action="draft-record-edit" data-field="relTypeText">${renderSelectFromList(UI_ACTOR_TYPES as any, String(draftRecordEdit.relTypeText || '학부모'))}</select>
+              <select data-action="draft-record-edit" data-field="relTypeText">${renderSelectFromList(UI_ACTOR_TYPES as any, String(draftRecordEdit.relTypeText || '상대방'))}</select>
               <div class="grow">${editRelNameField}</div>
               ${H.btn('추가', 'add-related-edit', '', 'btn small')}
             </div>
@@ -1567,10 +1871,10 @@ function renderRecordModal() {
     <section class="recordEditHint">
       <div class="recordSectionHead">
         <div>
-          <div class="recordSectionTitle">정정</div>
-          <div class="muted">수정은 덮어쓰지 않고 새 해시와 로그를 추가해 봉인합니다.</div>
+          <div class="recordSectionTitle">수정</div>
+          <div class="muted">기록을 덮어쓰지 않고 새 해시와 로그를 추가해 봉인합니다.</div>
         </div>
-        ${H.btnData('이 기록 정정', 'start-edit-record', { id: r.id }, 'btn primary')}
+        ${H.btnData('이 기록 수정', 'start-edit-record', { id: r.id }, 'btn primary')}
       </div>
     </section>
   `;
@@ -1589,7 +1893,7 @@ function renderRecordModal() {
                 <div class="revisionNo">rev ${esc(String(rev.rev))}</div>
               </div>
               <div class="revisionGrid">
-                <div class="revisionMeta"><span>사건시각</span><b>${esc(fmt(rev.eventAt))}</b></div>
+                <div class="revisionMeta"><span>기록 시각</span><b>${esc(fmt(rev.eventAt))}</b></div>
                 <div class="revisionMeta"><span>봉인시각</span><b>${esc(fmt(rev.sealedAt))}</b></div>
                 <div class="revisionMeta"><span>서명</span><b>${esc(rev.signerLabel || '전자서명')}</b></div>
                 <div class="revisionMeta"><span>사유</span><b>${esc(rev.reason || '—')}</b></div>
@@ -1610,7 +1914,7 @@ function renderRecordModal() {
         <div class="recordHeroBadges">${renderRiskTag((r as any).risk)}${integrityBadge}<span class="integrityCount">rev ${esc(String(getRecordRevisionCount(r as any)))}</span></div>
       </div>
       <div class="recordHeroMeta">
-        <div class="recordHeroMetaItem"><span>사건시각</span><b>${esc(fmt(r.ts))}</b></div>
+        <div class="recordHeroMetaItem"><span>기록 시각</span><b>${esc(fmt(r.ts))}</b></div>
         <div class="recordHeroMetaItem"><span>${esc(lastSealLabel)}</span><b>${esc(fmt((r as any)?.integrity?.lastSealedAt || r.ts))}</b></div>
         <div class="recordHeroMetaItem"><span>원본 해시</span><code>${esc(shortHash(originalHash, 14, 10))}</code></div>
         <div class="recordHeroMetaItem"><span>현재 해시</span><code>${esc(shortHash(currentHash, 14, 10))}</code></div>
@@ -1621,12 +1925,12 @@ function renderRecordModal() {
     <section class="recordCurrentSection">
       <div class="detailGrid trustDetailGrid">
         ${H.dr('주체', esc(recordActorText(r)))}
-        ${H.dr('장소', esc(placeLabel(r.place, r.placeOther)))}
-        ${H.dr('보관형태', esc(storeLabel(r.storeType, r.storeOther)))}
-        ${H.dr('정정 횟수', esc(String(Math.max(0, getRecordRevisionCount(r as any) - 1))))}
+        ${H.dr('위치 / 채널', esc(placeLabel(r.place, r.placeOther)))}
+        ${H.dr('자료 형태', esc(storeLabel(r.storeType, r.storeOther)))}
+        ${H.dr('수정 횟수', esc(String(Math.max(0, getRecordRevisionCount(r as any) - 1))))}
         ${H.ds('관련자', relatedHtml)}
         ${H.ds('현재 내용', `<div class="detailNote">${esc(r.summary || '')}</div>`)}
-        ${H.ds('AI 민원 위험도', renderRiskSummary((r as any).risk))}
+        ${H.ds('AI 리스크 신호', renderRiskSummary((r as any).risk))}
       </div>
     </section>
   `;
@@ -1635,7 +1939,7 @@ function renderRecordModal() {
     <section class="recordHistorySection">
       <div class="recordSectionHead">
         <div>
-          <div class="recordSectionTitle">수정 이력</div>
+          <div class="recordSectionTitle">버전 이력</div>
           <div class="muted">최신 로그가 위에 쌓입니다. 각 revision은 이전 hash를 참조합니다.</div>
         </div>
       </div>
@@ -1644,8 +1948,8 @@ function renderRecordModal() {
   `;
 
   const tabs = renderMiniTabs([
-    { label: '현재기록', action: 'switch-record-modal-tab', dataKey: 'record-modal-tab', dataValue: 'current', active: activeTab === 'current' },
-    { label: '수정이력', action: 'switch-record-modal-tab', dataKey: 'record-modal-tab', dataValue: 'history', active: activeTab === 'history' },
+    { label: '현재 기록', action: 'switch-record-modal-tab', dataKey: 'record-modal-tab', dataValue: 'current', active: activeTab === 'current' },
+    { label: '버전 이력', action: 'switch-record-modal-tab', dataKey: 'record-modal-tab', dataValue: 'history', active: activeTab === 'history' },
     { label: '수정', action: 'switch-record-modal-tab', dataKey: 'record-modal-tab', dataValue: 'edit', active: activeTab === 'edit' },
   ]);
 
@@ -1662,7 +1966,7 @@ function renderRecordModal() {
     </div>
   `;
 
-  return H.modal('recordModal', H.modalHead('증거관리 · 상세', String(title), headActions), body);
+  return H.modal('recordModal', H.modalHead('기록 보관함 · 상세', String(title), headActions), body);
 }
 
 
@@ -1716,7 +2020,7 @@ function renderRecordSidebar() {
         ])}
         <div class="recMiniTitle">${esc(trunc(r.summary || '', 92))}</div>
         <div class="recMiniTimes">
-          <div class="recMiniMetaLine"><span class="metaK">사건시각</span><span>${esc(fmt(r.ts))}</span></div>
+          <div class="recMiniMetaLine"><span class="metaK">기록 시각</span><span>${esc(fmt(r.ts))}</span></div>
           <div class="recMiniMetaLine"><span class="metaK">${esc(amendCount ? '최종 수정봉인' : '기록 봉인')}</span><span>${esc(fmt(lastSealedAt))}</span></div>
         </div>
         <div class="recMiniHash">현재 해시 ${esc(shortHash(String(r?.integrity?.currentHash || ''), 10, 8))}</div>
@@ -1730,7 +2034,7 @@ function renderRecordSidebar() {
     `;
   };
 
-  const listHtml = filtered.length ? filtered.map(mini).join('') : H.empty(hasFilters ? '필터 결과가 없어요.' : '아직 증거가 없어요.', 140);
+  const listHtml = filtered.length ? filtered.map(mini).join('') : H.empty(hasFilters ? '필터 결과가 없어요.' : '아직 기록이 없어요.', 140);
 
   return `
     <div class="sideStack">
@@ -1738,7 +2042,7 @@ function renderRecordSidebar() {
       <section class="card sideCard memoFilterCard compactFilterCard">
         <div class="sideCardHead sideCardHeadFilterRow">
           <div>
-            <div class="sideCardTitle">증거 필터</div>
+            <div class="sideCardTitle">기록 필터</div>
             <div class="sideCardMetaText muted">
               ${hasFilters ? `필터 <b>${esc(String(filtered.length))}</b>/${esc(String(all.length))}` : `총 <b>${esc(String(all.length))}</b>개`}
             </div>
@@ -1781,8 +2085,8 @@ function renderRecordSidebar() {
       <section class="card sideCard">
         <div class="sideCardHead">
           <div>
-            <div class="sideCardTitle">전체 증거</div>
-            <div class="muted" style="font-size:12px; margin-top:2px">사건시각 · 기록/수정 봉인시각 · 정정 횟수</div>
+            <div class="sideCardTitle">전체 기록</div>
+            <div class="muted" style="font-size:12px; margin-top:2px">기록 시각 · 봉인 시각 · 수정 횟수</div>
           </div>
           <div class="sideCardActions"><span class="countPill">${esc(String(filtered.length))}</span></div>
         </div>
@@ -1819,8 +2123,8 @@ function renderRecordEntryForm() {
   const showStoreOther = (draftRecord.storeTypeText || '') === '기타';
   const showPlaceOther = (draftRecord.placeText || '') === '기타';
 
-  const actorType = String(draftRecord.actorTypeText || '학생');
-  const placeText = String(draftRecord.placeText || '교실');
+  const actorType = String(draftRecord.actorTypeText || '당사자');
+  const placeText = String(draftRecord.placeText || '온라인');
   const storeTypeText = String(draftRecord.storeTypeText || '전화');
   const actorList = (Array.isArray((draftRecord as any).actors) ? ((draftRecord as any).actors as ActorRef[]) : []);
   const pendingActorName = String(draftRecord.actorNameOther || '').trim();
@@ -1846,14 +2150,14 @@ function renderRecordEntryForm() {
   const reqMissing: string[] = [];
   if (!okSummaryOverview) reqMissing.push('핵심 사실');
   if (!okSummaryBackground) reqMissing.push('이전 흐름·배경');
-  if (!okSummaryTeacherActions) reqMissing.push('내가 바로 한 조치');
-  if (!okSummaryIssues) reqMissing.push('쟁점·요청 정리');
-  if (!okSummaryEvidenceList) reqMissing.push('증거 목록');
+  if (!okSummaryTeacherActions) reqMissing.push('내가 한 대응');
+  if (!okSummaryIssues) reqMissing.push('핵심 포인트');
+  if (!okSummaryEvidenceList) reqMissing.push('관련 자료');
   if (!okSummaryOther) reqMissing.push('기타 메모');
-  if (!okTs) reqMissing.push('시간');
-  if (!okActor) reqMissing.push('주체');
-  if (!okPlace) reqMissing.push('장소');
-  if (!okStore) reqMissing.push('보관 형태');
+  if (!okTs) reqMissing.push('기록 시각');
+  if (!okActor) reqMissing.push('사람');
+  if (!okPlace) reqMissing.push('위치/채널');
+  if (!okStore) reqMissing.push('자료 형태');
 
   const canSave = reqMissing.length === 0;
   const reqLabel = canSave ? '저장 가능' : `미작성 ${reqMissing.length}개`;
@@ -1863,7 +2167,7 @@ function renderRecordEntryForm() {
     value: String(draftRecord.actorNameOther || ''),
     action: 'draft-record',
     field: 'actorNameOther',
-    placeholder: '이름(예: 학생1 / 1번 모 / 교장 / 김OO)'
+    placeholder: '이름(예: 상대 A / 담당자 / 김OO)'
   });
 
   const relNameField = renderNameFieldForType({
@@ -1871,7 +2175,7 @@ function renderRecordEntryForm() {
     value: String(draftRecord.relNameOther || ''),
     action: 'draft-record',
     field: 'relNameOther',
-    placeholder: '이름(예: 1번 부 / 교감 / 김OO)'
+    placeholder: '이름(예: 관계자 / 동행인 / 김OO)'
   });
 
   const actorListHtml =
@@ -1888,7 +2192,7 @@ function renderRecordEntryForm() {
             )
             .join('')}
         </div>`
-      : `<div class="muted composerEmptyHint gatherMutedHint">주체를 1명 이상 추가해 주세요.</div>`;
+      : `<div class="muted composerEmptyHint gatherMutedHint">관련된 사람을 1명 이상 추가해 주세요.</div>`;
 
   const relatedList =
     (draftRecord.related || []).length
@@ -1904,7 +2208,7 @@ function renderRecordEntryForm() {
             )
             .join('')}
         </div>`
-      : `<div class="muted composerEmptyHint gatherMutedHint">관련자가 있으면 추가해 주세요.</div>`;
+      : `<div class="muted composerEmptyHint gatherMutedHint">추가로 엮인 사람이 있으면 함께 남겨주세요.</div>`;
 
   const missingSummary = reqMissing.length
     ? `아직 ${esc(reqMissing.slice(0, 4).join(' · '))}${reqMissing.length > 4 ? ` 외 ${esc(String(reqMissing.length - 4))}개` : ''}`
@@ -1915,9 +2219,9 @@ function renderRecordEntryForm() {
       <div class="recordFormSimple">
         <div class="recordFormStatusBar">
           <div>
-            <div class="recordFormKicker">증거 기록</div>
-            <div class="recordFormTitle">모든 항목을 작성한 뒤 저장하세요</div>
-            <div class="recordFormSub">이번 화면은 기존 항목 전체가 필수예요.</div>
+            <div class="recordFormKicker">빠른 캡처</div>
+            <div class="recordFormTitle">무슨 일이 있었는지 먼저 남겨보세요</div>
+            <div class="recordFormSub">핵심 내용을 먼저 적고, 필요한 메타데이터와 관계 정보를 이어서 채우면 저장돼요.</div>
           </div>
           <div class="recordFormTopActions">
             <span id="recordReqPill" class="recordFormStatusPill ${canSave ? 'ready' : 'warn'}">${esc(reqLabel)}</span>
@@ -1927,83 +2231,98 @@ function renderRecordEntryForm() {
 
         <section class="recordFormCard">
           <div class="recordFormCardHead">
-            <div class="recordFormCardTitle">기록 내용</div>
-            <div class="recordFormCardDesc">짧고 명확하게 적되, 모든 칸을 채워 주세요.</div>
+            <div class="recordFormCardTitle">상황 요약</div>
+            <div class="recordFormCardDesc">나중에 다시 봐도 맥락이 바로 떠오르도록 짧고 분명하게 적어주세요.</div>
           </div>
 
           <div class="field">
-            <label>핵심 사실 <span class="reqStar">*</span></label>
+            <label>무슨 일이 있었나요? <span class="reqStar">*</span></label>
             <textarea id="recordSummaryOverview" class="entryTa composerTa simpleComposerTextarea ${okSummaryOverview ? '' : 'reqWarn'}" rows="4"
-              placeholder="무슨 일이 있었는지 한 번에 이해되게 적어주세요"
+              placeholder="상황을 한 번에 이해할 수 있게 핵심 사실을 적어주세요"
               data-action="draft-record" data-field="summaryOverview">${esc((draftRecord as any).summaryOverview || '')}</textarea>
           </div>
           <div id="recordWarnSummary" class="composerInlineWarn simpleWarn" ${okSummaryOverview ? 'hidden' : ''}>핵심 사실은 4글자 이상 작성해 주세요.</div>
 
+          <details class="recordRelatedDetails recordMetaFold" open>
+            <summary>
+              <span>상세 정리와 메타데이터</span>
+              <span class="metaMoreCount">펼쳐서 입력</span>
+            </summary>
+            <div class="recordRelatedPanel recordMetaFoldBody">
           <div class="recordFormGrid">
             <div class="field">
               <label>이전 흐름 · 배경 <span class="reqStar">*</span></label>
               <textarea class="entryTa composerTa ${okSummaryBackground ? '' : 'reqWarn'}" rows="3" placeholder="이 일 이전의 흐름이나 배경" data-action="draft-record" data-field="summaryBackground">${esc((draftRecord as any).summaryBackground || '')}</textarea>
             </div>
             <div class="field">
-              <label>내가 바로 한 조치 <span class="reqStar">*</span></label>
+              <label>내가 한 대응 / 메모 <span class="reqStar">*</span></label>
               <textarea class="entryTa composerTa ${okSummaryTeacherActions ? '' : 'reqWarn'}" rows="3" placeholder="즉시 한 안내나 조치" data-action="draft-record" data-field="summaryTeacherActions">${esc((draftRecord as any).summaryTeacherActions || '')}</textarea>
             </div>
             <div class="field">
-              <label>쟁점 · 요청 정리 <span class="reqStar">*</span></label>
+              <label>핵심 포인트 <span class="reqStar">*</span></label>
               <textarea class="entryTa composerTa ${okSummaryIssues ? '' : 'reqWarn'}" rows="3" placeholder="상대가 제기한 핵심 쟁점이나 요청" data-action="draft-record" data-field="summaryIssues">${esc((draftRecord as any).summaryIssues || '')}</textarea>
             </div>
             <div class="field">
-              <label>증거 목록 <span class="reqStar">*</span></label>
+              <label>관련 자료 목록 <span class="reqStar">*</span></label>
               <textarea class="entryTa composerTa ${okSummaryEvidenceList ? '' : 'reqWarn'}" rows="3" placeholder="사진, 문자, 통화기록 등" data-action="draft-record" data-field="summaryEvidenceList">${esc((draftRecord as any).summaryEvidenceList || '')}</textarea>
             </div>
           </div>
 
           <div class="field" style="margin-bottom:0">
-            <label>기타 메모 <span class="reqStar">*</span></label>
+            <label>추가 메모 <span class="reqStar">*</span></label>
             <textarea class="entryTa composerTa ${okSummaryOther ? '' : 'reqWarn'}" rows="3" placeholder="추후 확인할 점이나 남겨둘 메모" data-action="draft-record" data-field="summaryOther">${esc((draftRecord as any).summaryOther || '')}</textarea>
           </div>
+            </div>
+          </details>
         </section>
 
-        <section class="recordFormCard">
+        <details class="recordRelatedDetails recordMetaFold" open>
+          <summary>
+            <span>사람, 위치, 자료 형태</span>
+            <span class="metaMoreCount">저장 전 확인</span>
+          </summary>
+          <section class="recordFormCard recordMetaFoldCard">
           <div class="recordFormCardHead">
             <div class="recordFormCardTitle">기본 정보</div>
-            <div class="recordFormCardDesc">시간, 주체, 장소, 보관 형태도 모두 입력해야 저장돼요.</div>
+            <div class="recordFormCardDesc">기록 시각, 사람, 위치/채널, 자료 형태를 모두 입력해야 저장돼요.</div>
           </div>
 
           <div class="recordFormGrid">
             <div class="field compact recordFormFieldCard">
-              <label>시간 <span class="reqStar">*</span></label>
+              <label>기록 시각 <span class="reqStar">*</span></label>
               <div class="rowInline compactRow gatherInlineRow">
                 <input id="recordTs" class="${okTs ? '' : 'reqWarn'}" type="datetime-local" value="${esc(draftRecord.ts)}" data-action="draft-record" data-field="ts" />
                 <button class="btn ghost small gatherNowBtn" type="button" data-action="set-record-now" title="지금 시간으로">방금</button>
               </div>
-              <div id="recordWarnTs" class="miniWarn simpleWarn" ${okTs ? 'hidden' : ''}>시간을 선택해 주세요.</div>
+              <div id="recordWarnTs" class="miniWarn simpleWarn" ${okTs ? 'hidden' : ''}>기록 시각을 선택해 주세요.</div>
             </div>
 
             <div class="field compact recordFormFieldCard">
-              <label>장소 <span class="reqStar">*</span></label>
+              <label>위치 / 채널 <span class="reqStar">*</span></label>
               <select class="${okPlace ? '' : 'reqWarn'}" data-action="draft-record" data-field="placeText">${renderSelectFromList(PLACE_TYPES as any, placeText)}</select>
               ${showPlaceOther ? `<input class="${okPlace ? '' : 'reqWarn'}" value="${esc(draftRecord.placeOther)}" placeholder="장소 상세(기타)" data-action="draft-record" data-field="placeOther" />` : ''}
             </div>
 
             <div class="field compact recordFormFieldCard">
-              <label>보관 형태 <span class="reqStar">*</span></label>
+              <label>자료 형태 <span class="reqStar">*</span></label>
               <select class="${okStore ? '' : 'reqWarn'}" data-action="draft-record" data-field="storeTypeText">${renderSelectFromList(STORE_TYPES as any, storeTypeText)}</select>
               ${showStoreOther ? `<input class="${okStore ? '' : 'reqWarn'}" value="${esc(draftRecord.storeOther)}" placeholder="보관형태 상세(기타)" data-action="draft-record" data-field="storeOther" />` : ''}
             </div>
 
             <div class="field compact recordFormFieldCard recordFormActorCard">
-              <label>주체 <span class="reqStar">*</span></label>
+              <label>사람 <span class="reqStar">*</span></label>
               <div id="recordActorRow" class="rowInline compactRow gatherActorRow ${okActor ? '' : 'reqWarn'}">
                 <select data-action="draft-record" data-field="actorTypeText">${renderSelectFromList(UI_ACTOR_TYPES as any, actorType)}</select>
                 <div class="grow">${mainNameField}</div>
                 ${H.btn('추가', 'add-record-actor', '', 'btn small')}
               </div>
               ${actorListHtml}
-              <div id="recordWarnActor" class="miniWarn simpleWarn" ${okActor ? 'hidden' : ''}>주체를 1명 이상 추가해 주세요.</div>
+              <div id="recordWarnActor" class="miniWarn simpleWarn" ${okActor ? 'hidden' : ''}>사람을 1명 이상 추가해 주세요.</div>
             </div>
           </div>
-        </section>
+          </section>
+        </details>
+      </section>
 
         ${dl('dlNameStudent', STUDENT_NAMES as any)}
         ${dl('dlNameClassRoster', getClassRoster() as any)}
@@ -2012,13 +2331,13 @@ function renderRecordEntryForm() {
 
         <details id="recordRelatedDetails" class="metaMore recordRelatedDetails" ${ui.recRelatedOpen ? 'open' : ''}>
           <summary>
-            <span>관련자 추가</span>
+            <span>관계 항목 추가</span>
             <span class="metaMoreCount">${esc(String((draftRecord.related || []).length))}명</span>
           </summary>
           <div class="metaMorePanel recordRelatedPanel">
             <div class="field" style="margin-bottom:0">
               <div class="rowInline gatherRelatedRow">
-                <select data-action="draft-record" data-field="relTypeText">${renderSelectFromList(UI_ACTOR_TYPES as any, String(draftRecord.relTypeText || '학부모'))}</select>
+                <select data-action="draft-record" data-field="relTypeText">${renderSelectFromList(UI_ACTOR_TYPES as any, String(draftRecord.relTypeText || '상대방'))}</select>
                 <div class="grow">${relNameField}</div>
                 ${H.btn('추가', 'add-related', '', 'btn small')}
               </div>
@@ -2031,9 +2350,9 @@ function renderRecordEntryForm() {
           <div class="recordFormFooterText">${missingSummary}</div>
           <button id="btnSaveRecord" class="btn primary saveCta recordFormSaveBtn" data-action="save-record" type="button"
             ${canSave ? '' : 'disabled aria-disabled="true" title="모든 필수 항목을 작성하면 저장할 수 있어요"'}>
-            저장하기
+            기록 저장
           </button>
-          <button id="btnSaveRecordBottom" class="srOnly" data-action="save-record" type="button" ${canSave ? '' : 'disabled aria-disabled="true"'}>저장하기</button>
+          <button id="btnSaveRecordBottom" class="srOnly" data-action="save-record" type="button" ${canSave ? '' : 'disabled aria-disabled="true"'}>기록 저장</button>
         </div>
       </div>
     </div>
@@ -2054,7 +2373,7 @@ function renderRecordComposerModal() {
     </div>
   `;
 
-  return H.modal('recordComposerModal', H.modalHead('증거 기록하기', '모든 항목을 작성한 뒤 저장하세요.', headActions), body, 'modal recordComposerModal');
+  return H.modal('recordComposerModal', H.modalHead('빠른 캡처', '핵심 상황부터 적고 필요한 메타데이터를 이어서 채우세요.', headActions), body, 'modal recordComposerModal');
 }
 
 
@@ -2091,16 +2410,16 @@ function renderStudentRosterModal() {
   return `
     <div class="classRosterLayer" id="classRosterModal" role="presentation">
       <section class="classRosterPanel" role="dialog" aria-modal="true" aria-labelledby="classRosterModalTitle">
-        ${H.modalHead('학생 명부 등록', '우리반 리스트를 한 번 등록해두면 기록 입력 때 바로 불러옵니다.', headActions).replace('<div class="h2">', '<div class="h2" id="classRosterModalTitle">')}
+        ${H.modalHead('프로필 템플릿', '자주 등장하는 이름을 저장해두면 캡처와 컬렉션 입력이 훨씬 빨라져요.', headActions).replace('<div class="h2">', '<div class="h2" id="classRosterModalTitle">')}
         <div class="classRosterModalBody">
           <div class="classRosterHero">
             <div>
-              <div class="classRosterTitle">1번부터 40번까지 학생 이름을 등록하세요.</div>
-              <div class="muted">아무 칸에나 여러 줄 붙여넣기하면 아래로 자동 배치됩니다. 저장 후 증거기록/증거모으기의 <b>우리반</b> 항목에서 바로 선택할 수 있어요.</div>
+              <div class="classRosterTitle">최대 40개까지 자주 쓰는 이름이나 대상을 저장하세요.</div>
+              <div class="muted">아무 칸에나 여러 줄 붙여넣기하면 아래로 자동 배치됩니다. 저장 후 빠른 캡처와 컬렉션 만들기 화면에서 <b>프로필 템플릿</b>으로 바로 선택할 수 있어요.</div>
             </div>
             <div class="classRosterCount"><span id="classRosterFilledCount">${esc(String(filled))}</span> / ${esc(String(CLASS_ROSTER_SIZE))}</div>
           </div>
-          <div class="classRosterGrid" role="table" aria-label="학생 명부 등록표">
+          <div class="classRosterGrid" role="table" aria-label="프로필 템플릿 표">
             ${rows}
           </div>
         </div>
@@ -2119,7 +2438,7 @@ function renderCasesShell(selected: CaseItem | null, gridClass: string, gridInne
   const panel = active === 'create'
     ? `
       <div class="caseCommandPanel caseCommandPanelCreate">
-        <div class="subTabHint muted">증거모으기는 이 화면 안에서 바로 이어집니다.</div>
+        <div class="subTabHint muted">컬렉션 만들기는 이 화면 안에서 바로 이어집니다.</div>
         <div class="caseCommandPanelScroll">
           ${renderCaseCreateContent()}
         </div>
@@ -2134,17 +2453,17 @@ function renderCasesShell(selected: CaseItem | null, gridClass: string, gridInne
         </div>
       `
       : `
-        <div class="caseCommandMeta muted">사건 목록과 타임라인은 조회 탭에서만 보여줍니다.</div>
+        <div class="caseCommandMeta muted">컬렉션 목록과 타임라인은 보기 탭에서 확인할 수 있어요.</div>
       `;
 
   return `
-    <section class="caseShell ${isList ? 'caseShellList' : 'caseShellSolo'}">
+    <section class="caseShell caseShellWorkspace ${isList ? 'caseShellList' : 'caseShellSolo'}">
       <div class="card caseCommandDeck">
 
         ${renderMiniTabs([
-          { label: '증거모으기', action: 'switch-case-tab', dataKey: 'case-tab', dataValue: 'create', active: active === 'create' },
-          { label: '사건조회하기', action: 'switch-case-tab', dataKey: 'case-tab', dataValue: 'list', active: active === 'list' },
-          { label: '내용증명', action: 'switch-case-tab', dataKey: 'case-tab', dataValue: 'proof', active: active === 'proof' },
+          { label: '컬렉션 만들기', action: 'switch-case-tab', dataKey: 'case-tab', dataValue: 'create', active: active === 'create' },
+          { label: '컬렉션 보기', action: 'switch-case-tab', dataKey: 'case-tab', dataValue: 'list', active: active === 'list' },
+          { label: '공유/제출 문서', action: 'switch-case-tab', dataKey: 'case-tab', dataValue: 'proof', active: active === 'proof' },
         ])}
 
         ${panel}
@@ -2163,8 +2482,8 @@ function renderCasesMain(selected: CaseItem | null) {
   const header = `
     <div class="sectionTitle caseMainTitle">
       <div>
-        <div class="h2">사건</div>
-        <div class="muted">${isFocused ? '열어둔 사건의 타임라인을 보고 있어요. 목록으로를 누르면 사건 목록으로 돌아갑니다.' : '사건 목록에서 열기를 누르면 이 자리에서 타임라인이 열립니다.'}</div>
+        <div class="h2">컬렉션</div>
+        <div class="muted">${isFocused ? '열어둔 컬렉션의 타임라인을 보고 있어요. 목록으로를 누르면 컬렉션 목록으로 돌아갑니다.' : '컬렉션 목록에서 열기를 누르면 이 자리에서 타임라인이 열립니다.'}</div>
       </div>
       <div class="titleActions">
         <span class="countPill">총 ${ids.length}개</span>
@@ -2174,7 +2493,7 @@ function renderCasesMain(selected: CaseItem | null) {
 
   if (!ids.length) {
     return `${header}
-      <div class="empty">아직 사건이 없어요. 위의 증거모으기에서 먼저 시작해보세요.</div>
+      <div class="empty">아직 컬렉션이 없어요. 위의 컬렉션 만들기에서 먼저 시작해보세요.</div>
     `;
   }
 
@@ -2192,7 +2511,7 @@ function renderCasesMain(selected: CaseItem | null) {
     <div class="caseWorkspace caseWorkspaceSingle">
       <section class="caseWorkspacePane caseWorkspaceListPane">
         <div class="caseWorkspacePaneHead">
-          <div class="title">사건 목록</div>
+          <div class="title">컬렉션 목록</div>
           <div class="muted">열기를 누르면 이 자리에서 타임라인이 열려요.</div>
         </div>
         <div class="caseListScroll">${listHtml}</div>
@@ -2241,8 +2560,8 @@ function renderCaseSidebar(selected: CaseItem | null) {
       <section class="card sideCard actionSide">
         <div class="sideCardHead">
           <div>
-            <div class="sideCardTitle">내 조치 로그</div>
-            <div class="muted" style="margin-top:2px">이 묶음에서 저장한 대응</div>
+            <div class="sideCardTitle">실행 로그</div>
+            <div class="muted" style="margin-top:2px">이 컬렉션에서 남긴 내 메모와 조치</div>
           </div>
           <span class="countPill">${esc(String(steps.length))}</span>
         </div>
@@ -2258,8 +2577,8 @@ function renderCaseSidebar(selected: CaseItem | null) {
                 </div>
 
                 <div class="field compact">
-                  <label>단계</label>
-                  <input value="${esc(draftStep.name)}" placeholder="예: 1차 안내" data-action="draft-step" data-field="name" />
+                  <label>이름</label>
+                  <input value="${esc(draftStep.name)}" placeholder="예: 1차 정리" data-action="draft-step" data-field="name" />
                 </div>
               </div>
 
@@ -2270,7 +2589,7 @@ function renderCaseSidebar(selected: CaseItem | null) {
 
               <div class="actionActions">
                 ${H.btn('추가', 'add-step', '', 'btn primary small')}
-                ${H.btn('가이드 재생성', 'regen-advisors', '', 'btn small')}
+                ${H.btn('AI 권장 행동 갱신', 'regen-advisors', '', 'btn small')}
               </div>
             </div>
           </div>
@@ -2290,7 +2609,7 @@ function renderCaseCreateContent() {
     value: String(draftCase.addNameOther || ''),
     action: 'draft-case',
     field: 'addNameOther',
-    placeholder: '이름(예: 학생1 / 1번 모 / 교장 / 김OO)'
+    placeholder: '이름(예: 상대 A / 담당자 / 김OO)'
   });
 
   const chips =
@@ -2307,26 +2626,27 @@ function renderCaseCreateContent() {
             )
             .join('')}
         </div>`
-      : `<div class="muted" style="margin-top:6px">관련자가 없으면 <b>${esc(UI_OTHER_ACTOR_LABEL)} / 없음</b>을 추가해 주세요.</div>`;
+      : `<div class="muted" style="margin-top:6px">대상이 아직 없어요. 최소 1명은 추가해 주세요.</div>`;
 
   const canStart = (draftCase.actors || []).length > 0;
   const startExtra = canStart ? '' : ' disabled aria-disabled="true" title="관련자를 1명 이상 추가해야 시작할 수 있어요"';
 
   return `
+    <div class="caseCreateFlow">
       <div class="helperBox" style="margin-bottom:14px; margin-top:0;">
-        <b>사용법:</b> 누구의 기록을 모을지 선택하면 AI가 해당 인물과 관련된 증거를 우선적으로 찾아옵니다.
+        <b>사용법:</b> 사람, 관계, 주제를 정하면 AI가 관련 기록을 우선적으로 모아 컬렉션을 구성해줍니다.
       </div>
 
       <div class="field highlight-section">
-        <label style="font-size:13px;">① 누구의 기록을 모을까요? (필수)</label>
+        <label style="font-size:13px;">① 누구 또는 어떤 관계를 중심으로 묶을까요? (필수)</label>
         <div class="miniOptionRow">
-          <label class="miniToggle" title="체크하면 증거에서 주요인물로 추가한 사람의 기록만 모아요.">
+          <label class="miniToggle" title="체크하면 선택한 인물 중심의 기록만 우선 모아요.">
             <input type="checkbox" data-action="draft-case" data-field="onlyMainActor" ${((draftCase as any).onlyMainActor ? 'checked' : '')} />
-            <span>원하는 주요인물 기록만 모으려면 체크</span>
+            <span>선택한 사람 중심 기록만 우선 모으기</span>
           </label>
         </div>
         <div class="rowInline">
-          <select data-action="draft-case" data-field="addTypeText" style="flex:0 0 100px;">${renderSelectFromList(UI_ACTOR_TYPES as any, String((draftCase as any).addTypeText || '학생'))}</select>
+          <select data-action="draft-case" data-field="addTypeText" style="flex:0 0 100px;">${renderSelectFromList(UI_ACTOR_TYPES as any, String((draftCase as any).addTypeText || '당사자'))}</select>
           ${addNameField}
           ${H.btn('추가', 'add-case-actor')}
         </div>
@@ -2334,17 +2654,17 @@ function renderCaseCreateContent() {
       </div>
 
       <div class="field" style="margin-top:16px;">
-        <label>② 어떤 사건인가요? (요약/키워드)</label>
-        <textarea rows="3" placeholder="예: 복도에서 언쟁, 급식실 안전사고 등 (비워두면 인물 중심으로만 찾습니다)" data-action="draft-case" data-field="query">${esc(draftCase.query)}</textarea>
+        <label>② 이 컬렉션의 상황/주제를 적어주세요</label>
+        <textarea rows="3" placeholder="예: 메신저 대화 정리, 계약 변경 요청, 반복 연락 이슈 등" data-action="draft-case" data-field="query">${esc(draftCase.query)}</textarea>
       </div>
 
       <details class="fold" style="margin-top:12px;">
         <summary>옵션: 기간 및 제목 직접 설정</summary>
         <div class="fold-content">
           <div class="row">
-            <div class="field">
-              <label>기간 시작</label>
-              <input type="datetime-local" value="${esc(draftCase.timeFrom)}" data-action="draft-case" data-field="timeFrom" />
+          <div class="field">
+            <label>기간 시작</label>
+            <input type="datetime-local" value="${esc(draftCase.timeFrom)}" data-action="draft-case" data-field="timeFrom" />
             </div>
             <div class="field">
               <label>기간 종료</label>
@@ -2353,23 +2673,24 @@ function renderCaseCreateContent() {
           </div>
 
           <div class="field">
-            <label>사건 제목 (비워두면 자동 생성)</label>
-            <input value="${esc(draftCase.title)}" placeholder="예: 3학년 복도 언쟁 민원" data-action="draft-case" data-field="title" />
+            <label>컬렉션 제목 (비워두면 자동 생성)</label>
+            <input value="${esc(draftCase.title)}" placeholder="예: 반복 연락 정리 / 프로젝트 이슈 모음" data-action="draft-case" data-field="title" />
           </div>
         </div>
       </details>
 
-      <div class="rowInline" style="margin-top:16px; padding-top:10px; border-top:1px solid var(--grey-200);">
-        ${H.btn('증거모으기 시작', 'create-case', startExtra, 'btn primary')}
+      <div class="rowInline caseCreateActions" style="margin-top:16px; padding-top:10px; border-top:1px solid var(--grey-200);">
+        ${H.btn('컬렉션 만들기 시작', 'create-case', startExtra, 'btn primary')}
         ${H.btn('초기화', 'clear-case-draft')}
       </div>
-    `;
+    </div>
+  `;
 }
 
 function renderCaseCreateModal() {
   return H.modal(
     'caseCreateModal',
-    H.modalHead('증거모으기', '스마트모으기로 관련 증거를 자동 선별합니다.', H.btn('닫기', 'close-case-create')),
+    H.modalHead('컬렉션 만들기', 'AI가 관련 기록을 자동 선별해 첫 컬렉션을 제안합니다.', H.btn('닫기', 'close-case-create')),
     renderCaseCreateContent(),
     'modal caseCreateModal'
   );
@@ -2420,7 +2741,7 @@ function renderCaseUpdateModal() {
     return String(b.record.ts || '').localeCompare(String(a.record.ts || '')); // 최신순
   });
 
-  const title = c ? trunc(c.title, 40) : '기록 추가';
+  const title = c ? trunc(c.title, 40) : '컬렉션에 기록 추가';
 
   // 필터 바 (입력값=draft, 적용값=applied)
   const updPlaceSel = String(((ui as any).updFilterPlaceDraft ?? (ui as any).updFilterPlace) || '');
@@ -2499,7 +2820,7 @@ function renderCaseUpdateModal() {
           `;
         }).join('')}
       </div>`
-    : H.empty('추가할 수 있는 증거가 없어요.');
+    : H.empty('추가할 수 있는 기록이 없어요.');
 
   // 안내 메시지: 로딩 중이면 표시하되, 데이터는 보여줌(이미 있는 데이터)
   const loadingMsg = ui.updateCandidatesLoading ? '<span class="muted" style="font-size:12px; margin-left:8px;">(AI 점수 계산 중...)</span>' : '';
@@ -2520,7 +2841,7 @@ function renderTimelineDetailModal() {
   if (!tl || !c) {
     return H.modal(
       'timelineDetailModal',
-      H.modalHead('타임라인 상세', '사건을 먼저 열어주세요.', H.btn('닫기', 'close-timeline-detail')),
+      H.modalHead('타임라인 상세', '컬렉션을 먼저 열어주세요.', H.btn('닫기', 'close-timeline-detail')),
       H.empty('표시할 데이터가 없어요.')
     );
   }
@@ -2624,9 +2945,9 @@ function renderTimelineDetailModal() {
 
       body = `
         <div class="detailGrid">
-          ${H.dr('사건시각', esc(fmt(vr.ts)))}
+          ${H.dr('기록 시각', esc(fmt(vr.ts)))}
           ${H.dr('주체', esc(recordActorText(vr)))}
-          ${H.dr('장소', esc(placeLabel(vr.place, vr.placeOther)))}
+          ${H.dr('위치 / 채널', esc(placeLabel(vr.place, vr.placeOther)))}
           ${H.ds('내용', `<div class="detailNote">${esc(vr.summary || '')}</div>`)}
 
           ${H.ds(
@@ -2742,8 +3063,8 @@ function renderTimelineDetailModal() {
           ${(a.ruleId || '').trim() ? H.dr('룰', esc(String(a.ruleId || ''))) : ''}
           ${H.ds('내용', `<div class="detailNote">${esc(a.body)}</div>`)}
           ${H.ds(
-            '왜 이 대응 가이드가 뜨나',
-            `<div class="muted" style="margin-top:6px">대응 가이드는 사건 설정(관련자/요약/기간/패턴) 기반으로 생성돼요.</div>
+            '왜 이 권장 행동이 떴나',
+            `<div class="muted" style="margin-top:6px">AI 권장 행동은 컬렉션 설정(관련 인물/설명/기간/패턴) 기반으로 생성돼요.</div>
              <div class="chips" style="margin-top:10px">${hintParts.map((x) => `<span class="chip">${esc(x)}</span>`).join('')}</div>`
           )}
         </div>
@@ -2757,8 +3078,8 @@ function renderTimelineDetailModal() {
         <div class="detailGrid">
           ${H.dr('시간', esc(fmt(s.ts)))}
           ${H.dr('이름', esc(s.name))}
-          ${H.ds('내 조치 로그 메모', `<div class="detailNote">${esc(s.note)}</div>`)}
-          ${H.ds('왜 포함됐나', `<div class="muted">내 조치 로그는 이 사건에서 직접 저장된 실행/대응 로그라서 타임라인에 항상 포함돼요.</div>`)}
+          ${H.ds('내 실행 로그 메모', `<div class="detailNote">${esc(s.note)}</div>`)}
+          ${H.ds('왜 포함됐나', `<div class="muted">내 실행 로그는 이 컬렉션 안에서 직접 저장된 항목이라 타임라인에 항상 포함돼요.</div>`)}
         </div>
       `;
     }
@@ -2785,13 +3106,18 @@ function renderCaseCard(c: CaseItem) {
   const isSelected = S.selectedCaseId === (c as any).id;
 
   return `
-    <article class="item ${isSelected ? 'selected' : ''}">
-      ${H.tags([
-        `<span class="tag ai">${esc('AI')}</span>`,
-        H.tag(hasRange ? '기간' : '기간없음'),
-      ])}
+    <article class="item caseCollectionCard ${isSelected ? 'selected' : ''}">
+      <div class="caseCollectionCardTop">
+        ${H.tags([
+          `<span class="tag ai">${esc('AI')}</span>`,
+          H.tag(hasRange ? '기간 지정' : '상시'),
+        ])}
+        <span class="countPill">기록 ${esc(String(mapped))}개</span>
+      </div>
       <div class="title">${esc((c as any).title)}</div>
-      ${((c as any).query || '').trim() ? `<div class="muted" style="margin-top:8px">요약: ${esc(qHint || '-')}</div>` : ''}
+      ${((c as any).query || '').trim()
+        ? `<div class="muted caseCollectionSummary">요약: ${esc(qHint || '-')}</div>`
+        : `<div class="muted caseCollectionSummary">요약 설명이 아직 없어요.</div>`}
       <div class="actionsRow">
         ${H.btnData('열기', 'select-case', { id: (c as any).id }, 'btn primary')}
         ${H.btnData('삭제', 'delete-case', { id: (c as any).id })}
@@ -2810,6 +3136,18 @@ function renderCaseTimeline(c: CaseItem) {
   const { events, mappedCount, hasRange } = buildCaseTimeline(c, S.records, '');
   // 타임라인 검색 UI 제거(스크린샷 영역 제거 요청)
   const filtered = HIDE_CASE_ACTIONS_AND_GUIDES ? events.filter((ev: any) => ev?.kind === 'record') : events;
+  const recordCount = events.filter((ev: any) => ev?.kind === 'record').length;
+  const advisorCount = events.filter((ev: any) => ev?.kind === 'advisor').length;
+  const stepCount = events.filter((ev: any) => ev?.kind === 'step').length;
+  const allEventTimes = events.map((ev: any) => eventTs(ev)).filter(Boolean).sort((a, b) => String(b).localeCompare(String(a)));
+  const latestEventTs = allEventTimes[0] || '';
+  const earliestEventTs = allEventTimes[allEventTimes.length - 1] || '';
+  const periodText = hasRange
+    ? `${esc((c as any).timeFrom ? fmt((c as any).timeFrom) : '—')} ~ ${esc((c as any).timeTo ? fmt((c as any).timeTo) : '—')}`
+    : earliestEventTs && latestEventTs
+      ? `${esc(fmt(earliestEventTs))} ~ ${esc(fmt(latestEventTs))}`
+      : '기간 정보 없음';
+  const summaryText = String((c as any).query || '').trim();
 
   const ctx = {
     actors: ((c as any).actors || []) as ActorRef[],
@@ -2819,24 +3157,54 @@ function renderCaseTimeline(c: CaseItem) {
   };
 
   return `
-    <div class="sectionTitle">
-      <div class="caseTitleLeft">
-        <div class="h2">${esc((c as any).title)}</div>
-        <div class="muted"><span class="badgeAI">AI 선별</span> 관련 증거 자동 선별</div>
-        ${hasRange ? `<div class="muted" style="margin-top:8px">기간: ${esc((c as any).timeFrom ? fmt((c as any).timeFrom) : '—')} ~ ${esc((c as any).timeTo ? fmt((c as any).timeTo) : '—')}</div>` : ''}
-        ${((c as any).query || '').trim() ? `<div class="muted" style="margin-top:8px">요약: ${esc(trunc((c as any).query || '', 90))}</div>` : ''}
-      </div>
-
-      <div class="caseTitleRight">
-        <div class="aiTopActions">
-          ${H.btn('기록추가', 'open-case-update')}
-          ${H.btnData('내용증명', 'switch-case-tab', { 'case-tab': 'proof' }, 'btn')}
-          ${H.btn('목록으로', 'clear-case')}
+    <div class="caseTimelineShell">
+      <section class="caseTimelineHero">
+        <div class="caseTimelineHeroMain">
+          <div class="caseTimelineHeroTop">
+            ${H.tags([
+              `<span class="tag ai">${esc('AI 선별')}</span>`,
+              H.tag(hasRange ? '기간 지정' : '자동 범위'),
+              H.tag(`기록 ${recordCount}개`),
+            ])}
+          </div>
+          <div class="caseTimelineHeroTitle">${esc((c as any).title)}</div>
+          <div class="caseTimelineHeroDesc">${summaryText ? esc(summaryText) : '설명은 아직 비어 있지만, 연결된 기록 흐름은 이 화면에서 바로 점검할 수 있어요.'}</div>
+          <div class="caseTimelineHeroMeta">
+            <span class="caseTimelineMetaItem">기간 ${periodText}</span>
+            ${latestEventTs ? `<span class="caseTimelineMetaItem">최근 기록 ${esc(fmt(latestEventTs))}</span>` : ''}
+          </div>
         </div>
-      </div>
-    </div>
 
-    ${filtered.length ? renderTimelineWithDays(filtered, ctx) : `<div class="empty">표시할 항목이 없어요.</div>`}
+        <div class="caseTimelineHeroSide">
+          <div class="caseTimelineStatRail">
+            <article class="caseTimelineStatCard">
+              <span>타임라인</span>
+              <strong>${esc(String(filtered.length))}</strong>
+              <small>현재 화면에 표시되는 항목</small>
+            </article>
+            <article class="caseTimelineStatCard">
+              <span>전체 기록</span>
+              <strong>${esc(String(mappedCount))}</strong>
+              <small>컬렉션에 연결된 기록 수</small>
+            </article>
+            <article class="caseTimelineStatCard">
+              <span>보조 항목</span>
+              <strong>${esc(String(advisorCount + stepCount))}</strong>
+              <small>가이드와 조치 로그 포함</small>
+            </article>
+          </div>
+          <div class="caseTimelineActionRow">
+            ${H.btn('기록추가', 'open-case-update')}
+            ${H.btnData('공유 문서', 'switch-case-tab', { 'case-tab': 'proof' }, 'btn')}
+            ${H.btn('목록으로', 'clear-case')}
+          </div>
+        </div>
+      </section>
+
+      <section class="caseTimelineTrack">
+        ${filtered.length ? renderTimelineWithDays(filtered, ctx) : `<div class="empty">표시할 항목이 없어요.</div>`}
+      </section>
+    </div>
   `;
 }
 

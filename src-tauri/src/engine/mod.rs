@@ -1,15 +1,13 @@
 use serde::{Deserialize, Serialize};
-use reqwest::blocking::Client;
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
-use std::env;
 use std::fs;
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::{BufRead, BufReader, Read};
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::{Mutex, OnceLock};
+use std::sync::OnceLock;
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH}; // 시간 처리를 위한 표준 라이브러리 추가
 use tauri::{path::BaseDirectory, AppHandle, Emitter, Manager};
@@ -196,6 +194,23 @@ pub type PlaceType = String;
 pub type CaseSensFilter = String;
 pub type CaseStatus = String;
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct RecordSummaryParts {
+  #[serde(default)]
+  pub overview: String,
+  #[serde(default)]
+  pub background: String,
+  #[serde(default)]
+  pub issues: String,
+  #[serde(default)]
+  pub evidence_list: String,
+  #[serde(default)]
+  pub teacher_actions: String,
+  #[serde(default)]
+  pub other: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ActorRef {
@@ -220,6 +235,10 @@ pub struct RecordItem {
   pub place: PlaceType,
   pub place_other: String,
   pub summary: String,
+  #[serde(default)]
+  pub summary_parts: Option<RecordSummaryParts>,
+  #[serde(default)]
+  pub risk: Option<RiskPrediction>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -830,11 +849,9 @@ pub fn generate_advisors_for_case(case_item: &CaseItem, _records: &[RecordItem])
 
 const STRATEGY_MODEL_FILENAME: &str = "HyperCLOVAX-SEED-Text-Instruct-0.5B-q4_0.gguf";
 const STRATEGY_MODEL_RESOURCE_PATH: &str = "models/HyperCLOVAX-SEED-Text-Instruct-0.5B-q4_0.gguf";
-const STRATEGY_MODEL_URL: &str = "https://github.com/myongsung/roosycozy-models/releases/download/model_v1/HyperCLOVAX-SEED-Text-Instruct-0.5B-q4_0.gguf";
 const STRATEGY_SIDECAR_STEM: &str = "llama-sidecar";
 const STRATEGY_PROGRESS_EVENT: &str = "strategy-chat-progress";
 const STRATEGY_CHAT_TIMEOUT_SECS: u64 = 90;
-static STRATEGY_MODEL_DOWNLOAD_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
 #[cfg(target_os = "windows")]
 const STRATEGY_SIDECAR_GENERIC_FILENAME: &str = "llama-sidecar.exe";
@@ -886,15 +903,48 @@ pub struct StrategyChatRunResult {
   pub runner: String,
   pub prompt_chars: usize,
   pub records_used: usize,
+  pub retrieval_query: String,
+  pub evidence_packet: StrategyEvidencePacket,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
-pub struct StrategyModelReadyResult {
-  pub model_path: String,
-  pub downloaded: bool,
-  pub file_name: String,
-  pub source_url: String,
+pub struct StrategyEvidenceRecord {
+  pub ref_id: String,
+  pub record_id: String,
+  pub ts: String,
+  pub actor: String,
+  pub place: String,
+  pub store: String,
+  pub summary: String,
+  pub score: f32,
+  #[serde(default)]
+  pub risk_label: String,
+  #[serde(default)]
+  pub reasons: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct StrategyEvidencePacket {
+  #[serde(default)]
+  pub mode: String,
+  #[serde(default)]
+  pub case_title: String,
+  #[serde(default)]
+  pub focus_summary: String,
+  #[serde(default)]
+  pub overview: String,
+  #[serde(default)]
+  pub actor_summary: Vec<String>,
+  #[serde(default)]
+  pub timeline_summary: Vec<String>,
+  #[serde(default)]
+  pub risk_summary: Vec<String>,
+  #[serde(default)]
+  pub gaps: Vec<String>,
+  #[serde(default)]
+  pub evidence_records: Vec<StrategyEvidenceRecord>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -951,10 +1001,6 @@ fn strategy_runner_hint_text() -> String {
   )
 }
 
-fn strategy_model_download_lock() -> &'static Mutex<()> {
-  STRATEGY_MODEL_DOWNLOAD_LOCK.get_or_init(|| Mutex::new(()))
-}
-
 #[cfg(unix)]
 fn ensure_executable(path: &Path) -> Result<(), String> {
   let meta = fs::metadata(path).map_err(|e| format!("cannot inspect sidecar permissions: {e}"))?;
@@ -972,40 +1018,23 @@ fn ensure_executable(_path: &Path) -> Result<(), String> {
   Ok(())
 }
 
-fn strategy_runner_candidates(app: Option<&AppHandle>) -> Vec<PathBuf> {
+fn strategy_runner_candidates(_app: Option<&AppHandle>) -> Vec<PathBuf> {
   let mut out = Vec::<PathBuf>::new();
-  if let Ok(path) = env::var("ROOSYCOZY_LLAMA_CLI") {
-    let trimmed = path.trim();
-    if !trimmed.is_empty() {
-      push_unique_path(&mut out, PathBuf::from(trimmed));
-    }
-  }
-
-  if let Some(app) = app {
-    for file_name in strategy_runner_filenames() {
-      if let Ok(path) = app.path().resolve(format!("sidecar/{}", file_name), BaseDirectory::Resource) {
-        push_unique_path(&mut out, path);
-      }
-      if let Ok(path) = app.path().resolve(file_name, BaseDirectory::Resource) {
-        push_unique_path(&mut out, path);
-      }
-    }
-  }
-
-  let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-  for file_name in strategy_runner_filenames() {
-    push_unique_path(&mut out, manifest.join("binaries").join(file_name));
-    push_unique_path(&mut out, manifest.join("resources").join("sidecar").join(file_name));
-    push_unique_path(&mut out, manifest.join(file_name));
-  }
 
   if let Ok(exe) = std::env::current_exe() {
     if let Some(dir) = exe.parent() {
       for file_name in strategy_runner_filenames() {
-        push_unique_path(&mut out, dir.join(file_name));
         push_unique_path(&mut out, dir.join("sidecar").join(file_name));
-        push_unique_path(&mut out, dir.join("resources").join("sidecar").join(file_name));
       }
+    }
+  }
+
+  #[cfg(debug_assertions)]
+  {
+    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    for file_name in strategy_runner_filenames() {
+      push_unique_path(&mut out, manifest.join("binaries").join(file_name));
+      push_unique_path(&mut out, manifest.join("resources").join("sidecar").join(file_name));
     }
   }
 
@@ -1020,122 +1049,41 @@ fn resolve_strategy_runner_path(app: Option<&AppHandle>) -> Result<PathBuf, Stri
     }
   }
   Err(format!(
-    "전략자문 추론기 파일을 찾지 못했어요. {}을(를) roosycozy 실행 파일과 같은 폴더, 앱 번들 리소스 sidecar 경로, 또는 src-tauri/binaries 폴더에 넣어주세요.",
+    "전략자문 추론기 파일을 찾지 못했어요. App Store 배포용 앱 번들의 Contents/MacOS/sidecar 안에 {}이(가) 함께 포함되어야 해요.",
     strategy_runner_hint_text()
   ))
 }
 
 fn strategy_model_candidates(app: Option<&AppHandle>) -> Vec<PathBuf> {
   let mut out = Vec::<PathBuf>::new();
-  if let Ok(path) = env::var("ROOSYCOZY_HYPERCLOVA_MODEL") {
-    let trimmed = path.trim();
-    if !trimmed.is_empty() {
-      push_unique_path(&mut out, PathBuf::from(trimmed));
-    }
-  }
 
   if let Some(app) = app {
-    if let Ok(path) = strategy_model_cache_path(app) {
-      push_unique_path(&mut out, path);
-    }
     if let Ok(path) = app.path().resolve(STRATEGY_MODEL_RESOURCE_PATH, BaseDirectory::Resource) {
       push_unique_path(&mut out, path);
     }
-    if let Ok(path) = app.path().resolve(STRATEGY_MODEL_FILENAME, BaseDirectory::Resource) {
-      push_unique_path(&mut out, path);
-    }
   }
-
-  let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-  push_unique_path(&mut out, manifest.join("src").join("engine").join(STRATEGY_MODEL_FILENAME));
-  push_unique_path(&mut out, manifest.join("resources").join("models").join(STRATEGY_MODEL_FILENAME));
-  push_unique_path(&mut out, manifest.join(STRATEGY_MODEL_FILENAME));
 
   if let Ok(exe) = std::env::current_exe() {
     if let Some(dir) = exe.parent() {
-      push_unique_path(&mut out, dir.join(STRATEGY_MODEL_FILENAME));
-      push_unique_path(&mut out, dir.join("models").join(STRATEGY_MODEL_FILENAME));
+      if let Some(contents) = dir.parent() {
+        push_unique_path(&mut out, contents.join("Resources").join("models").join(STRATEGY_MODEL_FILENAME));
+      }
       push_unique_path(&mut out, dir.join("resources").join("models").join(STRATEGY_MODEL_FILENAME));
     }
   }
 
+  #[cfg(debug_assertions)]
+  {
+    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    push_unique_path(&mut out, manifest.join("resources").join("models").join(STRATEGY_MODEL_FILENAME));
+    push_unique_path(&mut out, manifest.join("src").join("engine").join(STRATEGY_MODEL_FILENAME));
+    push_unique_path(&mut out, manifest.join(STRATEGY_MODEL_FILENAME));
+    if let Some(parent) = manifest.parent() {
+      push_unique_path(&mut out, parent.join("src-tauri").join("resources").join("models").join(STRATEGY_MODEL_FILENAME));
+    }
+  }
+
   out
-}
-
-fn strategy_model_cache_dir(app: &AppHandle) -> Result<PathBuf, String> {
-  let dir = app
-    .path()
-    .app_data_dir()
-    .map_err(|e| format!("모델 저장 폴더를 찾지 못했어요: {e}"))?
-    .join("models");
-  fs::create_dir_all(&dir).map_err(|e| format!("모델 저장 폴더를 만들지 못했어요: {e}"))?;
-  Ok(dir)
-}
-
-fn strategy_model_cache_path(app: &AppHandle) -> Result<PathBuf, String> {
-  Ok(strategy_model_cache_dir(app)?.join(STRATEGY_MODEL_FILENAME))
-}
-
-fn download_strategy_model(app: &AppHandle) -> Result<PathBuf, String> {
-  let cache_path = strategy_model_cache_path(app)?;
-  if cache_path.exists() {
-    return Ok(cache_path);
-  }
-
-  let tmp_path = cache_path.with_extension("download");
-  emit_strategy_progress(Some(app), "모델", format!("전략자문 모델 {} 다운로드를 시작해요.", STRATEGY_MODEL_FILENAME));
-
-  let client = Client::builder()
-    .connect_timeout(Duration::from_secs(20))
-    .timeout(Duration::from_secs(60 * 20))
-    .build()
-    .map_err(|e| format!("모델 다운로드 클라이언트를 준비하지 못했어요: {e}"))?;
-
-  let mut response = client
-    .get(STRATEGY_MODEL_URL)
-    .send()
-    .map_err(|e| format!("전략자문 모델 다운로드 요청에 실패했어요: {e}"))?
-    .error_for_status()
-    .map_err(|e| format!("전략자문 모델 다운로드 응답이 올바르지 않아요: {e}"))?;
-
-  let total = response.content_length();
-  let mut file = fs::File::create(&tmp_path).map_err(|e| format!("임시 모델 파일을 만들지 못했어요: {e}"))?;
-  let mut downloaded: u64 = 0;
-  let mut last_reported_bucket = 0u64;
-  let mut buf = [0u8; 64 * 1024];
-
-  loop {
-    let read = response
-      .read(&mut buf)
-      .map_err(|e| format!("모델 파일을 읽는 중 오류가 났어요: {e}"))?;
-    if read == 0 {
-      break;
-    }
-    file
-      .write_all(&buf[..read])
-      .map_err(|e| format!("모델 파일을 저장하는 중 오류가 났어요: {e}"))?;
-    downloaded += read as u64;
-    if let Some(total_bytes) = total {
-      let pct = if total_bytes == 0 { 0 } else { downloaded.saturating_mul(100) / total_bytes };
-      let bucket = pct / 10;
-      if bucket > last_reported_bucket {
-        last_reported_bucket = bucket;
-        emit_strategy_progress(Some(app), "모델", format!("전략자문 모델 다운로드 중... {}% 완료", pct.min(100)));
-      }
-    } else if downloaded / (50 * 1024 * 1024) > last_reported_bucket {
-      last_reported_bucket = downloaded / (50 * 1024 * 1024);
-      emit_strategy_progress(
-        Some(app),
-        "모델",
-        format!("전략자문 모델 다운로드 중... {:.1}MB 수신", downloaded as f64 / 1024f64 / 1024f64),
-      );
-    }
-  }
-
-  file.flush().map_err(|e| format!("모델 파일 쓰기를 마무리하지 못했어요: {e}"))?;
-  fs::rename(&tmp_path, &cache_path).map_err(|e| format!("모델 파일을 저장 위치로 옮기지 못했어요: {e}"))?;
-  emit_strategy_progress(Some(app), "모델", format!("전략자문 모델 다운로드를 마쳤어요. 저장 위치: {}", cache_path.display()));
-  Ok(cache_path)
 }
 
 fn resolve_strategy_model_path(app: Option<&AppHandle>) -> Result<PathBuf, String> {
@@ -1144,33 +1092,10 @@ fn resolve_strategy_model_path(app: Option<&AppHandle>) -> Result<PathBuf, Strin
       return Ok(candidate);
     }
   }
-  if let Some(app) = app {
-    let _guard = strategy_model_download_lock()
-      .lock()
-      .map_err(|_| "전략자문 모델 다운로드 잠금을 얻지 못했어요.".to_string())?;
-    if let Ok(path) = strategy_model_cache_path(app) {
-      if path.exists() {
-        return Ok(path);
-      }
-    }
-    return download_strategy_model(app);
-  }
   Err(format!(
-    "전략자문 모델 파일을 찾지 못했어요. 앱 실행 후 자동 다운로드가 필요해요. 모델 URL: {}",
-    STRATEGY_MODEL_URL
+    "전략자문 모델 파일을 찾지 못했어요. App Store 배포용 앱 번들의 Resources/models 안에 {} 파일을 포함해주세요.",
+    STRATEGY_MODEL_FILENAME
   ))
-}
-
-pub fn ensure_strategy_model_ready(app: &AppHandle) -> Result<StrategyModelReadyResult, String> {
-  let cache_path = strategy_model_cache_path(app)?;
-  let downloaded = !cache_path.exists();
-  let path = resolve_strategy_model_path(Some(app))?;
-  Ok(StrategyModelReadyResult {
-    model_path: path.display().to_string(),
-    downloaded,
-    file_name: STRATEGY_MODEL_FILENAME.to_string(),
-    source_url: STRATEGY_MODEL_URL.to_string(),
-  })
 }
 
 fn format_actor_short(actor: &ActorRef) -> String {
@@ -1183,6 +1108,54 @@ fn format_actor_short(actor: &ActorRef) -> String {
     return kind.to_string();
   }
   format!("{} {}", kind, name)
+}
+
+fn strategy_store_label(record: &RecordItem) -> String {
+  let store = record.store_type.trim();
+  let other = record.store_other.trim();
+  if store.is_empty() || store == "기타" {
+    if other.is_empty() {
+      "기록유형 미상".to_string()
+    } else {
+      other.to_string()
+    }
+  } else {
+    store.to_string()
+  }
+}
+
+fn strategy_place_label(record: &RecordItem) -> String {
+  let place = record.place.trim();
+  let other = record.place_other.trim();
+  if place.is_empty() || place == "기타" {
+    if other.is_empty() {
+      "장소 미상".to_string()
+    } else {
+      other.to_string()
+    }
+  } else {
+    place.to_string()
+  }
+}
+
+fn strategy_main_actor_label(record: &RecordItem) -> String {
+  let actor_names = record_main_actor_names(record);
+  actor_names
+    .get(0)
+    .cloned()
+    .filter(|x| !x.trim().is_empty())
+    .unwrap_or_else(|| {
+      let label = format_actor_short(&record.actor);
+      if label.trim().is_empty() {
+        "당사자 미상".to_string()
+      } else {
+        label
+      }
+    })
+}
+
+fn strategy_effective_risk(record: &RecordItem) -> RiskPrediction {
+  record.risk.clone().unwrap_or_else(|| predict_risk(record))
 }
 
 fn summarize_case_context(case_item: Option<&CaseItem>) -> String {
@@ -1211,29 +1184,418 @@ fn summarize_case_context(case_item: Option<&CaseItem>) -> String {
   "- 사건 연결 없이 증거만으로 분석 중".to_string()
 }
 
-fn summarize_record_for_prompt(record: &RecordItem, index: usize) -> String {
-  let actor_names = record_main_actor_names(record);
-  let main_actor = actor_names.get(0).cloned().unwrap_or_else(|| record.actor.name.trim().to_string());
-  let related = record
-    .related
-    .iter()
-    .take(3)
-    .map(format_actor_short)
-    .collect::<Vec<_>>()
-    .join(", ");
+fn build_strategy_retrieval_query(
+  case_item: Option<&CaseItem>,
+  message: &str,
+  strategy_note: Option<&str>,
+) -> String {
+  let mut parts = Vec::<String>::new();
+  let question = message.trim();
+  if !question.is_empty() {
+    parts.push(question.to_string());
+  }
+  if let Some(case_item) = case_item {
+    let title = case_item.title.trim();
+    if !title.is_empty() {
+      parts.push(title.to_string());
+    }
+    let query = case_item.query.trim();
+    if !query.is_empty() {
+      parts.push(query.to_string());
+    }
+    let actor_block = case_item
+      .actors
+      .iter()
+      .take(4)
+      .map(format_actor_short)
+      .filter(|x| !x.trim().is_empty())
+      .collect::<Vec<_>>()
+      .join(" ");
+    if !actor_block.is_empty() {
+      parts.push(actor_block);
+    }
+  }
+  let note = strategy_trim(strategy_note.unwrap_or("").trim(), 180);
+  if !note.is_empty() && note != "없음" {
+    parts.push(note);
+  }
+  strategy_trim(&parts.join(" "), 340)
+}
+
+fn build_strategy_retrieval_case(
+  case_item: Option<&CaseItem>,
+  retrieval_query: &str,
+  max_results: usize,
+) -> CaseItem {
+  let mut built = case_item.cloned().unwrap_or(CaseItem {
+    id: "strategy".to_string(),
+    title: "직접 분석".to_string(),
+    query: String::new(),
+    time_from: String::new(),
+    time_to: String::new(),
+    max_results: Some(max_results as u32),
+    actors: Vec::new(),
+  });
+  built.query = retrieval_query.to_string();
+  built.max_results = Some(max_results as u32);
+  built
+}
+
+fn summarize_strategy_record_parts(record: &RecordItem) -> String {
+  let mut extras = Vec::<String>::new();
+  if let Some(parts) = record.summary_parts.as_ref() {
+    let issues = parts.issues.trim();
+    let evidence = parts.evidence_list.trim();
+    let actions = parts.teacher_actions.trim();
+    if !issues.is_empty() {
+      extras.push(format!("핵심포인트: {}", strategy_trim(issues, 90)));
+    }
+    if !evidence.is_empty() {
+      extras.push(format!("자료: {}", strategy_trim(evidence, 72)));
+    }
+    if !actions.is_empty() {
+      extras.push(format!("내대응: {}", strategy_trim(actions, 72)));
+    }
+  }
+  extras.join(" | ")
+}
+
+fn build_strategy_record_line_for_prompt(evidence: &StrategyEvidenceRecord) -> String {
   let mut line = format!(
-    "{}. [{}] {} | {} | {} | {}",
-    index + 1,
-    strategy_trim(record.ts.trim(), 32),
-    strategy_trim(main_actor.trim(), 32),
-    strategy_trim(record.store_type.trim(), 24),
-    strategy_trim(record.place.trim(), 24),
-    strategy_trim(record.summary.trim(), 240)
+    "[{}] {} | {} | {} | {} | {}",
+    evidence.ref_id,
+    strategy_trim(evidence.ts.trim(), 32),
+    strategy_trim(evidence.actor.trim(), 28),
+    strategy_trim(evidence.store.trim(), 18),
+    strategy_trim(evidence.place.trim(), 18),
+    strategy_trim(evidence.summary.trim(), 180)
   );
-  if !related.is_empty() {
-    line.push_str(&format!(" | 관련: {}", strategy_trim(&related, 80)));
+  if !evidence.risk_label.trim().is_empty() {
+    line.push_str(&format!(" | 위험: {}", strategy_trim(evidence.risk_label.trim(), 18)));
+  }
+  if !evidence.reasons.is_empty() {
+    line.push_str(&format!(" | 선택 이유: {}", strategy_trim(&evidence.reasons.join(", "), 96)));
   }
   line
+}
+
+fn build_strategy_actor_summary(records: &[&RecordItem]) -> Vec<String> {
+  let mut counts = HashMap::<String, usize>::new();
+  for record in records {
+    let main = strategy_main_actor_label(record);
+    if !main.trim().is_empty() {
+      *counts.entry(main).or_insert(0) += 1;
+    }
+    for related in &record.related {
+      let label = format!("관련 {}", format_actor_short(related));
+      if !label.trim().is_empty() {
+        *counts.entry(label).or_insert(0) += 1;
+      }
+    }
+  }
+  let mut ranked = counts.into_iter().collect::<Vec<_>>();
+  ranked.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+  ranked
+    .into_iter()
+    .take(6)
+    .map(|(label, count)| format!("{} · {}건", label, count))
+    .collect()
+}
+
+fn build_strategy_gaps(case_item: Option<&CaseItem>, records: &[&RecordItem], total_records: usize) -> Vec<String> {
+  let mut gaps = Vec::<String>::new();
+  if case_item.is_none() {
+    gaps.push("기준 컬렉션 없이 직접 분석 중이라 사건 범위가 넓을 수 있어요.".to_string());
+  }
+  if records.len() <= 2 {
+    gaps.push("현재 연결된 핵심 기록 수가 적어서 흐름 판단이 제한적일 수 있어요.".to_string());
+  }
+  if total_records > records.len() {
+    gaps.push(format!("전체 기록 {}건 중 핵심 근거 {}건만 추려 분석했어요.", total_records, records.len()));
+  }
+  let missing_actions = records
+    .iter()
+    .filter(|record| {
+      record
+        .summary_parts
+        .as_ref()
+        .map(|parts| parts.teacher_actions.trim().is_empty())
+        .unwrap_or(true)
+    })
+    .count();
+  if missing_actions >= records.len().max(1) / 2 && !records.is_empty() {
+    gaps.push("내가 실제로 취한 대응 메모가 비어 있는 기록이 많아요.".to_string());
+  }
+  let missing_evidence = records
+    .iter()
+    .filter(|record| {
+      record
+        .summary_parts
+        .as_ref()
+        .map(|parts| parts.evidence_list.trim().is_empty())
+        .unwrap_or(true)
+    })
+    .count();
+  if missing_evidence >= records.len().max(1) / 2 && !records.is_empty() {
+    gaps.push("관련 자료·증빙 정리 칸이 비어 있는 기록이 많아요.".to_string());
+  }
+  gaps.truncate(4);
+  gaps
+}
+
+fn push_strategy_evidence_candidate(
+  out: &mut Vec<(String, Vec<String>, f32)>,
+  seen: &mut HashSet<String>,
+  id: String,
+  reasons: Vec<String>,
+  score: f32,
+) {
+  if !id.trim().is_empty() && seen.insert(id.clone()) {
+    out.push((id, reasons, score));
+  }
+}
+
+fn select_strategy_evidence_records(
+  records: &[RecordItem],
+  ranked_hits: &[RankedHit],
+  risk_by_id: &HashMap<String, RiskPrediction>,
+) -> Vec<(String, Vec<String>, f32)> {
+  let mut out = Vec::<(String, Vec<String>, f32)>::new();
+  let mut seen = HashSet::<String>::new();
+
+  for hit in ranked_hits.iter().take(5) {
+    push_strategy_evidence_candidate(&mut out, &mut seen, hit.id.clone(), hit.reasons.iter().take(3).cloned().collect(), hit.score);
+  }
+
+  let mut risk_ranked = records
+    .iter()
+    .map(|record| {
+      let risk = risk_by_id
+        .get(&record.id)
+        .cloned()
+        .unwrap_or_else(|| strategy_effective_risk(record));
+      (record.id.clone(), risk.label, risk.confidence, risk.reasons)
+    })
+    .collect::<Vec<_>>();
+  risk_ranked.sort_by(|a, b| {
+    b.1.cmp(&a.1)
+      .then_with(|| b.2.partial_cmp(&a.2).unwrap_or(Ordering::Equal))
+      .then_with(|| a.0.cmp(&b.0))
+  });
+  for (id, label, _confidence, reasons) in risk_ranked.into_iter().take(3) {
+    if label >= 1 {
+      let mut why = vec![if label == 2 { "고위험 신호".to_string() } else { "경고 신호".to_string() }];
+      why.extend(reasons.into_iter().take(2));
+      push_strategy_evidence_candidate(&mut out, &mut seen, id, why, 0.0);
+    }
+  }
+
+  let mut recent = records.iter().collect::<Vec<_>>();
+  recent.sort_by(|a, b| b.ts.cmp(&a.ts));
+  for record in recent.into_iter().take(3) {
+    push_strategy_evidence_candidate(&mut out, &mut seen, record.id.clone(), vec!["최근 흐름".to_string()], 0.0);
+  }
+
+  let should_fill_default = out.is_empty();
+  if should_fill_default {
+    for record in records.iter().rev().take(4) {
+      push_strategy_evidence_candidate(&mut out, &mut seen, record.id.clone(), vec!["기본 선택".to_string()], 0.0);
+    }
+  }
+
+  out
+}
+
+fn build_strategy_evidence_packet(
+  case_item: Option<&CaseItem>,
+  records: &[RecordItem],
+  message: &str,
+  strategy_note: Option<&str>,
+) -> (StrategyEvidencePacket, String) {
+  let retrieval_query = build_strategy_retrieval_query(case_item, message, strategy_note);
+  let retrieval_case = build_strategy_retrieval_case(case_item, &retrieval_query, records.len().clamp(4, 8));
+  let ranked_hits = rank_records_for_case(
+    records,
+    &retrieval_case,
+    Some(RankOpts {
+      max_results: Some(records.len().clamp(4, 8) as u32),
+      weights: Some(RankWeights {
+        actor: Some(2.8),
+        related: Some(1.2),
+        text: Some(2.4),
+      }),
+      min_score: Some(0.0),
+      min_text_sim: Some(0.15),
+    }),
+  );
+  let risk_by_id = records
+    .iter()
+    .map(|record| (record.id.clone(), strategy_effective_risk(record)))
+    .collect::<HashMap<_, _>>();
+  let selected = select_strategy_evidence_records(records, &ranked_hits, &risk_by_id);
+  let by_id = records
+    .iter()
+    .map(|record| (record.id.clone(), record))
+    .collect::<HashMap<_, _>>();
+
+  let mut selected_records = selected
+    .iter()
+    .filter_map(|(id, _, _)| by_id.get(id).copied())
+    .collect::<Vec<_>>();
+  selected_records.sort_by(|a, b| a.ts.cmp(&b.ts));
+
+  let earliest = selected_records.first().map(|record| record.ts.trim()).unwrap_or("");
+  let latest = selected_records.last().map(|record| record.ts.trim()).unwrap_or("");
+  let actor_summary = build_strategy_actor_summary(&selected_records);
+  let gaps = build_strategy_gaps(case_item, &selected_records, records.len());
+
+  let mut risk_counts = [0usize; 3];
+  let mut risk_reasons = Vec::<String>::new();
+  for record in &selected_records {
+    let risk = risk_by_id
+      .get(&record.id)
+      .cloned()
+      .unwrap_or_else(|| strategy_effective_risk(record));
+    risk_counts[risk.label as usize] += 1;
+    for reason in risk.reasons.iter().take(2) {
+      if !risk_reasons.iter().any(|item| item == reason) {
+        risk_reasons.push(reason.clone());
+      }
+    }
+  }
+
+  let case_title = case_item
+    .map(|item| item.title.trim().to_string())
+    .filter(|title| !title.is_empty())
+    .unwrap_or_else(|| "직접 분석".to_string());
+  let actor_line = actor_summary
+    .iter()
+    .take(3)
+    .cloned()
+    .collect::<Vec<_>>()
+    .join(", ");
+  let focus_summary = if earliest.is_empty() && latest.is_empty() {
+    format!("{} 기준으로 핵심 근거 {}건을 묶었어요.", case_title, selected_records.len())
+  } else {
+    format!(
+      "{} 기준. {} ~ {} 흐름에서 핵심 근거 {}건을 골랐고, 주요 인물은 {}예요.",
+      case_title,
+      if earliest.is_empty() { "시점 미상" } else { earliest },
+      if latest.is_empty() { "시점 미상" } else { latest },
+      selected_records.len(),
+      if actor_line.is_empty() { "정리 중" } else { actor_line.as_str() }
+    )
+  };
+
+  let overview = if selected_records.is_empty() {
+    "핵심 근거를 아직 고르지 못했어요.".to_string()
+  } else {
+    let lead = selected_records
+      .iter()
+      .take(3)
+      .map(|record| {
+        format!(
+          "{} / {} / {}",
+          strategy_main_actor_label(record),
+          strategy_store_label(record),
+          strategy_trim(record.summary.trim(), 58)
+        )
+      })
+      .collect::<Vec<_>>()
+      .join(" -> ");
+    format!(
+      "질문과 사건 맥락을 기준으로 기록을 다시 뽑아보니, 흐름의 중심은 {} 입니다.",
+      strategy_trim(&lead, 220)
+    )
+  };
+
+  let timeline_summary = selected
+    .iter()
+    .filter_map(|(id, reasons, score)| {
+      let record = by_id.get(id)?;
+      let risk = risk_by_id.get(id).cloned().unwrap_or_else(|| strategy_effective_risk(record));
+      let extra = summarize_strategy_record_parts(record);
+      let mut line = format!(
+        "{} · {} · {} · {}",
+        record.ts.trim(),
+        strategy_main_actor_label(record),
+        strategy_trim(record.summary.trim(), 72),
+        if extra.is_empty() { format!("위험 {}", risk.label_text) } else { extra }
+      );
+      if !reasons.is_empty() {
+        line.push_str(&format!(" · 선택 이유 {}", strategy_trim(&reasons.join(", "), 80)));
+      }
+      if *score > 0.0 {
+        line.push_str(&format!(" · score {:.2}", score));
+      }
+      Some(strategy_trim(&line, 280))
+    })
+    .take(6)
+    .collect::<Vec<_>>();
+
+  let mut risk_summary = Vec::<String>::new();
+  if risk_counts[2] > 0 {
+    risk_summary.push(format!("고위험 신호 {}건", risk_counts[2]));
+  }
+  if risk_counts[1] > 0 {
+    risk_summary.push(format!("경고 신호 {}건", risk_counts[1]));
+  }
+  if risk_summary.is_empty() {
+    risk_summary.push("대부분 일반 공유 수준 기록".to_string());
+  }
+  for reason in risk_reasons.into_iter().take(4) {
+    risk_summary.push(reason);
+  }
+
+  let evidence_records = selected_records
+    .iter()
+    .enumerate()
+    .map(|(idx, record)| {
+      let ref_id = format!("E{}", idx + 1);
+      let lookup = selected
+        .iter()
+        .find(|(id, _, _)| id == &record.id)
+        .cloned()
+        .unwrap_or_else(|| (record.id.clone(), vec!["핵심 근거".to_string()], 0.0));
+      let risk = risk_by_id
+        .get(&record.id)
+        .cloned()
+        .unwrap_or_else(|| strategy_effective_risk(record));
+      let extra = summarize_strategy_record_parts(record);
+      let summary = if extra.is_empty() {
+        strategy_trim(record.summary.trim(), 220)
+      } else {
+        strategy_trim(&format!("{} | {}", record.summary.trim(), extra), 220)
+      };
+      StrategyEvidenceRecord {
+        ref_id,
+        record_id: record.id.clone(),
+        ts: record.ts.trim().to_string(),
+        actor: strategy_main_actor_label(record),
+        place: strategy_place_label(record),
+        store: strategy_store_label(record),
+        summary,
+        score: lookup.2,
+        risk_label: risk.label_text,
+        reasons: lookup.1,
+      }
+    })
+    .collect::<Vec<_>>();
+
+  (
+    StrategyEvidencePacket {
+      mode: if case_item.is_some() { "case-linked".to_string() } else { "direct".to_string() },
+      case_title,
+      focus_summary,
+      overview,
+      actor_summary,
+      timeline_summary,
+      risk_summary,
+      gaps,
+      evidence_records,
+    },
+    retrieval_query,
+  )
 }
 
 fn summarize_conversation(history: &[StrategyChatTurn]) -> String {
@@ -1260,41 +1622,91 @@ fn build_strategy_system_prompt() -> String {
     "- AI 언어모델의 이름은 \"CLOVA X\" 이며 네이버에서 만들었다.",
     "- 반드시 한국어로만 답하라.",
     "- 영어, 중국어, 일본어, 한자 사용 금지.",
-    "- 역할: 학교 현장 분쟁·민원 대응을 돕는 전략자문 에이전트.",
+    "- 역할: 학교 현장 분쟁·민원 대응을 돕는 증거 기반 전략자문 에이전트.",
+    "- 반드시 제공된 사건 맥락과 증거 참조표만 근거로 답하라.",
+    "- 사건에 없는 사실을 추가하지 말고, 확실하지 않으면 모른다고 적어라.",
+    "- 근거는 별도 '근거 묶음' 섹션으로 떼어내지 말고, 답변 문장 안에 자연스럽게 녹여라.",
+    "- 핵심 판단이나 제안마다 가능하면 [E1], [E2] 형식의 근거 표기를 문장 안에 붙여라.",
     "- 답변은 교사가 바로 복사해 쓸 수 있게 실무적으로 작성하라.",
     "- 과도한 법률 단정은 피하고, 기록·증거·말의 톤·다음 행동 중심으로 답하라.",
-    "- 가능하면 1) 상황판단 2) 지금 먼저 할 말 3) 바로 남길 기록 4) 다음 행동 순서로 답하라.",
+    "- 응답은 대화형으로 자연스럽게 이어가되, 필요하면 짧은 bullet만 사용하라.",
+    "- 응답은 가능하면 1) 상황판단 2) 지금 먼저 할 말 3) 바로 남길 기록 4) 다음 행동 순서를 자연스럽게 따른다.",
   ].join("\n")
 }
 
 fn build_strategy_user_prompt(
+  evidence_packet: &StrategyEvidencePacket,
   case_item: Option<&CaseItem>,
-  records: &[RecordItem],
   message: &str,
   strategy_note: Option<&str>,
   conversation: &[StrategyChatTurn],
 ) -> String {
   let case_block = summarize_case_context(case_item);
-  let records_block = if records.is_empty() {
+  let records_block = if evidence_packet.evidence_records.is_empty() {
     "- 연결된 증거 없음".to_string()
   } else {
-    records
+    evidence_packet
+      .evidence_records
       .iter()
-      .take(12)
-      .enumerate()
-      .map(|(idx, record)| summarize_record_for_prompt(record, idx))
+      .map(build_strategy_record_line_for_prompt)
       .collect::<Vec<_>>()
       .join("\n")
   };
   let note_block = strategy_trim(strategy_note.unwrap_or("없음"), 800);
   let history_block = summarize_conversation(conversation);
   let question_block = strategy_trim(message.trim(), 600);
+  let actor_block = if evidence_packet.actor_summary.is_empty() {
+    "- 정리된 인물 없음".to_string()
+  } else {
+    evidence_packet
+      .actor_summary
+      .iter()
+      .map(|line| format!("- {}", line))
+      .collect::<Vec<_>>()
+      .join("\n")
+  };
+  let risk_block = if evidence_packet.risk_summary.is_empty() {
+    "- 두드러진 위험 신호 없음".to_string()
+  } else {
+    evidence_packet
+      .risk_summary
+      .iter()
+      .map(|line| format!("- {}", line))
+      .collect::<Vec<_>>()
+      .join("\n")
+  };
+  let gap_block = if evidence_packet.gaps.is_empty() {
+    "- 특별히 비어 있는 정보 없음".to_string()
+  } else {
+    evidence_packet
+      .gaps
+      .iter()
+      .map(|line| format!("- {}", line))
+      .collect::<Vec<_>>()
+      .join("\n")
+  };
+  let timeline_block = if evidence_packet.timeline_summary.is_empty() {
+    "- 시간 흐름 요약 없음".to_string()
+  } else {
+    evidence_packet
+      .timeline_summary
+      .iter()
+      .map(|line| format!("- {}", line))
+      .collect::<Vec<_>>()
+      .join("\n")
+  };
 
   format!(
-    "[현재 사건 맥락]\n{}\n\n[전략 메모]\n{}\n\n[연결된 증거 요약]\n{}\n\n[직전 대화]\n{}\n\n[이번 요청]\n{}\n\n[응답 조건]\n- 한국어만 사용\n- 학교 현장에서 바로 쓰는 표현\n- 너무 긴 설명보다 핵심 위주\n- 필요한 경우 bullet 사용 가능\n- 사건에 없는 사실은 추정하지 말 것",
+    "[현재 사건 맥락]\n{}\n\n[증거 패킷 요약]\n- {}\n- {}\n\n[핵심 인물]\n{}\n\n[시간 흐름]\n{}\n\n[위험 신호]\n{}\n\n[비어 있는 정보]\n{}\n\n[증거 참조표]\n{}\n\n[전략 메모]\n{}\n\n[직전 대화]\n{}\n\n[이번 요청]\n{}\n\n[응답 조건]\n- 한국어만 사용\n- 학교 현장에서 바로 쓰는 표현\n- 너무 긴 설명보다 핵심 위주\n- 필요한 경우 bullet 사용 가능\n- 사건에 없는 사실은 추정하지 말 것\n- '현재 근거 묶음 보기' 같은 별도 섹션 제목은 만들지 말 것\n- 근거는 답변 문장 안에 [E1]처럼 자연스럽게 섞어 쓸 것\n- 비어 있는 정보나 확인 필요 사항도 별도 큰 섹션보다 문장 말미에 자연스럽게 덧붙일 것\n- 근거가 약한 내용은 '확실하지 않음'이라고 쓸 것",
     case_block,
-    note_block,
+    evidence_packet.focus_summary,
+    evidence_packet.overview,
+    actor_block,
+    timeline_block,
+    risk_block,
+    gap_block,
     records_block,
+    note_block,
     history_block,
     question_block
   )
@@ -1369,8 +1781,13 @@ fn cleanup_strategy_output(raw: &str) -> String {
       || trimmed.starts_with("<|im_start|>")
       || trimmed.starts_with("<|im_end|>")
       || trimmed.starts_with("[현재 사건 맥락]")
+      || trimmed.starts_with("[증거 패킷 요약]")
+      || trimmed.starts_with("[핵심 인물]")
+      || trimmed.starts_with("[시간 흐름]")
+      || trimmed.starts_with("[위험 신호]")
+      || trimmed.starts_with("[비어 있는 정보]")
+      || trimmed.starts_with("[증거 참조표]")
       || trimmed.starts_with("[전략 메모]")
-      || trimmed.starts_with("[연결된 증거 요약]")
       || trimmed.starts_with("[직전 대화]")
       || trimmed.starts_with("[이번 요청]")
       || trimmed.starts_with("[응답 조건]")
@@ -1385,9 +1802,12 @@ fn cleanup_strategy_output(raw: &str) -> String {
       || trimmed.starts_with("- 반드시 한국어로만")
       || trimmed.starts_with("- 영어, 중국어, 일본어")
       || trimmed.starts_with("- 역할:")
+      || trimmed.starts_with("- 반드시 제공된 사건 맥락과 증거 참조표만")
+      || trimmed.starts_with("- 사건에 없는 사실을 추가하지 말고")
+      || trimmed.starts_with("- 핵심 판단이나 제안마다 가능하면")
       || trimmed.starts_with("- 답변은 교사가 바로")
       || trimmed.starts_with("- 과도한 법률 단정은")
-      || trimmed.starts_with("- 가능하면 1) 상황판단")
+      || trimmed.starts_with("- 응답은 가능하면 1) 상황판단")
     {
       continue;
     }
@@ -1400,6 +1820,58 @@ fn cleanup_strategy_output(raw: &str) -> String {
   let out = filtered.join("\n");
   let out = out.trim();
   strategy_trim(out, 2400)
+}
+
+fn strategy_answer_has_evidence_ref(answer: &str) -> bool {
+  answer.contains("[E1]") || answer.contains("[E2]") || answer.contains("[E3]") || answer.contains("[E")
+}
+
+fn finalize_strategy_answer(answer: &str, evidence_packet: &StrategyEvidencePacket) -> String {
+  let mut out = answer.trim().to_string();
+  if out.is_empty() {
+    return out;
+  }
+
+  if !strategy_answer_has_evidence_ref(&out) && !evidence_packet.evidence_records.is_empty() {
+    let lines = evidence_packet
+      .evidence_records
+      .iter()
+      .take(2)
+      .map(|item| {
+        format!(
+          "[{}] {} / {} / {}",
+          item.ref_id,
+          strategy_trim(item.ts.trim(), 22),
+          strategy_trim(item.actor.trim(), 22),
+          strategy_trim(item.summary.trim(), 54)
+        )
+      })
+      .collect::<Vec<_>>()
+      .join(", ");
+    out.push_str("\n\n참고로 지금 판단의 중심 근거는 ");
+    out.push_str(&lines);
+    out.push_str(" 정도예요.");
+  }
+
+  let normalized = out.replace(' ', "");
+  if !evidence_packet.gaps.is_empty()
+    && !normalized.contains("확인필요")
+    && !normalized.contains("비어있는정보")
+    && !normalized.contains("추가필요")
+  {
+    let lines = evidence_packet
+      .gaps
+      .iter()
+      .take(2)
+      .map(|item| item.to_string())
+      .collect::<Vec<_>>()
+      .join(", ");
+    out.push_str("\n\n추가로 ");
+    out.push_str(&lines);
+    out.push_str(" 부분은 아직 확실하지 않아 확인이 더 필요해요.");
+  }
+
+  strategy_trim(out.trim(), 3200)
 }
 
 pub fn run_strategy_chat(
@@ -1419,11 +1891,21 @@ pub fn run_strategy_chat(
     return Err("전략자문에 연결된 증거가 없어요.".to_string());
   }
   emit_strategy_progress(app, "준비", format!("전략자문 요청을 받았어요. 연결된 증거 {}개를 확인 중이에요.", records.len()));
+  let (evidence_packet, retrieval_query) = build_strategy_evidence_packet(case_item, records, safe_message, strategy_note);
+  emit_strategy_progress(
+    app,
+    "근거정리",
+    format!(
+      "질문 기준으로 핵심 근거 {}건을 골랐어요. 검색 질의는 '{}'예요.",
+      evidence_packet.evidence_records.len(),
+      strategy_trim(retrieval_query.trim(), 120)
+    ),
+  );
 
   let model_path = resolve_strategy_model_path(app)?;
   let runner = resolve_strategy_runner_path(app)?;
   let system_prompt = build_strategy_system_prompt();
-  let user_prompt = build_strategy_user_prompt(case_item, records, safe_message, strategy_note, conversation);
+  let user_prompt = build_strategy_user_prompt(&evidence_packet, case_item, safe_message, strategy_note, conversation);
   let max_tokens = opts.as_ref().and_then(|x| x.max_tokens).unwrap_or(320).clamp(64, 512);
   let n_ctx = opts.as_ref().and_then(|x| x.n_ctx).unwrap_or(2048).clamp(1024, 4096);
   let threads = opts.as_ref().and_then(|x| x.threads).unwrap_or(4).clamp(1, 8);
@@ -1535,7 +2017,7 @@ pub fn run_strategy_chat(
 
   let stdout = String::from_utf8_lossy(&stdout_handle.join().unwrap_or_default()).to_string();
   let stderr = stderr_handle.join().unwrap_or_else(|_| "stderr 수집 스레드가 비정상 종료되었어요.".to_string());
-  let answer = cleanup_strategy_output(&stdout);
+  let answer = finalize_strategy_answer(&cleanup_strategy_output(&stdout), &evidence_packet);
 
   if timed_out {
     return Err(format!(
@@ -1562,6 +2044,8 @@ pub fn run_strategy_chat(
     model_path: model_path.display().to_string(),
     runner: runner.display().to_string(),
     prompt_chars: system_prompt.chars().count() + user_prompt.chars().count(),
-    records_used: records.len(),
+    records_used: evidence_packet.evidence_records.len(),
+    retrieval_query,
+    evidence_packet,
   })
 }

@@ -16,7 +16,7 @@ export const ui = {
   updatesNoteOpen: false,
   evidenceTab: 'write' as 'write' | 'list',
   caseTab: 'create' as 'create' | 'list' | 'proof',
-  legalTab: 'simulation' as 'simulation' | 'advisor',
+  legalTab: 'simulation' as const,
   simulationDraft: {
     evidenceFilter: '',
     scenarioPreset: 'balanced',
@@ -62,13 +62,14 @@ export const ui = {
     ts: string,
     meta?: string,
   }>,
+  strategyThreadPackageId: '',
   settingsOpen: false,
-  recRelatedOpen: false, // 증거기록하기 > 관련자 추가(details) 열림 상태
-  recEditRelatedOpen: false, // 증거 수정 > 관련자 추가(details) 열림 상태
+  recRelatedOpen: false, // 빠른 캡처 > 관계 항목 추가(details) 열림 상태
+  recEditRelatedOpen: false, // 기록 수정 > 관계 항목 추가(details) 열림 상태
   // 메모 필터(사이드바) - draft는 입력값, applied는 적용된 값
   recFilterActor: '', recFilterPlace: '', recFilterKeyword: '',
   recFilterActorDraft: '', recFilterPlaceDraft: '', recFilterKeywordDraft: '',
-  // '기록추가' 모달 필터 - draft/applied 분리
+  // '빠른 캡처' 모달 필터 - draft/applied 분리
   updFilterActor: '', updFilterPlace: '', updFilterKeyword: '',
   updFilterActorDraft: '', updFilterPlaceDraft: '', updFilterKeywordDraft: '',
   updatePickIds: [] as string[],
@@ -108,19 +109,19 @@ export const ui = {
 
 export const UI_OTHER_ACTOR_LABEL = '직접입력';
 export const LEGACY_UI_OTHER_ACTOR_LABEL = '기타/외부인';
-export const UI_CLASS_ACTOR_LABEL = '우리반';
-export const UI_ACTOR_TYPES = ['학생', UI_CLASS_ACTOR_LABEL, '학부모', UI_OTHER_ACTOR_LABEL, '관리자', '동료교사'] as const;
+export const UI_CLASS_ACTOR_LABEL = '프로필 템플릿';
+export const UI_ACTOR_TYPES = ['당사자', '상대방', '참여자', UI_CLASS_ACTOR_LABEL, '기관/조직', UI_OTHER_ACTOR_LABEL] as const;
 export const ACTOR_TYPES: ActorType[] = ['관리자', '학부모', '학생', '동료교사', '외부인', '기타'];
 export const LVS: Sensitivity[] = ['LV1', 'LV2', 'LV3', 'LV4', 'LV5'];
 
-export const STORE_TYPES: StoreType[] = (['녹취록','통화녹취','음성녹음','문서','공문','가정통신문','회의록','상담록','상담일지','지도일지','교무수첩','업무일지','학급일지','전화','문자','업무메신저','이메일','사진','영상','CCTV','진술서','방문상담','공식채널','기타'] as any) as StoreType[];
-export const PLACE_TYPES: PlaceType[] = (['교실','복도','급식실','보건실','교외','교무실','운동장','상담실','체육관','도서관','행정실','생활지도실','온라인','기타'] as any) as PlaceType[];
+export const STORE_TYPES: StoreType[] = (['메모','채팅','이메일','전화','녹취','사진','영상','문서','파일','웹 링크','방문 기록','공식 채널','기타'] as any) as StoreType[];
+export const PLACE_TYPES: PlaceType[] = (['온라인','메신저','전화/회의','현장','사무 공간','집','이동 중','공공장소','기타'] as any) as PlaceType[];
 
 export const CLASS_ROSTER_SIZE = 40;
 export const emptyClassRoster = () => Array.from({ length: CLASS_ROSTER_SIZE }, () => '');
-export const STUDENT_NAMES = Array.from({ length: 40 }, (_, i) => `학생${i + 1}`);
-export const PARENT_NAMES = Array.from({ length: 40 }, (_, i) => [`${i + 1}번 모`, `${i + 1}번 부`]).flat();
-export const ADMIN_NAMES = ['교장', '교감', '교무부장', '학년부장'];
+export const STUDENT_NAMES = Array.from({ length: 40 }, (_, i) => `당사자${i + 1}`);
+export const PARENT_NAMES = Array.from({ length: 40 }, (_, i) => `상대방${i + 1}`);
+export const ADMIN_NAMES = ['기관 담당', '연락 창구', '외부 자문', '지원 담당'];
 
 export const SCREEN_PIN_STORAGE_KEY = `${LS_KEY}:screen_pin`;
 export const SCREEN_PIN_LENGTH = 4;
@@ -157,27 +158,42 @@ export const clearScreenPin = () => {
 
 export const actorTypeTextFromInternal = (t: ActorType) => {
   const v = String(t || '').trim();
-  return v === '외부인' || v === '기타' ? UI_OTHER_ACTOR_LABEL : (v || UI_OTHER_ACTOR_LABEL);
+  if (v === '학생') return '당사자';
+  if (v === '학부모') return '상대방';
+  if (v === '관리자') return '기관/조직';
+  if (v === '동료교사') return '참여자';
+  return UI_OTHER_ACTOR_LABEL;
 };
 export const normalizeActorTypeTextUI = (v: string) => {
   const s = String(v || '').trim();
-  return s === LEGACY_UI_OTHER_ACTOR_LABEL || s === '외부인' || s === '기타' ? UI_OTHER_ACTOR_LABEL : s;
+  if (!s) return '';
+  if (s === LEGACY_UI_OTHER_ACTOR_LABEL || s === '외부인' || s === '기타') return UI_OTHER_ACTOR_LABEL;
+  if (s === '학생') return '당사자';
+  if (s === '학부모') return '상대방';
+  if (s === '관리자') return '기관/조직';
+  if (s === '동료교사') return '참여자';
+  if (s === '우리반') return UI_CLASS_ACTOR_LABEL;
+  return s;
 };
 export const actorTypeInternalFromText = (v: string): ActorType => {
   const s = normalizeActorTypeTextUI(v);
   if (!s || s === UI_OTHER_ACTOR_LABEL) return '외부인' as ActorType;
   if (s === UI_CLASS_ACTOR_LABEL) return '학생' as ActorType;
+  if (s === '당사자') return '학생' as ActorType;
+  if (s === '상대방') return '학부모' as ActorType;
+  if (s === '기관/조직') return '관리자' as ActorType;
+  if (s === '참여자') return '동료교사' as ActorType;
   return ((ACTOR_TYPES as any).includes(s) ? s : '외부인') as ActorType;
 };
 export const getClassRoster = () => {
   const raw = Array.isArray(S.classRoster) ? S.classRoster : [];
   return Array.from({ length: CLASS_ROSTER_SIZE }, (_, i) => String(raw[i] || '').trim());
 };
-export const getClassRosterNames = () => getClassRoster().map((name, index) => name ? `${index + 1}번 ${name}` : '').filter(Boolean);
+export const getClassRosterNames = () => getClassRoster().map((name) => String(name || '').trim()).filter(Boolean);
 
 export const nameDatalistIdForActorTypeText = (typeText: string) => {
   const t = String(typeText || '').trim();
-  return t === '학생' ? 'dlNameStudent' : t === UI_CLASS_ACTOR_LABEL ? 'dlNameClassRoster' : t === '학부모' ? 'dlNameParent' : t === '관리자' ? 'dlNameAdmin' : '';
+  return t === '당사자' ? 'dlNameStudent' : t === UI_CLASS_ACTOR_LABEL ? 'dlNameClassRoster' : t === '상대방' ? 'dlNameParent' : t === '기관/조직' ? 'dlNameAdmin' : '';
 };
 
 export const opt = (value: string, label: string, selected: string) =>
@@ -206,12 +222,12 @@ export const renderNameFieldForType = (args: { typeText: string; value: string; 
   const common = `data-action="${esc(args.action)}" data-field="${esc(args.field)}"`;
   if (t === UI_CLASS_ACTOR_LABEL) {
     const list = getClassRosterNames();
-    const ph = list.length ? '우리반 학생 선택' : '학생 명부를 먼저 등록하세요';
+    const ph = list.length ? '프로필 템플릿 선택' : '프로필 템플릿을 먼저 저장하세요';
     return `<select ${common} ${list.length ? '' : 'disabled'}>${list.length ? renderSelectFromListWithPlaceholder(list as any, v, ph, false) : `<option value="" selected disabled>${esc(ph)}</option>`}</select>`;
   }
-  if (!(t === '학생' || t === '학부모' || t === '관리자')) return `<input value="${esc(v)}" placeholder="${esc(args.placeholder)}" ${common} />`;
-  const list = t === '학생' ? STUDENT_NAMES : t === '학부모' ? PARENT_NAMES : ADMIN_NAMES;
-  const ph = t === '학생' ? '학생 선택' : t === '학부모' ? '학부모 선택' : '관리자 선택';
+  if (!(t === '당사자' || t === '상대방' || t === '기관/조직')) return `<input value="${esc(v)}" placeholder="${esc(args.placeholder)}" ${common} />`;
+  const list = t === '당사자' ? STUDENT_NAMES : t === '상대방' ? PARENT_NAMES : ADMIN_NAMES;
+  const ph = t === '당사자' ? '당사자 선택' : t === '상대방' ? '상대방 선택' : '기관/조직 선택';
   return `<select ${common}>${renderSelectFromListWithPlaceholder(list as any, v, ph, false)}</select>`;
 };
 
@@ -249,10 +265,10 @@ export const placeLabel = (p: PlaceType, other: string) => (p !== '기타' ? p :
 export const actorLabel = (a: ActorRef) => `${actorTypeTextFromInternal((a.type || '외부인') as any)} · ${a.name || '기타'}`;
 export const actorShort = (a: ActorRef) => {
   const n = a.name || '기타';
-  if (a.type === '학생') return `학생 ${n}`;
-  if (a.type === '학부모') return `학부모 ${n}`;
-  if (a.type === '관리자') return `관리자 ${n}`;
-  if (a.type === '동료교사') return `동료교사 ${n}`;
+  if (a.type === '학생') return `당사자 ${n}`;
+  if (a.type === '학부모') return `상대방 ${n}`;
+  if (a.type === '관리자') return `기관/조직 ${n}`;
+  if (a.type === '동료교사') return `참여자 ${n}`;
   return `${UI_OTHER_ACTOR_LABEL} ${n}`;
 };
 export const sensFilterLabel = (s: CaseSensFilter) => (s === 'any' ? '전체' : s);
@@ -405,9 +421,9 @@ const summaryPartsFromRecord = (record: any): Required<RecordSummaryParts> => {
 /* drafts */
 const RECORD_DRAFT_BASE = () => ({
   intake: '상담' as const,
-  actorTypeText: '학생', actorType: '학생' as ActorType, actorNameChoice: OTHER, actorNameOther: '', actors: [] as ActorRef[],
-  relTypeText: '학부모', relType: '학부모' as ActorType, relNameChoice: OTHER, relNameOther: '', related: [] as ActorRef[],
-  placeText: '교실', place: '교실' as PlaceType, placeOther: '',
+  actorTypeText: '당사자', actorType: '학생' as ActorType, actorNameChoice: OTHER, actorNameOther: '', actors: [] as ActorRef[],
+  relTypeText: '상대방', relType: '학부모' as ActorType, relNameChoice: OTHER, relNameOther: '', related: [] as ActorRef[],
+  placeText: '온라인', place: '온라인' as PlaceType, placeOther: '',
   storeTypeText: '전화', storeType: '전화' as StoreType, storeOther: '',
   lvText: 'LV2', lv: 'LV2' as Sensitivity,
   ts: toLocalInputValue(nowISO()),
@@ -439,13 +455,13 @@ export function loadRecordEditDraft(record: any) {
   draftRecordEdit.actors = Array.isArray(r.actors) && r.actors.length
     ? JSON.parse(JSON.stringify(r.actors))
     : (r.actor?.name ? [{ type: r.actor.type, name: r.actor.name }] : []);
-  draftRecordEdit.relTypeText = '학부모';
+  draftRecordEdit.relTypeText = '상대방';
   draftRecordEdit.relType = '학부모' as ActorType;
   draftRecordEdit.relNameChoice = OTHER;
   draftRecordEdit.relNameOther = '';
   draftRecordEdit.related = Array.isArray(r.related) ? JSON.parse(JSON.stringify(r.related)) : [];
-  draftRecordEdit.place = (r.place || '교실') as PlaceType;
-  draftRecordEdit.placeText = String(r.place || '교실');
+  draftRecordEdit.place = (r.place || '온라인') as PlaceType;
+  draftRecordEdit.placeText = String(r.place || '온라인');
   draftRecordEdit.placeOther = String(r.placeOther || '');
   draftRecordEdit.storeType = (r.storeType || '전화') as StoreType;
   draftRecordEdit.storeTypeText = String(r.storeType || '전화');
@@ -470,7 +486,7 @@ export const draftCase = {
   actors: [] as ActorRef[],
   sensFilterText: 'any', sensFilter: 'any' as CaseSensFilter,
   statusText: '진행중', status: '진행중' as CaseStatus,
-  addTypeText: '학생', addType: '학생' as ActorType, addNameChoice: OTHER, addNameOther: '',
+  addTypeText: '당사자', addType: '학생' as ActorType, addNameChoice: OTHER, addNameOther: '',
 };
 export const draftStep = { ts: toLocalInputValue(nowISO()), name: '', note: '' };
 

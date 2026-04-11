@@ -23,6 +23,12 @@ Thumbs.db
 .vscode/
 .idea/
 
+# Apple signing material
+src-tauri/embedded.provisionprofile
+*.p12
+*.cer
+AuthKey_*.p8
+
 *.gguf
 models/
 # AI models

@@ -14,10 +14,16 @@
       {
         "label": "main",
         "title": "roosycozy",
-        "width": 920,
-        "height": 680,
+        "width": 1280,
+        "height": 800,
         "minWidth": 860,
         "minHeight": 620,
+        "hiddenTitle": true,
+        "titleBarStyle": "Overlay",
+        "trafficLightPosition": {
+          "x": 16,
+          "y": 18
+        },
         "resizable": true,
         "fullscreen": false,
         "center": true
@@ -27,8 +33,33 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "externalBin": [
-      "binaries/llama-sidecar"
-    ]
+    "category": "Productivity",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": {
+      "resources/models/HyperCLOVAX-SEED-Text-Instruct-0.5B-q4_0.gguf": "models/HyperCLOVAX-SEED-Text-Instruct-0.5B-q4_0.gguf"
+    },
+    "macOS": {
+      "entitlements": "entitlements.macos.plist",
+      "infoPlist": "Info.plist",
+      "minimumSystemVersion": "12.0",
+      "files": {
+        "embedded.provisionprofile": "embedded.provisionprofile",
+        "MacOS/sidecar/llama-sidecar-aarch64-apple-darwin": "binaries/llama-sidecar-aarch64-apple-darwin",
+        "MacOS/sidecar/libggml-base.0.dylib": "binaries/libggml-base.0.dylib",
+        "MacOS/sidecar/libggml-blas.0.dylib": "binaries/libggml-blas.0.dylib",
+        "MacOS/sidecar/libggml-cpu.0.dylib": "binaries/libggml-cpu.0.dylib",
+        "MacOS/sidecar/libggml-metal.0.dylib": "binaries/libggml-metal.0.dylib",
+        "MacOS/sidecar/libggml-rpc.0.dylib": "binaries/libggml-rpc.0.dylib",
+        "MacOS/sidecar/libggml.0.dylib": "binaries/libggml.0.dylib",
+        "MacOS/sidecar/libllama.0.dylib": "binaries/libllama.0.dylib",
+        "MacOS/sidecar/libmtmd.0.dylib": "binaries/libmtmd.0.dylib"
+      }
+    }
   }
 }

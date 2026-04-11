@@ -17460,3 +17460,3917 @@ body{
   padding:5px 0 7px !important;
   line-height:1.56 !important;
 }
+
+/* =====================================================================
+   2026-04-08 natural window chrome pass
+   ===================================================================== */
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell{
+  --window-topbar-h: 54px;
+  --window-drag-left: 20px;
+  --window-drag-right: 20px;
+  --window-sidebar-top: 18px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell[data-window-platform="macos"]{
+  --window-drag-left: 86px;
+  --window-drag-right: 28px;
+  --window-sidebar-top: 54px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell[data-window-platform="windows"]{
+  --window-drag-left: 12px;
+  --window-drag-right: 12px;
+  --window-sidebar-top: 14px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceSidebar{
+  padding-top: var(--window-sidebar-top) !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topbar{
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 40 !important;
+  background: rgba(255,255,255,0.88) !important;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.05) !important;
+  backdrop-filter: saturate(1.24) blur(18px) !important;
+  -webkit-backdrop-filter: saturate(1.24) blur(18px) !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topbarInner{
+  height: var(--window-topbar-h) !important;
+  min-height: var(--window-topbar-h) !important;
+  padding: 8px 14px 6px 0 !important;
+  display: flex !important;
+  align-items: flex-end !important;
+  gap: 10px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell[data-window-platform="macos"] .topbarInner{
+  padding-top: 10px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .windowDragPad{
+  height: 100%;
+  min-width: 20px;
+  align-self: stretch;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .windowDragPadStart{
+  flex: 0 0 var(--window-drag-left);
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .windowDragPadEnd{
+  flex: 1 1 auto;
+  min-width: var(--window-drag-right);
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topNav,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topNav.topNavShifted{
+  width: auto !important;
+  margin: 0 !important;
+  justify-content: flex-start !important;
+  gap: 16px !important;
+  flex: 0 1 auto !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topNavBtn{
+  min-width: 0 !important;
+  width: auto !important;
+  height: 34px !important;
+  padding: 0 0 9px !important;
+  color: #8b94a6 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topNavBtn:hover,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topNavBtn:focus-visible{
+  color: #4b5563 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topNavBtn.active{
+  color: #111827 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topNavBtn::after{
+  height: 2px !important;
+  background: rgba(17, 24, 39, 0.92) !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topNavLabel{
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.02em !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .windowControls{
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  padding-left: 4px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell:not([data-window-platform="windows"]) .windowControls{
+  display: none !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .windowControlBtn{
+  width: 34px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: 9px;
+  color: #667085;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: background-color .16s ease, color .16s ease;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .windowControlBtn:hover{
+  background: rgba(15, 23, 42, 0.06);
+  color: #111827;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .windowControlBtn.close:hover{
+  background: #ef4444;
+  color: #ffffff;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .windowControlGlyph{
+  font-size: 15px;
+  line-height: 1;
+  font-weight: 500;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .windowControlGlyphSquare{
+  width: 11px;
+  height: 11px;
+  border: 1.5px solid currentColor;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceContent{
+  padding-top: 14px !important;
+}
+
+/* =====================================================================
+   2026-04-08 titlebar drag strip refinement
+   ===================================================================== */
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topbar{
+  display:flex !important;
+  flex-direction:column !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .windowTitlebarStrip{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  min-height:26px;
+  padding:6px 12px 0 12px;
+  user-select:none;
+  -webkit-user-select:none;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell[data-window-platform="macos"] .windowTitlebarStrip{
+  padding:8px 18px 0 86px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell[data-window-platform="windows"] .windowTitlebarStrip{
+  padding:4px 8px 0 10px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .windowTitlebarDrag{
+  flex:1 1 auto;
+  min-height:20px;
+  border-radius:10px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topbarInner{
+  padding:2px 14px 7px 0 !important;
+  min-height:40px !important;
+  height:auto !important;
+  gap:8px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell[data-window-platform="macos"] .topbarInner{
+  padding-top:0 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .windowDragPad{
+  display:none !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .windowControls{
+  margin-left:0 !important;
+  padding-left:0 !important;
+}
+
+/* =====================================================================
+   2026-04-08 global compact polish
+   - evidence / cases / legal / header / sidebar density retune
+   ===================================================================== */
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell{
+  --global-shell-font: 12.5px;
+  --global-shell-muted: 11px;
+  --global-shell-title: 14px;
+  --global-shell-heading: 16px;
+  --global-shell-card-pad: 12px;
+  --global-shell-gap: 10px;
+  --global-shell-control-h: 34px;
+  --global-shell-soft-border: rgba(15, 23, 42, 0.07);
+  --global-shell-soft-shadow: 0 8px 22px rgba(15, 23, 42, 0.045);
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .appFrame{
+  grid-template-columns: 56px minmax(0, 1fr) !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceSidebar{
+  gap: 10px !important;
+  padding: 10px 6px 10px !important;
+  border-right: 1px solid rgba(15, 23, 42, 0.05) !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceSidebarNav{
+  gap: 4px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceLogo,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarIconBtn,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarSettingsBtn{
+  width: 34px !important;
+  height: 34px !important;
+  min-width: 34px !important;
+  border-radius: 10px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceLogoGlyph{
+  font-size: 14px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarIcon,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarIcon svg{
+  width: 16px !important;
+  height: 16px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topbar{
+  border-bottom: 1px solid rgba(15, 23, 42, 0.04) !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .windowTitlebarStrip{
+  min-height: 22px !important;
+  padding-top: 5px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell[data-window-platform="macos"] .windowTitlebarStrip{
+  padding-top: 7px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topbarInner{
+  min-height: 36px !important;
+  padding: 1px 12px 6px 0 !important;
+  gap: 7px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topNav,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topNav.topNavShifted{
+  gap: 14px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topNavBtn{
+  height: 26px !important;
+  min-height: 26px !important;
+  padding: 0 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topNavBtn::after{
+  bottom: -6px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topNavLabel{
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.025em !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .windowControlBtn{
+  width: 30px !important;
+  height: 24px !important;
+  border-radius: 8px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .windowControlGlyph{
+  font-size: 13px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .windowControlGlyphSquare{
+  width: 10px !important;
+  height: 10px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceContent{
+  padding: 0 10px 10px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceSection,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .recordsMain,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .recordsPageShell,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseShell,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeMain,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sideStack,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseWorkspace,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseBodyGrid{
+  gap: var(--global-shell-gap) !important;
+  margin-top: 8px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .card,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .side .card,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseCommandDeck,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .recordsPageShell .sideCard,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .memoFilterCard,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .simulationCompactResultHero{
+  padding: var(--global-shell-card-pad) !important;
+  border-radius: 14px !important;
+  border: 1px solid var(--global-shell-soft-border) !important;
+  box-shadow: var(--global-shell-soft-shadow) !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sectionTitle,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseMainTitle,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .recordsPageShell .sectionTitle,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sideCardHead{
+  margin-bottom: 8px !important;
+  gap: 6px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sectionTitle .h2,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseShellList .sectionTitle .h2,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseShellList .caseTitleLeft .h2,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseMainTitle{
+  font-size: var(--global-shell-heading) !important;
+  line-height: 1.22 !important;
+  letter-spacing: -0.03em !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .title,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .recMiniTitle,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .recordSectionTitle,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeFeedName{
+  font-size: var(--global-shell-title) !important;
+  line-height: 1.34 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .card,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .item,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseItem,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .recMini,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .paperPickItem,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .field input,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .field select,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .field textarea,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .btn{
+  font-size: var(--global-shell-font) !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .muted,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .meta,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .detailNote,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .recMiniMeta,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .recMiniMetaLine,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .recMiniHash,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .timelineRevText,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .paperMeta,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeFeedMeta,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeFeedSub,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeFeedStat{
+  font-size: var(--global-shell-muted) !important;
+  line-height: 1.42 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .btn{
+  height: var(--global-shell-control-h) !important;
+  min-height: var(--global-shell-control-h) !important;
+  padding: 0 11px !important;
+  border-radius: 10px !important;
+  font-size: 11.5px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .btn.small,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .btn.mini,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .mfBtn,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .recordsPageShell .memoFilterCard .sideCardActions .btn{
+  height: 28px !important;
+  min-height: 28px !important;
+  padding: 0 8px !important;
+  border-radius: 9px !important;
+  font-size: 10.5px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .field{
+  gap: 5px !important;
+  margin-bottom: 8px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .field label,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .pinField > span{
+  font-size: 10.5px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .field input,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .field select,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .searchInput,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .pinInput,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .settingsPinCard input[data-action="draft-pin-settings"]{
+  height: 36px !important;
+  padding: 0 11px !important;
+  border-radius: 11px !important;
+  font-size: 12px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .field textarea{
+  min-height: 74px !important;
+  padding: 9px 11px !important;
+  border-radius: 11px !important;
+  font-size: 12px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .countPill,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseCountPill,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .statPill,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .tag,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .chip{
+  min-height: 20px !important;
+  padding: 2px 7px !important;
+  font-size: 10px !important;
+  border-radius: 999px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .chips,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .tags,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .actionsRow{
+  gap: 5px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sectionTabs,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseCommandDeck .sectionTabs{
+  gap: 12px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sectionTab,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseCommandDeck .sectionTab{
+  height: 24px !important;
+  font-size: 11px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .paperPickItem,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .item,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseItem,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .recMini,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .timelineMetaBlock,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .tCard{
+  padding: 10px 11px !important;
+  border-radius: 12px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .recordsPageShell .compactFilterBar,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .recordsPageShell .compactFilterBar .mfFields,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .recordsPageShell .compactFilterBar .mfFields.twoUp{
+  gap: 6px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .recordsPageShell .memoFilterCard .mfInput,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .recordsPageShell .memoFilterCard .mfSelect{
+  height: 30px !important;
+  font-size: 11.5px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .grid.caseGrid{
+  grid-template-columns: minmax(244px, 292px) minmax(0, 1fr) !important;
+  gap: 10px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseShellList .caseWorkspace{
+  grid-template-columns: minmax(250px, 0.84fr) minmax(0, 1.16fr) !important;
+  gap: 10px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .recordsListScroll,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseListScroll,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineScroll,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseCommandPanelScroll,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .paperPickList{
+  padding-right: 4px !important;
+}
+
+/* =====================================================================
+   2026-04-08 codex-like shell tone
+   - left sidebar soft gray
+   - header + right work area unified white
+   ===================================================================== */
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell{
+  background: #ffffff !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .appFrame{
+  background: #ffffff !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceSidebar{
+  background: #f5f5f3 !important;
+  border-right: 1px solid rgba(15, 23, 42, 0.06) !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceMain,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topbar,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .windowTitlebarStrip,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topbarInner,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceContent{
+  background: #ffffff !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topbar{
+  border-bottom: 1px solid rgba(15, 23, 42, 0.045) !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .windowTitlebarStrip{
+  border-bottom: none !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceContent{
+  background-image: none !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceLogo,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarIconBtn,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarSettingsBtn{
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  box-shadow: none !important;
+  color: #6b7280 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceLogo:hover,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarIconBtn:hover,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarSettingsBtn:hover{
+  background: rgba(255,255,255,0.86) !important;
+  border-color: rgba(15, 23, 42, 0.06) !important;
+  color: #111827 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceLogo.active,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarIconBtn.active,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarSettingsBtn.active,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarIconBtn.accent{
+  background: #ffffff !important;
+  border-color: rgba(15, 23, 42, 0.08) !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+  color: #111827 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceLogo.active::before,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarIconBtn.active::before,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarSettingsBtn.active::before,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarIconBtn.accent::before{
+  background: #111827 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceLogoGlyph{
+  color: #4b5563 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topNavBtn,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topGearBtn,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topNavBtnTeacherCreate{
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: #7b8494 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topNavBtn:hover,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topGearBtn:hover,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topNavBtnTeacherCreate:hover{
+  background: transparent !important;
+  color: #111827 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topNavBtn.active{
+  color: #111827 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topNavBtnTeacherCreate,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topNavBtnTeacherCreate .topNavLabel,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topNavBtnTeacherCreate .topNavIcon{
+  color: #6b7280 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topNavBtnTeacherCreate:hover,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topNavBtnTeacherCreate:focus-visible{
+  color: #111827 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .card,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .side .card,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseCommandDeck,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .recordsPageShell .sideCard,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .memoFilterCard,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .simulationCompactResultHero,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .paperPickItem,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .item,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseItem,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .recMini,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .timelineMetaBlock,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .tCard{
+  background: #ffffff !important;
+}
+
+/* =====================================================================
+   2026-04-08 sidebar/header alignment pass
+   - wider sidebar
+   - logo start line aligned more naturally with header
+   - header row and logo rhythm tuned to feel more codex-like
+   ===================================================================== */
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell{
+  --shell-sidebar-w: 74px;
+  --shell-logo-size: 38px;
+  --shell-sidebar-pad-x: 10px;
+  --shell-header-main-h: 42px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .appFrame{
+  grid-template-columns: var(--shell-sidebar-w) minmax(0, 1fr) !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceSidebar{
+  width: var(--shell-sidebar-w) !important;
+  padding: 14px var(--shell-sidebar-pad-x) 12px !important;
+  gap: 12px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell[data-window-platform="macos"] .serviceSidebar{
+  padding-top: 22px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell[data-window-platform="windows"] .serviceSidebar{
+  padding-top: 14px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceLogo,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarIconBtn,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarSettingsBtn{
+  width: var(--shell-logo-size) !important;
+  height: var(--shell-logo-size) !important;
+  min-width: var(--shell-logo-size) !important;
+  border-radius: 12px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceLogo{
+  margin-top: 6px !important;
+  margin-bottom: 2px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell[data-window-platform="windows"] .serviceLogo{
+  margin-top: 2px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceLogoGlyph{
+  font-size: 15px !important;
+  font-weight: 800 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceSidebarNav{
+  gap: 7px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceSidebarBottom{
+  padding-top: 10px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topbar{
+  min-height: 70px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .windowTitlebarStrip{
+  min-height: 24px !important;
+  padding: 7px 12px 0 12px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell[data-window-platform="macos"] .windowTitlebarStrip{
+  padding: 8px 18px 0 86px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell[data-window-platform="windows"] .windowTitlebarStrip{
+  padding: 6px 10px 0 10px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topbarInner{
+  min-height: var(--shell-header-main-h) !important;
+  height: var(--shell-header-main-h) !important;
+  padding: 0 14px 7px 0 !important;
+  align-items: center !important;
+  gap: 10px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topNav,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topNav.topNavShifted{
+  min-height: var(--shell-header-main-h) !important;
+  align-items: center !important;
+  gap: 16px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topNavBtn{
+  height: 30px !important;
+  min-height: 30px !important;
+  padding-bottom: 1px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topNavBtn::after{
+  bottom: -7px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topNavLabel{
+  font-size: 12.5px !important;
+}
+
+/* =====================================================================
+   2026-04-08 final sidebar marker + strategy chat codex shell
+   ===================================================================== */
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceLogo.active,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarIconBtn.active,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarSettingsBtn.active,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarIconBtn.accent{
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  color: #111827 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceLogo.active::before,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarIconBtn.active::before,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarSettingsBtn.active::before,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarIconBtn.accent::before{
+  left: -9px !important;
+  top: 7px !important;
+  bottom: 7px !important;
+  width: 2px !important;
+  border-radius: 999px !important;
+  background: #111827 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceContent.serviceContentChatMode{
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceContent.serviceContentChatMode > .legalHub.legalHubChatMode{
+  flex: 1 1 auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  max-width: none !important;
+  margin: 0 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode > .legalHubShellFlat{
+  flex: 1 1 auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  overflow: hidden !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .legalHubPanel.strategyChatPage{
+  flex: 1 1 auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  background: #ffffff !important;
+  overflow: hidden !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyChatOnlyShell{
+  flex: 1 1 auto !important;
+  display: grid !important;
+  grid-template-rows: minmax(0, 1fr) auto !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  max-width: min(860px, 100%) !important;
+  margin: 0 auto !important;
+  padding: 18px 18px 16px !important;
+  box-sizing: border-box !important;
+  gap: 16px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyChatThreadOnly{
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  padding: 0 8px 12px 0 !important;
+  scrollbar-gutter: stable !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyChatOnlyComposer{
+  position: relative !important;
+  left: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  transform: none !important;
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 14px 16px 12px !important;
+  border-radius: 24px !important;
+  border: 1px solid #e5e7eb !important;
+  background: rgba(255, 255, 255, 0.98) !important;
+  box-shadow: 0 12px 36px rgba(15, 23, 42, 0.08) !important;
+  align-self: stretch !important;
+  z-index: 1 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyAvatar{
+  display: none !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategySummaryMsg,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyIntroMsg,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyStatusMsg,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyResponseMsg,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyUserMsg{
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyResponseMsg .strategyBubble,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyIntroMsg .strategyBubble,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategySummaryMsg .strategyBubble,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyStatusMsg .strategyBubble{
+  padding: 0 !important;
+  border: none !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  max-width: 100% !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyBubbleMetaOnly{
+  margin-bottom: 10px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyBubbleMetaOnly span,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyInlineMeta span{
+  background: transparent !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  color: #9ca3af !important;
+  font-size: 10.5px !important;
+  font-weight: 600 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyResponseMsg .strategyParagraph,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategySummaryMsg .strategyParagraph,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyIntroMsg .strategyParagraph,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyStatusMsg .strategyParagraph{
+  font-size: 14px !important;
+  line-height: 1.74 !important;
+  color: #1f2937 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategySummaryMsg .strategyLead,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyIntroMsg .strategyLead,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyStatusMsg .strategyLead{
+  font-size: 14px !important;
+  line-height: 1.62 !important;
+  color: #111827 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyUserMsg{
+  display: block !important;
+  text-align: right !important;
+  margin: 0 0 22px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyUserCard{
+  display: inline-block !important;
+  max-width: min(560px, 78%) !important;
+  padding: 10px 14px !important;
+  border-radius: 18px !important;
+  background: #f3f4f6 !important;
+  border: 1px solid #e7ebf0 !important;
+  box-shadow: none !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyUserMsg .strategyParagraph{
+  font-size: 13px !important;
+  line-height: 1.58 !important;
+  color: #111827 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyChatOnlyComposerBar{
+  align-items: center !important;
+  gap: 12px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyChatOnlyComposerTools{
+  gap: 10px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyChatOnlyComposerTools .btn.ghost{
+  min-height: 34px !important;
+  padding: 0 12px !important;
+  border-radius: 999px !important;
+  background: #ffffff !important;
+  border: 1px solid #e5e7eb !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyChatOnlyComposerHint{
+  font-size: 10.5px !important;
+  color: #94a3b8 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyComposerTextareaOnly{
+  min-height: 32px !important;
+  max-height: 140px !important;
+  padding: 4px 0 6px !important;
+  font-size: 14px !important;
+  line-height: 1.6 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyChatOnlyComposer .btn.primary{
+  min-width: 84px !important;
+  min-height: 36px !important;
+  border-radius: 999px !important;
+}
+
+@media (max-width: 860px){
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyChatOnlyShell{
+    padding: 10px 10px 10px !important;
+    gap: 12px !important;
+  }
+
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyChatThreadOnly{
+    padding: 0 2px 10px 0 !important;
+  }
+
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyChatOnlyComposer{
+    padding: 12px 12px 10px !important;
+  }
+}
+
+/* =====================================================================
+   2026-04-11 strategy chat white tone polish
+   ===================================================================== */
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .legalHubPanel.strategyChatPage{
+  background:
+    radial-gradient(circle at top center, rgba(255,255,255,0.98), rgba(255,255,255,0) 38%),
+    linear-gradient(180deg, #ffffff 0%, #fcfcfd 56%, #f7f8fa 100%) !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyChatOnlyShell{
+  padding: 22px 22px 18px !important;
+  gap: 18px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyChatThreadOnly{
+  padding: 2px 10px 14px 2px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyIntroMsg,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategySummaryMsg,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyStatusMsg,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyResponseMsg{
+  margin: 0 0 18px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyResponseMsg .strategyBubble,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyIntroMsg .strategyBubble,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategySummaryMsg .strategyBubble,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyStatusMsg .strategyBubble{
+  padding: 18px 20px !important;
+  border: 1px solid rgba(226, 232, 240, 0.95) !important;
+  border-radius: 24px !important;
+  background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(250,251,252,0.98)) !important;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.045) !important;
+  backdrop-filter: none !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyBubbleMetaOnly{
+  margin-bottom: 12px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyBubbleMetaOnly span,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyInlineMeta span{
+  min-height: 22px !important;
+  padding: 0 10px !important;
+  border-radius: 999px !important;
+  background: #f8fafc !important;
+  color: #7b8794 !important;
+  font-size: 10.5px !important;
+  font-weight: 700 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategySummaryMsg .strategyLead,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyIntroMsg .strategyLead,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyStatusMsg .strategyLead{
+  color: #0f172a !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyResponseMsg .strategyParagraph,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategySummaryMsg .strategyParagraph,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyIntroMsg .strategyParagraph,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyStatusMsg .strategyParagraph{
+  color: #334155 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyUserMsg{
+  margin: 2px 0 18px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyUserCard{
+  background: linear-gradient(180deg, #fefefe, #f4f6f8) !important;
+  border: 1px solid rgba(226, 232, 240, 0.92) !important;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.03) !important;
+  border-radius: 20px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyChatOnlyContext{
+  width: 100% !important;
+  margin: 0 0 18px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyChatOnlyContext > summary{
+  min-height: 24px !important;
+  padding: 0 10px !important;
+  border-radius: 999px !important;
+  background: #ffffff !important;
+  border: 1px solid #e5e7eb !important;
+  color: #64748b !important;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.03) !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyChatOnlyContextGrid{
+  gap: 12px !important;
+  margin-top: 12px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyChatOnlyPanel,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyContextChecklist{
+  border: 1px solid rgba(226, 232, 240, 0.95) !important;
+  background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(250,251,252,0.98)) !important;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.035) !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyContextChecklist.warn{
+  background: linear-gradient(180deg, #fffefe, #faf8f4) !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyContextChecklist.accent{
+  background: linear-gradient(180deg, #ffffff, #f7fafc) !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyContextPill{
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  color: #475569 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyProgressConsoleMini{
+  background: #ffffff !important;
+  border: 1px solid rgba(226, 232, 240, 0.92) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.7) !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyChatOnlyComposer{
+  border: 1px solid rgba(226, 232, 240, 0.98) !important;
+  background: linear-gradient(180deg, rgba(255,255,255,0.99), rgba(250,251,252,0.99)) !important;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.06) !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyComposerTextareaOnly{
+  padding: 8px 2px 10px !important;
+  border-radius: 16px !important;
+  background: transparent !important;
+  color: #0f172a !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyComposerTextareaOnly::placeholder{
+  color: #94a3b8 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyChatOnlyComposerTools .btn.ghost{
+  background: #f8fafc !important;
+  border: 1px solid #e2e8f0 !important;
+  color: #475569 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyChatOnlyComposerTools .btn.ghost:hover{
+  background: #f1f5f9 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyChatOnlyComposer .btn.primary{
+  background: #ffffff !important;
+  color: #111827 !important;
+  border: 1px solid #dbe1e8 !important;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.05) !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyChatOnlyComposer .btn.primary:hover{
+  background: #f8fafc !important;
+}
+
+@media (max-width: 860px){
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyChatOnlyShell{
+    padding: 12px 12px 10px !important;
+    gap: 14px !important;
+  }
+
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyResponseMsg .strategyBubble,
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyIntroMsg .strategyBubble,
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategySummaryMsg .strategyBubble,
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyStatusMsg .strategyBubble{
+    padding: 16px 16px !important;
+    border-radius: 20px !important;
+  }
+}
+
+/* =====================================================================
+   2026-04-08 sidebar labels pass
+   - codex-like labeled sidebar items
+   ===================================================================== */
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell{
+  --shell-sidebar-w: 136px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .appFrame{
+  grid-template-columns: var(--shell-sidebar-w) minmax(0, 1fr) !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceSidebar{
+  width: var(--shell-sidebar-w) !important;
+  min-width: var(--shell-sidebar-w) !important;
+  max-width: var(--shell-sidebar-w) !important;
+  align-items: stretch !important;
+  padding: 14px 10px 12px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceSidebarNav{
+  width: 100% !important;
+  align-items: stretch !important;
+  gap: 6px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceSidebarBottom{
+  width: 100% !important;
+  justify-content: stretch !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceLogo{
+  align-self: flex-start !important;
+  margin-left: 8px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topbarInner{
+  padding-left: 14px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topNav,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topNav.topNavShifted{
+  margin-left: 2px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarIconBtn,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarSettingsBtn{
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 38px !important;
+  justify-content: flex-start !important;
+  gap: 10px !important;
+  padding: 0 12px 0 16px !important;
+  border-radius: 12px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarIcon{
+  flex: 0 0 auto !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarLabel{
+  display: inline-flex !important;
+  align-items: center !important;
+  min-width: 0 !important;
+  font-size: 12.5px !important;
+  line-height: 1 !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.02em !important;
+  color: currentColor !important;
+  white-space: nowrap !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarPinDot{
+  margin-left: auto !important;
+  position: relative !important;
+  right: auto !important;
+  top: auto !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceLogo.active::before,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarIconBtn.active::before,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarSettingsBtn.active::before,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarIconBtn.accent::before{
+  left: 4px !important;
+}
+
+/* =====================================================================
+   2026-04-09 personal AI evidence manager rebrand pass
+   - dashboard-first home
+   - compact product-style cards
+   - softer generic information architecture
+   ===================================================================== */
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell{
+  --shell-sidebar-w: 148px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceSidebar{
+  background: #f5f5f4 !important;
+  border-right: 1px solid #e7e5e4 !important;
+  box-shadow: none !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceMain,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceContent{
+  background: #ffffff !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topbar{
+  border-bottom: 1px solid #ece7e2 !important;
+  background: rgba(255,255,255,0.94) !important;
+  backdrop-filter: blur(14px) !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topbarInner{
+  min-height: 52px !important;
+  padding-top: 8px !important;
+  padding-bottom: 8px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topNavBtn{
+  min-height: 34px !important;
+  padding: 0 2px !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topNavBtn .topNavLabel{
+  font-size: 12.5px !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.02em !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topNavBtn.active{
+  color: #111827 !important;
+  background: transparent !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarIconBtn,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarSettingsBtn{
+  height: 40px !important;
+  border-radius: 10px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeDashboard{
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 16px !important;
+  width: 100% !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .updatesHeroCard{
+  align-items: stretch !important;
+  justify-content: space-between !important;
+  gap: 20px !important;
+  padding: 22px 24px !important;
+  border: 1px solid #ebe7e2 !important;
+  border-radius: 22px !important;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.98), rgba(252,251,249,0.96)) !important;
+  box-shadow: 0 18px 38px rgba(17,24,39,0.06) !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .updatesHeroEyebrow{
+  color: #8c7f72 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .updatesHeroTitle{
+  font-size: 28px !important;
+  line-height: 1.2 !important;
+  letter-spacing: -0.04em !important;
+  color: #111827 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .updatesHeroMeta{
+  font-size: 13px !important;
+  color: #6b7280 !important;
+}
+
+.homeHeroQuickActions{
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.homeHeroQuickActions .btn{
+  min-height: 36px;
+  border-radius: 999px;
+}
+
+.homeDashboardGrid{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.homeDashboardCard{
+  padding: 18px 18px 16px;
+  border: 1px solid #ece8e3;
+  border-radius: 20px;
+  background: #ffffff;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
+}
+
+.homeOverviewCard{
+  grid-column: 1 / -1;
+}
+
+.homeCardHead{
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.homeCardTitle{
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: #111827;
+}
+
+.homeCardSub{
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #6b7280;
+}
+
+.homeMetricRow{
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 14px 0 4px;
+}
+
+.homeMetricChip{
+  padding: 12px 14px;
+  border: 1px solid #ece8e3;
+  border-radius: 16px;
+  background: #fafaf9;
+}
+
+.homeMetricChip span{
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  color: #8b7b6c;
+}
+
+.homeMetricChip b{
+  display: block;
+  margin-top: 6px;
+  font-size: 22px;
+  line-height: 1;
+  letter-spacing: -0.05em;
+  color: #111827;
+}
+
+.homeTodoList,
+.homeInsightList,
+.homeMiniList{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.homeTodoItem,
+.homeInsightItem,
+.homeMiniListItem,
+.homeRiskItem{
+  width: 100%;
+  text-align: left;
+  padding: 12px 14px;
+  border: 1px solid #ece8e3;
+  border-radius: 16px;
+  background: #fcfcfb;
+}
+
+.homeMiniListItem,
+.homeRiskItem{
+  cursor: pointer;
+  transition: border-color .18s ease, background-color .18s ease, transform .18s ease;
+}
+
+.homeMiniListItem:hover,
+.homeRiskItem:hover{
+  border-color: #d9d4cd;
+  background: #ffffff;
+  transform: translateY(-1px);
+}
+
+.homeTodoItem{
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.homeTodoNo{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  border-radius: 999px;
+  background: #111827;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.homeInsightItem{
+  font-size: 13px;
+  line-height: 1.6;
+  color: #1f2937;
+}
+
+.homeMiniListTop,
+.homeRiskHead{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.homeMiniListTitle,
+.homeRiskTitle{
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+  color: #111827;
+}
+
+.homeMiniListMeta{
+  font-size: 11px;
+  color: #9ca3af;
+  white-space: nowrap;
+}
+
+.homeMiniListSub{
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #6b7280;
+}
+
+.homeRiskTitle{
+  margin-top: 8px;
+}
+
+.homeEmptyHint{
+  padding: 16px;
+  border: 1px dashed #ddd6cf;
+  border-radius: 16px;
+  background: #fafaf9;
+  color: #6b7280;
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.recordMetaFold{
+  margin-top: 12px;
+  border: 1px solid #ece8e3;
+  border-radius: 18px;
+  background: #fcfcfb;
+}
+
+.recordMetaFold > summary{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1f2937;
+  list-style: none;
+}
+
+.recordMetaFold > summary::-webkit-details-marker{
+  display: none;
+}
+
+.recordMetaFoldBody,
+.recordMetaFoldCard{
+  padding: 0 16px 16px !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+.recordMetaFoldCard .recordFormCardHead{
+  padding-top: 2px;
+}
+
+@media (max-width: 980px){
+  .homeDashboardGrid{
+    grid-template-columns: 1fr;
+  }
+
+  .homeMetricRow{
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .homeHeroQuickActions{
+    justify-content: flex-start;
+  }
+}
+
+/* =====================================================================
+   2026-04-09 collections + quick capture compact product pass
+   - tuned for 1280x820
+   - slimmer typography and spacing
+   - cleaner collection workspace and modal composition
+   ===================================================================== */
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell{
+  --compact-font-xs: 11px;
+  --compact-font-sm: 12px;
+  --compact-font-md: 13px;
+  --compact-font-lg: 15px;
+  --compact-radius-sm: 12px;
+  --compact-radius-md: 16px;
+  --compact-radius-lg: 20px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceSection.casesSection{
+  height: 100%;
+  min-height: 0;
+  padding: 14px 18px 18px;
+  box-sizing: border-box;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .casesMain{
+  display: flex;
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseShell.caseShellWorkspace{
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 12px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseShell.caseShellWorkspace.caseShellSolo{
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseShell.caseShellWorkspace .caseCommandDeck{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid #ebe7e2;
+  border-radius: var(--compact-radius-lg);
+  background: linear-gradient(180deg, #ffffff 0%, #fcfcfb 100%);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.04);
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseShell.caseShellWorkspace .caseCommandDeck .sectionTabs{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 4px;
+  border: 1px solid #ece7e2;
+  border-radius: 14px;
+  background: #f8f7f5;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseShell.caseShellWorkspace .caseCommandDeck .sectionTab{
+  min-height: 30px;
+  padding: 0 11px;
+  border-radius: 10px;
+  font-size: var(--compact-font-sm);
+  font-weight: 700;
+  color: #6b7280;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseShell.caseShellWorkspace .caseCommandDeck .sectionTab.active{
+  color: #111827;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseShell.caseShellWorkspace .subTabHint,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseShell.caseShellWorkspace .caseCommandMeta{
+  margin: 0;
+  font-size: var(--compact-font-xs);
+  line-height: 1.5;
+  color: #8a8f98 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseCommandPanel,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseCommandPanelScroll,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseBodyGrid,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseWorkspace,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseWorkspacePane,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseListScroll,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineScroll{
+  min-height: 0;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseCommandPanelScroll,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseListScroll,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineScroll{
+  overflow: auto;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseShell.caseShellWorkspace.caseShellSolo .caseCommandPanelScroll{
+  padding-right: 4px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseShell.caseShellWorkspace .caseBodyGrid{
+  gap: 12px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseShell.caseShellWorkspace .caseBodyGrid > main.card,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseShell.caseShellWorkspace .caseBodyGrid > aside.side{
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  min-height: 0;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseWorkspace{
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  height: 100%;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseWorkspacePane{
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #ebe7e2;
+  border-radius: var(--compact-radius-lg);
+  background: #ffffff;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.04);
+  overflow: hidden;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseWorkspacePaneHead,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseMainTitle,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineScroll .sectionTitle{
+  margin: 0;
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid #f1eeea;
+  background: #ffffff;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseMainTitle .h2,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineScroll .caseTitleLeft .h2,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseWorkspacePaneHead .title{
+  font-size: var(--compact-font-lg);
+  line-height: 1.3;
+  letter-spacing: -0.03em;
+  font-weight: 800;
+  color: #111827;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseMainTitle .muted,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineScroll .muted,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseWorkspacePaneHead .muted{
+  margin-top: 4px;
+  font-size: var(--compact-font-sm);
+  line-height: 1.55;
+  color: #7b818c !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseListScroll,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineScroll{
+  flex: 1 1 auto;
+  padding: 12px;
+  background: #fcfcfb;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseWorkspaceListPane .list,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseProofCaseGrid,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .paperPickList{
+  display: grid;
+  gap: 10px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseWorkspaceListPane .list{
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 14px;
+  align-content: start;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseWorkspaceListPane .caseCollectionCard{
+  display: flex;
+  flex-direction: column;
+  min-height: 172px;
+  padding: 12px 13px;
+  border: 1px solid #ebe7e2;
+  border-radius: var(--compact-radius-md);
+  background: #ffffff;
+  box-shadow: none;
+  transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseWorkspaceListPane .caseCollectionCardTop{
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseWorkspaceListPane .caseCollectionCardTop .tags{
+  margin-bottom: 0;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseWorkspaceListPane .caseCollectionCard:hover{
+  border-color: #d8d1c7;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
+  transform: translateY(-1px);
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseWorkspaceListPane .caseCollectionCard.selected{
+  border-color: #111827;
+  box-shadow: 0 0 0 1px rgba(17, 24, 39, 0.06);
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseWorkspaceListPane .caseCollectionCard .title{
+  margin-top: 12px;
+  font-size: 14px;
+  line-height: 1.45;
+  font-weight: 750;
+  color: #111827;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseWorkspaceListPane .caseCollectionSummary{
+  margin-top: 10px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseWorkspaceListPane .caseCollectionCard .muted,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseWorkspaceListPane .caseCollectionCard .meta{
+  font-size: var(--compact-font-sm);
+  line-height: 1.5;
+  color: #7b818c !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseWorkspaceListPane .caseCollectionCard .actionsRow{
+  margin-top: auto;
+  padding-top: 14px;
+  gap: 8px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseShell.caseShellWorkspace .btn,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseShell.caseShellWorkspace .btn.small{
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 11px;
+  font-size: var(--compact-font-sm);
+  font-weight: 700;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseShell.caseShellWorkspace .countPill,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseShell.caseShellWorkspace .badgeAI,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseShell.caseShellWorkspace .tag,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseShell.caseShellWorkspace .chip,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseShell.caseShellWorkspace .stepMiniTime{
+  font-size: 10.5px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseShell.caseShellWorkspace .timelineWrap{
+  padding-top: 10px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseShell.caseShellWorkspace .timeline.timelineEm{
+  gap: 12px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseShell.caseShellWorkspace .timeline.timelineEm .tItem{
+  padding-left: 24px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseShell.caseShellWorkspace .timeline .tCard{
+  padding: 12px 13px;
+  border-radius: var(--compact-radius-md);
+  border-color: #ebe7e2;
+  box-shadow: none;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseShell.caseShellWorkspace .timeline .title{
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseWorkspace.caseWorkspaceSingle,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseWorkspace.caseWorkspaceSingle .caseWorkspaceFocusPane,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseWorkspace.caseWorkspaceSingle .caseTimelineScroll,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineShell,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineTrack{
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseWorkspace.caseWorkspaceSingle .caseWorkspaceFocusPane{
+  padding: 0;
+  overflow: hidden;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseWorkspace.caseWorkspaceSingle .caseTimelineScroll{
+  padding: 0;
+  background: #ffffff;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineShell{
+  display: grid;
+  gap: 16px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineHero{
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.85fr);
+  gap: 16px;
+  padding: 20px;
+  border-bottom: 1px solid #f1eeea;
+  background:
+    linear-gradient(135deg, rgba(252,249,245,0.96), rgba(255,255,255,1) 48%),
+    #ffffff;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineHeroMain,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineHeroSide{
+  min-width: 0;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineHeroTop .tags{
+  margin-bottom: 0;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineHeroTitle{
+  margin-top: 12px;
+  font-size: 28px;
+  line-height: 1.12;
+  letter-spacing: -0.055em;
+  font-weight: 840;
+  color: #18181b;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineHeroDesc{
+  margin-top: 12px;
+  max-width: 62ch;
+  font-size: 13.5px;
+  line-height: 1.72;
+  color: #57534e;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineHeroMeta{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineMetaItem{
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 11px;
+  border-radius: 999px;
+  border: 1px solid rgba(24,24,27,0.08);
+  background: rgba(255,255,255,0.86);
+  font-size: 11px;
+  font-weight: 750;
+  color: #4b5563;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineHeroSide{
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineStatRail{
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineStatCard{
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 14px 13px;
+  border-radius: 16px;
+  border: 1px solid #ece5de;
+  background: rgba(255,255,255,0.88);
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineStatCard span{
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #97765d;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineStatCard strong{
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: -0.06em;
+  font-weight: 840;
+  color: #18181b;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineStatCard small{
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: #7b818c;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineActionRow{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineActionRow .btn{
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 12px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineTrack{
+  padding: 0 18px 18px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineTrack .timelineWrap{
+  width: 100%;
+  margin-top: 0;
+  padding: 18px 20px;
+  border-radius: 22px;
+  background: #fcfcfb;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineTrack .timeline.timelineEm{
+  gap: 14px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineTrack .timeline.timelineEm .tItem{
+  width: 100%;
+  padding-left: 36px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineTrack .timeline.timelineEm::before{
+  left: 14px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineTrack .timeline.timelineEm .tItem .dot{
+  left: 7px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineTrack .tCard{
+  width: 100%;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineTrack .tDay{
+  margin-left: 28px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineTrack .tDay::after{
+  width: calc(100% - 10px);
+  max-width: none;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseCreateFlow{
+  display: grid;
+  gap: 12px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseCreateFlow .helperBox,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseCreateFlow .field,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseCreateFlow .fold{
+  border-radius: var(--compact-radius-md);
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseCreateFlow .helperBox{
+  padding: 11px 13px;
+  border: 1px solid #ebe7e2;
+  background: #fafaf9;
+  font-size: var(--compact-font-sm);
+  line-height: 1.55;
+  color: #4b5563;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseCreateFlow .field label,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseCreateFlow .miniToggle span{
+  font-size: var(--compact-font-sm);
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseCreateFlow textarea,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseCreateFlow input,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseCreateFlow select{
+  min-height: 40px;
+  border-radius: 12px;
+  font-size: var(--compact-font-sm);
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseCreateFlow textarea{
+  min-height: 86px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseCreateFlow{
+  padding-bottom: 22px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseCreateFlow .fold{
+  overflow: visible;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseCreateFlow input[type="datetime-local"]{
+  position: relative;
+  z-index: 1;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseCreateActions{
+  position: sticky;
+  bottom: -1px;
+  z-index: 8;
+  margin-top: 18px !important;
+  padding: 14px 0 0 !important;
+  background: linear-gradient(180deg, rgba(252,252,251,0), rgba(252,252,251,0.92) 22%, #fcfcfb 64%) !important;
+  backdrop-filter: blur(8px);
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseCreateActions .btn{
+  min-height: 38px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseCreateFlow .chips .chip{
+  min-height: 28px;
+  font-size: var(--compact-font-xs);
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseProofPanel.compactMode{
+  display: grid;
+  gap: 12px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseProofHero.compactMode,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseProofTargetCard.compactMode,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseProofHintCard{
+  padding: 14px 16px;
+  border: 1px solid #ebe7e2;
+  border-radius: var(--compact-radius-md);
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseProofCaseGrid{
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseProofCaseCard,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .paperPickItem{
+  padding: 12px 13px;
+  border: 1px solid #ebe7e2;
+  border-radius: var(--compact-radius-md);
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseProofCaseCard.active{
+  border-color: #111827;
+  background: #fbfbfa;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseProofCaseTitle,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .paperPickTitle{
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseProofCaseDesc,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseProofCaseMeta,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .paperPickMeta,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .paperPickStat{
+  font-size: var(--compact-font-sm);
+  line-height: 1.5;
+}
+
+dialog.recordComposerModal:not([open]){
+  display: none !important;
+}
+
+dialog.recordComposerModal[open]{
+  width: min(880px, calc(100vw - 44px)) !important;
+  max-width: 880px !important;
+  height: min(760px, calc(100dvh - 44px)) !important;
+  max-height: min(760px, calc(100dvh - 44px)) !important;
+  display: flex;
+  flex-direction: column;
+  border-radius: 24px;
+  overflow: hidden;
+  background: #f7f6f4 !important;
+  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.16);
+}
+
+.recordComposerModal .modalHead{
+  padding: 12px 14px !important;
+  border-bottom: 1px solid #ece7e2 !important;
+  background: rgba(255, 255, 255, 0.92) !important;
+  backdrop-filter: blur(12px);
+}
+
+.recordComposerModal .modalHead .h2{
+  font-size: 15px !important;
+  line-height: 1.3 !important;
+  letter-spacing: -0.02em !important;
+  font-weight: 800 !important;
+}
+
+.recordComposerModal .modalHead .muted{
+  margin-top: 3px !important;
+  font-size: var(--compact-font-sm) !important;
+  line-height: 1.5 !important;
+  color: #7b818c !important;
+}
+
+.recordComposerModal .modalHead .btn{
+  min-height: 32px !important;
+  padding: 0 11px !important;
+  border-radius: 10px !important;
+  font-size: var(--compact-font-sm) !important;
+}
+
+.recordComposerModal .recordComposerModalBody{
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 10px !important;
+  background: #f7f6f4 !important;
+}
+
+.recordComposerModal .entryFormGather{
+  min-height: 100%;
+}
+
+.recordComposerModal .recordFormSimple{
+  gap: 10px;
+}
+
+.recordComposerModal .recordFormStatusBar,
+.recordComposerModal .recordFormCard,
+.recordComposerModal .recordRelatedDetails,
+.recordComposerModal .recordFormFooter{
+  border: 1px solid #e9e5df;
+  border-radius: var(--compact-radius-md);
+  background: #ffffff;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.03);
+}
+
+.recordComposerModal .recordFormStatusBar{
+  padding: 13px 14px;
+  gap: 10px;
+}
+
+.recordComposerModal .recordFormKicker{
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8b7b6c;
+}
+
+.recordComposerModal .recordFormTitle{
+  margin-top: 3px;
+  font-size: 17px;
+  line-height: 1.28;
+  letter-spacing: -0.03em;
+}
+
+.recordComposerModal .recordFormSub{
+  margin-top: 5px;
+  font-size: var(--compact-font-sm);
+  line-height: 1.5;
+  color: #7b818c;
+}
+
+.recordComposerModal .recordFormTopActions{
+  gap: 7px;
+}
+
+.recordComposerModal .recordFormStatusPill{
+  min-height: 28px;
+  padding: 0 10px;
+  font-size: var(--compact-font-xs);
+}
+
+.recordComposerModal .recordFormGhostBtn{
+  height: 30px !important;
+  padding: 0 10px !important;
+}
+
+.recordComposerModal .recordFormCard{
+  padding: 13px 14px;
+}
+
+.recordComposerModal .recordFormCardHead{
+  margin-bottom: 10px;
+}
+
+.recordComposerModal .recordFormCardTitle{
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.recordComposerModal .recordFormCardDesc{
+  margin-top: 3px;
+  font-size: var(--compact-font-xs);
+  line-height: 1.5;
+}
+
+.recordComposerModal .recordFormCard label,
+.recordComposerModal .recordRelatedPanel label{
+  font-size: var(--compact-font-xs);
+  font-weight: 800;
+}
+
+.recordComposerModal .recordFormCard input,
+.recordComposerModal .recordFormCard select,
+.recordComposerModal .recordFormCard textarea,
+.recordComposerModal .recordRelatedPanel input,
+.recordComposerModal .recordRelatedPanel select,
+.recordComposerModal .recordRelatedPanel textarea{
+  min-height: 38px;
+  padding: 10px 12px;
+  border-radius: 12px !important;
+  font-size: var(--compact-font-sm);
+  line-height: 1.5;
+}
+
+.recordComposerModal .recordFormCard textarea,
+.recordComposerModal .recordRelatedPanel textarea{
+  min-height: 74px;
+}
+
+.recordComposerModal .simpleComposerTextarea{
+  min-height: 96px !important;
+}
+
+.recordComposerModal .recordFormGrid{
+  gap: 10px;
+}
+
+.recordComposerModal .recordRelatedDetails > summary{
+  padding: 12px 14px;
+  font-size: var(--compact-font-md);
+  font-weight: 750;
+}
+
+.recordComposerModal .recordRelatedPanel,
+.recordComposerModal .recordMetaFoldBody,
+.recordComposerModal .recordMetaFoldCard{
+  padding-left: 14px !important;
+  padding-right: 14px !important;
+  padding-bottom: 14px !important;
+}
+
+.recordComposerModal .gatherActorRow,
+.recordComposerModal .gatherRelatedRow,
+.recordComposerModal .gatherInlineRow{
+  gap: 7px;
+}
+
+.recordComposerModal .gatherActorRow .btn.small,
+.recordComposerModal .gatherRelatedRow .btn.small,
+.recordComposerModal .gatherNowBtn{
+  min-height: 38px !important;
+  height: 38px !important;
+  padding: 0 11px !important;
+  border-radius: 11px !important;
+  font-size: var(--compact-font-sm) !important;
+}
+
+.recordComposerModal .gatherActorChips .chip,
+.recordComposerModal .chips.mini .chip{
+  min-height: 27px;
+  padding: 0 9px;
+  font-size: 10.5px;
+}
+
+.recordComposerModal .simpleWarn,
+.recordComposerModal .miniWarn.simpleWarn{
+  margin-top: 7px;
+  padding: 7px 9px;
+  font-size: var(--compact-font-xs);
+}
+
+.recordComposerModal .recordFormFooter{
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+}
+
+.recordComposerModal .recordFormFooterText{
+  font-size: var(--compact-font-xs);
+}
+
+.recordComposerModal .recordFormSaveBtn{
+  width: auto;
+  min-width: 120px;
+  height: 40px !important;
+  padding: 0 16px !important;
+  border-radius: 12px !important;
+}
+
+@media (min-width: 720px){
+  .recordComposerModal .recordFormGrid{
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .recordComposerModal .recordFormActorCard,
+  .recordComposerModal .simpleComposerTextarea,
+  .recordComposerModal #recordSummaryOverview,
+  .recordComposerModal .recordFormCard .field:first-of-type,
+  .recordComposerModal .recordFormCard .field:last-of-type{
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 1024px){
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .serviceSection.casesSection{
+    padding: 12px;
+  }
+
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .caseProofCaseGrid{
+    grid-template-columns: 1fr;
+  }
+
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineHero{
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px){
+  dialog.recordComposerModal[open]{
+    width: min(calc(100vw - 18px), 100vw) !important;
+    height: min(calc(100dvh - 18px), 100dvh) !important;
+    max-height: min(calc(100dvh - 18px), 100dvh) !important;
+    border-radius: 18px;
+  }
+
+  .recordComposerModal .recordFormStatusBar,
+  .recordComposerModal .recordFormFooter{
+    grid-template-columns: 1fr;
+  }
+
+  .recordComposerModal .recordFormFooter{
+    align-items: stretch;
+  }
+
+  .recordComposerModal .recordFormSaveBtn{
+    width: 100%;
+  }
+
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineHero{
+    padding: 16px;
+  }
+
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineHeroTitle{
+    font-size: 22px;
+  }
+
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineStatRail{
+    grid-template-columns: 1fr;
+  }
+
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineActionRow .btn{
+    width: 100%;
+  }
+
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineTrack{
+    padding: 0 12px 12px;
+  }
+
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineTrack .timelineWrap{
+    padding: 14px;
+  }
+}
+
+/* =====================================================================
+   2026-04-09 home workspace refresh
+   - cleaner hero
+   - wider dashboard grid
+   - quieter, more minimal surface system
+   ===================================================================== */
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeWorkspace{
+  width:min(100%, 1240px) !important;
+  max-width:1240px !important;
+  margin:0 auto !important;
+  gap:18px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroPanel{
+  display:grid;
+  grid-template-columns:minmax(0, 1.45fr) minmax(300px, 0.9fr);
+  gap:20px;
+  align-items:stretch;
+  padding:30px;
+  border-radius:30px;
+  border:1px solid #e9e2db;
+  background:
+    radial-gradient(circle at top left, rgba(255,255,255,0.96), rgba(255,255,255,0) 42%),
+    linear-gradient(135deg, #fcfaf7 0%, #f7f4ee 36%, #ffffff 100%);
+  box-shadow:0 30px 70px rgba(15,23,42,0.06);
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroContent{
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  justify-content:space-between;
+  gap:16px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroEyebrow{
+  font-size:11px;
+  font-weight:800;
+  letter-spacing:0.18em;
+  text-transform:uppercase;
+  color:#97765d;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroTitle{
+  max-width:11ch;
+  font-size:clamp(30px, 3vw, 44px);
+  line-height:1.04;
+  letter-spacing:-0.06em;
+  font-weight:860;
+  color:#171717;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroText{
+  max-width:64ch;
+  font-size:14px;
+  line-height:1.78;
+  color:#57534e;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroActions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  align-items:center;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroActions .btn{
+  min-height:44px !important;
+  height:44px !important;
+  padding:0 16px !important;
+  border-radius:14px !important;
+  font-size:12px !important;
+  font-weight:750 !important;
+  box-shadow:none !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroActions .btn.primary{
+  background:#18181b !important;
+  border:1px solid rgba(24,24,27,0.08) !important;
+  color:#ffffff !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroActions .btn.ghost{
+  background:rgba(255,255,255,0.78) !important;
+  border:1px solid rgba(24,24,27,0.08) !important;
+  color:#27272a !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroQuietAction{
+  color:#6b7280 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroAside{
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+  padding:20px;
+  border-radius:24px;
+  border:1px solid rgba(24,24,27,0.08);
+  background:rgba(255,255,255,0.78);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.85);
+  backdrop-filter:blur(14px);
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroAsideTop,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeFocusMetaRow{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroAsideMeta{
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:0.03em;
+  color:#9a8b7d;
+  white-space:nowrap;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeProgressPill{
+  display:inline-flex;
+  align-items:center;
+  min-height:28px;
+  padding:0 11px;
+  border-radius:999px;
+  border:1px solid transparent;
+  font-size:11px;
+  font-weight:800;
+  letter-spacing:0.04em;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeProgressPill.is-idle{
+  background:#f3f4f6;
+  color:#4b5563;
+  border-color:#e5e7eb;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeProgressPill.is-active{
+  background:#fef3e7;
+  color:#9a5b23;
+  border-color:#f6d8b5;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeProgressPill.is-calm{
+  background:#edf4f3;
+  color:#45665d;
+  border-color:#d4e2de;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeProgressPill.is-accent{
+  background:#edeff7;
+  color:#45506a;
+  border-color:#d9deeb;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeProgressPill.is-ready{
+  background:#eef6ef;
+  color:#476246;
+  border-color:#d8e8d5;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroAsideTitle,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeFocusTitle{
+  font-size:23px;
+  line-height:1.2;
+  letter-spacing:-0.045em;
+  font-weight:800;
+  color:#18181b;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroAsideText,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeFocusSummary{
+  font-size:13px;
+  line-height:1.72;
+  color:#57534e;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeProgressList{
+  display:flex;
+  flex-direction:column;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeProgressItem{
+  padding:12px 0 0;
+  font-size:12.5px;
+  line-height:1.68;
+  color:#44403c;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeProgressItem + .homeProgressItem{
+  margin-top:10px;
+  border-top:1px solid rgba(24,24,27,0.08);
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroAsideFooter{
+  margin-top:auto;
+  padding-top:12px;
+  border-top:1px solid rgba(24,24,27,0.08);
+  font-size:11.5px;
+  line-height:1.55;
+  color:#8a7c70;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeStatRail{
+  display:grid;
+  grid-template-columns:repeat(4, minmax(0, 1fr));
+  gap:14px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeStatCard{
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  padding:18px 20px;
+  border-radius:22px;
+  border:1px solid #ece5de;
+  background:#ffffff;
+  box-shadow:0 18px 40px rgba(15,23,42,0.04);
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeStatLabel{
+  font-size:11px;
+  font-weight:800;
+  letter-spacing:0.14em;
+  text-transform:uppercase;
+  color:#97765d;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeStatValue{
+  font-size:34px;
+  line-height:1;
+  letter-spacing:-0.08em;
+  font-weight:860;
+  color:#18181b;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeStatNote{
+  font-size:12.5px;
+  line-height:1.62;
+  color:#6b7280;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeDashboardMatrix{
+  display:grid;
+  grid-template-columns:repeat(12, minmax(0, 1fr));
+  gap:14px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homePanel{
+  grid-column:span 4;
+  min-width:0;
+  padding:20px;
+  border-radius:24px;
+  border:1px solid #ece5de;
+  background:#ffffff;
+  box-shadow:0 18px 45px rgba(15,23,42,0.04);
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homePanelWide{
+  grid-column:span 7;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homePanelSide{
+  grid-column:span 5;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homePanelSoft{
+  background:linear-gradient(180deg, rgba(250,248,244,0.98), rgba(255,255,255,1));
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homePanelFull{
+  grid-column:1 / -1;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homePanelHead{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:14px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homePanelTitle{
+  font-size:18px;
+  line-height:1.25;
+  letter-spacing:-0.04em;
+  font-weight:800;
+  color:#18181b;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homePanelText{
+  margin-top:6px;
+  max-width:40ch;
+  font-size:13px;
+  line-height:1.68;
+  color:#6b7280;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeChecklist,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeSignalList,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeEntryList{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeChecklistItem,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeSignalItem,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeEntryButton,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeEntryEmpty{
+  width:100%;
+  min-width:0;
+  padding:14px 16px;
+  border-radius:18px;
+  border:1px solid #efe9e2;
+  background:#fbfaf8;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeChecklistItem{
+  display:flex;
+  align-items:flex-start;
+  gap:12px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeChecklistNumber{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:26px;
+  height:26px;
+  flex:0 0 26px;
+  border-radius:999px;
+  background:#18181b;
+  color:#ffffff;
+  font-size:11px;
+  font-weight:800;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeChecklistText{
+  font-size:14px;
+  line-height:1.66;
+  color:#292524;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeSignalItem{
+  font-size:13.5px;
+  line-height:1.72;
+  color:#292524;
+  background:linear-gradient(180deg, #faf8f5, #ffffff);
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeFocusTags{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-top:16px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeInlineStat{
+  display:inline-flex;
+  align-items:center;
+  min-height:30px;
+  padding:0 11px;
+  border-radius:999px;
+  border:1px solid rgba(24,24,27,0.08);
+  background:rgba(255,255,255,0.84);
+  font-size:11px;
+  font-weight:750;
+  color:#4b5563;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeFocusActionRow{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  margin-top:18px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeFocusActionRow .btn{
+  min-height:40px !important;
+  height:40px !important;
+  padding:0 14px !important;
+  border-radius:12px !important;
+  font-size:12px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeEntryButton{
+  text-align:left;
+  cursor:pointer;
+  transition:transform .18s ease, border-color .18s ease, background-color .18s ease, box-shadow .18s ease;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeEntryButton:hover{
+  transform:translateY(-2px);
+  border-color:#d8cfc6;
+  background:#ffffff;
+  box-shadow:0 16px 26px rgba(15,23,42,0.05);
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeEntryButtonRisk{
+  background:linear-gradient(180deg, rgba(255,250,248,0.98), rgba(255,255,255,1));
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeEntryTop{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeEntryTopLoose{
+  align-items:center;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeEntryTitle{
+  min-width:0;
+  font-size:14px;
+  line-height:1.52;
+  font-weight:750;
+  color:#18181b;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeEntryMeta{
+  flex:0 0 auto;
+  font-size:11px;
+  color:#a8a29e;
+  white-space:nowrap;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeEntrySub{
+  margin-top:8px;
+  font-size:12.5px;
+  line-height:1.68;
+  color:#57534e;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeRiskTitle{
+  margin-top:10px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeEntryEmpty{
+  border-style:dashed;
+  background:#fafaf9;
+  font-size:13px;
+  line-height:1.72;
+  color:#6b7280;
+}
+
+@media (max-width: 1180px){
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroPanel{
+    grid-template-columns:1fr;
+  }
+
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .homeStatRail{
+    grid-template-columns:repeat(2, minmax(0, 1fr));
+  }
+
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .homeDashboardMatrix{
+    grid-template-columns:repeat(2, minmax(0, 1fr));
+  }
+
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .homePanel,
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .homePanelWide,
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .homePanelSide,
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .homePanelSoft,
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .homePanelFull{
+    grid-column:span 1;
+  }
+
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .homePanelFull{
+    grid-column:1 / -1;
+  }
+}
+
+@media (max-width: 720px){
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .homeWorkspace{
+    gap:14px !important;
+  }
+
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroPanel{
+    padding:20px;
+    border-radius:24px;
+  }
+
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroTitle{
+    max-width:none;
+    font-size:28px;
+  }
+
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroActions .btn,
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .homeFocusActionRow .btn{
+    width:100%;
+  }
+
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .homeStatRail,
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .homeDashboardMatrix{
+    grid-template-columns:1fr;
+  }
+
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .homePanel,
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .homePanelWide,
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .homePanelSide,
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .homePanelSoft,
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .homePanelFull{
+    grid-column:1 / -1;
+    padding:18px;
+  }
+
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .homeStatCard{
+    padding:16px 18px;
+  }
+
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroAsideTop,
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .homeFocusMetaRow,
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .homeEntryTop{
+    flex-wrap:wrap;
+  }
+
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroAsideMeta,
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .homeEntryMeta{
+    white-space:normal;
+  }
+}
+
+/* =====================================================================
+   2026-04-09 desktop shell full-width correction
+   - remove compact preview width lock on desktop
+   - let cases/records/legal use the full app window
+   ===================================================================== */
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell{
+  --rc-shell-w: calc(100vw - 24px) !important;
+  --rc-shell-h: calc(100dvh - 24px) !important;
+  width: calc(100vw - 24px) !important;
+  min-width: calc(100vw - 24px) !important;
+  max-width: calc(100vw - 24px) !important;
+  height: calc(100dvh - 24px) !important;
+  min-height: calc(100dvh - 24px) !important;
+  max-height: calc(100dvh - 24px) !important;
+}
+
+@supports not (height: 100dvh){
+  .container.mobileRefined.iphonePremium.fluidDesktopShell{
+    --rc-shell-h: calc(100vh - 24px) !important;
+    height: calc(100vh - 24px) !important;
+    min-height: calc(100vh - 24px) !important;
+    max-height: calc(100vh - 24px) !important;
+  }
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseShellList .caseWorkspace.caseWorkspaceSingle{
+  display: block !important;
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseShellList .caseWorkspace.caseWorkspaceSingle > .caseWorkspacePane{
+  display: flex !important;
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  align-self: stretch !important;
+  justify-self: stretch !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseShellList .caseWorkspace.caseWorkspaceSingle .caseListScroll,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseShellList .caseWorkspace.caseWorkspaceSingle .caseTimelineScroll,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseShellList .caseWorkspace.caseWorkspaceSingle .caseTimelineShell,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseShellList .caseWorkspace.caseWorkspaceSingle .caseTimelineTrack,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseShellList .caseWorkspace.caseWorkspaceSingle .timelineWrap{
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseShellList .caseWorkspace.caseWorkspaceSingle .caseWorkspaceListPane .list{
+  width: 100% !important;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)) !important;
+}
+
+/* =====================================================================
+   2026-04-11 strategy thread package sidebar + contrast pass
+   - wider sidebar for package management
+   - darker chat typography
+   - dedicated strategy thread package section
+   ===================================================================== */
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell{
+  --shell-sidebar-w: 296px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .appFrame{
+  grid-template-columns: var(--shell-sidebar-w) minmax(0, 1fr) !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceSidebar{
+  width: var(--shell-sidebar-w) !important;
+  min-width: var(--shell-sidebar-w) !important;
+  max-width: var(--shell-sidebar-w) !important;
+  padding: 18px 14px 14px !important;
+  background: linear-gradient(180deg, #f9f9f8 0%, #f2f2f1 100%) !important;
+  border-right: 1px solid #e5e7eb !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell[data-window-platform="macos"] .serviceSidebar{
+  padding-top: 26px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceSidebarNav{
+  gap: 8px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarIconBtn,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarSettingsBtn{
+  height: 44px !important;
+  gap: 12px !important;
+  padding: 0 14px 0 18px !important;
+  border-radius: 14px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarIconBtn{
+  color: #334155 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarIconBtn.active,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarSettingsBtn.active,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarIconBtn.accent{
+  color: #0f172a !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarLabel{
+  font-size: 13px !important;
+  font-weight: 800 !important;
+  color: currentColor !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceSidebarBottom{
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 12px !important;
+  padding-top: 14px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceSidebarSection{
+  display: grid !important;
+  gap: 10px !important;
+  width: 100% !important;
+  padding: 14px !important;
+  border-radius: 20px !important;
+  background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,250,252,0.96)) !important;
+  border: 1px solid rgba(226, 232, 240, 0.95) !important;
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.06) !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceSidebarSectionHead{
+  display: grid !important;
+  gap: 4px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceSidebarSectionEyebrow{
+  font-size: 12px !important;
+  font-weight: 900 !important;
+  letter-spacing: -0.02em !important;
+  color: #111827 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceSidebarSectionMeta{
+  font-size: 11.5px !important;
+  line-height: 1.55 !important;
+  color: #475569 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadCurrentCard{
+  display: grid !important;
+  gap: 8px !important;
+  padding: 12px 12px 13px !important;
+  border-radius: 16px !important;
+  background: linear-gradient(180deg, #ffffff, #f8fafc) !important;
+  border: 1px solid #e2e8f0 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadCurrentCard.active{
+  border-color: #cbd5e1 !important;
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.18) !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadCurrentTop{
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 10px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadCurrentState{
+  font-size: 11px !important;
+  font-weight: 900 !important;
+  color: #0f172a !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadCurrentMeta{
+  font-size: 10.5px !important;
+  color: #64748b !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadCurrentTitle{
+  font-size: 13px !important;
+  font-weight: 800 !important;
+  line-height: 1.45 !important;
+  color: #0f172a !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadCurrentSummary{
+  font-size: 11.5px !important;
+  line-height: 1.6 !important;
+  color: #334155 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceSidebarSectionActions{
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) minmax(0, auto) !important;
+  gap: 8px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadActionBtn{
+  min-height: 34px !important;
+  padding: 0 12px !important;
+  border-radius: 12px !important;
+  border: 1px solid #dbe4ec !important;
+  background: #f8fafc !important;
+  color: #334155 !important;
+  font-size: 11.5px !important;
+  font-weight: 800 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadActionBtn.primary{
+  background: #ffffff !important;
+  color: #0f172a !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadActionBtn:hover{
+  background: #f1f5f9 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadPackageList{
+  display: grid !important;
+  gap: 8px !important;
+  max-height: min(42dvh, 380px) !important;
+  overflow: auto !important;
+  padding-right: 2px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadPackageRow{
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  gap: 8px !important;
+  align-items: stretch !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadPackageCard{
+  width: 100% !important;
+  min-width: 0 !important;
+  display: grid !important;
+  gap: 4px !important;
+  padding: 12px !important;
+  text-align: left !important;
+  border-radius: 15px !important;
+  border: 1px solid #e2e8f0 !important;
+  background: linear-gradient(180deg, #ffffff, #f8fafc) !important;
+  color: #0f172a !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadPackageCard.active,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadPackageRow.active .sidebarThreadPackageCard{
+  border-color: #cbd5e1 !important;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05) !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadPackageTitle{
+  display: block !important;
+  font-size: 12.5px !important;
+  font-weight: 800 !important;
+  line-height: 1.45 !important;
+  color: #0f172a !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadPackageMeta{
+  display: block !important;
+  font-size: 10.5px !important;
+  font-weight: 700 !important;
+  color: #64748b !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadPackageExcerpt{
+  display: block !important;
+  font-size: 11px !important;
+  line-height: 1.55 !important;
+  color: #334155 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadPackageRemove{
+  width: 34px !important;
+  min-width: 34px !important;
+  border-radius: 12px !important;
+  border: 1px solid #e2e8f0 !important;
+  background: #ffffff !important;
+  color: #64748b !important;
+  font-size: 18px !important;
+  line-height: 1 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadPackageRemove:hover{
+  background: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadEmpty{
+  padding: 12px !important;
+  border-radius: 15px !important;
+  background: #f8fafc !important;
+  border: 1px dashed #d7dee7 !important;
+  font-size: 11.5px !important;
+  line-height: 1.6 !important;
+  color: #475569 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarSettingsBtn{
+  width: 100% !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyBubbleMetaOnly span,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyInlineMeta span{
+  color: #5b6878 !important;
+  background: #f8fafc !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyResponseMsg .strategyParagraph,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategySummaryMsg .strategyParagraph,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyIntroMsg .strategyParagraph,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyStatusMsg .strategyParagraph,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyThreadPackageBannerMeta,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyThreadPackageBannerLabel{
+  color: #334155 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategySummaryMsg .strategyLead,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyIntroMsg .strategyLead,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyStatusMsg .strategyLead,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyThreadPackageBannerTitle,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyContextSummaryLead,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyContextChecklistTitle{
+  color: #0f172a !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyContextSummaryBody,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyContextChecklist ul,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyContextChecklist ol,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyProgressConsoleMini .strategyProgressLine{
+  color: #334155 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyChatOnlyContext > summary{
+  color: #475569 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyThreadPackageBanner{
+  display: grid !important;
+  gap: 4px !important;
+  margin: 0 0 18px !important;
+  padding: 14px 16px !important;
+  border-radius: 18px !important;
+  border: 1px solid #e2e8f0 !important;
+  background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,250,252,0.98)) !important;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04) !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyThreadPackageBannerLabel{
+  font-size: 11px !important;
+  font-weight: 800 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyThreadPackageBannerTitle{
+  font-size: 14px !important;
+  font-weight: 900 !important;
+  line-height: 1.45 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyThreadPackageBannerMeta{
+  font-size: 11.5px !important;
+  line-height: 1.55 !important;
+}
+
+@media (max-width: 1200px){
+  .container.mobileRefined.iphonePremium.fluidDesktopShell{
+    --shell-sidebar-w: 272px !important;
+  }
+}
+
+@media (max-width: 980px){
+  .container.mobileRefined.iphonePremium.fluidDesktopShell{
+    --shell-sidebar-w: 236px !important;
+  }
+
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .serviceSidebarSectionActions{
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+/* =====================================================================
+   2026-04-11 reference-like minimal sidebar pass
+   - flat ChatGPT-like thread rail
+   - softer neutral list rows
+   ===================================================================== */
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell{
+  --shell-sidebar-w: 278px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceSidebar{
+  background: #f7f7f5 !important;
+  border-right: 1px solid #ecebe7 !important;
+  box-shadow: none !important;
+  padding: 18px 12px 12px !important;
+  gap: 14px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell[data-window-platform="macos"] .serviceSidebar{
+  padding-top: 20px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceLogo{
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 28px !important;
+  justify-content: flex-start !important;
+  padding: 0 8px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: #1f2937 !important;
+  margin: 0 0 2px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceLogo::before{
+  content: "" !important;
+  display: inline-block !important;
+  width: 2px !important;
+  height: 22px !important;
+  margin-right: 10px !important;
+  border-radius: 999px !important;
+  background: #111827 !important;
+  opacity: 0.9 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceLogoGlyph{
+  font-size: 14px !important;
+  font-weight: 800 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceSidebarNav{
+  gap: 4px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarIconBtn,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarSettingsBtn{
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 36px !important;
+  padding: 0 10px 0 12px !important;
+  border: 0 !important;
+  border-radius: 10px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  justify-content: flex-start !important;
+  gap: 10px !important;
+  color: #4b5563 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarIconBtn:hover,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarSettingsBtn:hover{
+  background: rgba(15, 23, 42, 0.05) !important;
+  transform: none !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarIconBtn.active,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarSettingsBtn.active,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarIconBtn.accent{
+  background: transparent !important;
+  color: #111827 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarIconBtn.active::before,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarSettingsBtn.active::before,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarIconBtn.accent::before{
+  display: none !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarIcon{
+  width: 16px !important;
+  height: 16px !important;
+  color: currentColor !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarLabel{
+  font-size: 12.5px !important;
+  font-weight: 650 !important;
+  letter-spacing: -0.01em !important;
+  color: currentColor !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarPinDot{
+  width: 5px !important;
+  height: 5px !important;
+  margin-left: auto !important;
+  opacity: 0.9 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceSidebarBottom{
+  margin-top: auto !important;
+  gap: 16px !important;
+  padding-top: 12px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceSidebarThreadSection{
+  display: grid !important;
+  gap: 8px !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  margin-top: 6px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceSidebarThreadHeader{
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  gap: 10px !important;
+  padding: 2px 4px 0 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceSidebarThreadTitleWrap{
+  display: grid !important;
+  gap: 2px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceSidebarThreadTitle{
+  font-size: 11.5px !important;
+  font-weight: 750 !important;
+  letter-spacing: -0.01em !important;
+  color: #8f968e !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceSidebarThreadMeta{
+  font-size: 10.5px !important;
+  line-height: 1.45 !important;
+  color: #a6adb7 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceSidebarThreadHeaderActions{
+  display: flex !important;
+  align-items: center !important;
+  gap: 2px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadHeaderBtn{
+  width: 28px !important;
+  height: 28px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+  color: #7b8190 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadHeaderBtn:hover{
+  background: rgba(15, 23, 42, 0.05) !important;
+  color: #111827 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadHeaderBtn svg{
+  width: 15px !important;
+  height: 15px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadFolderList{
+  display: grid !important;
+  gap: 2px !important;
+  padding-top: 2px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadFolder{
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  min-height: 32px !important;
+  padding: 0 8px !important;
+  border-radius: 10px !important;
+  color: #374151 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadFolderIcon{
+  display: inline-flex !important;
+  width: 15px !important;
+  height: 15px !important;
+  color: #6b7280 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadFolderLabel{
+  font-size: 12.5px !important;
+  font-weight: 560 !important;
+  color: #4b5563 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadPackageList{
+  display: grid !important;
+  gap: 4px !important;
+  max-height: min(48dvh, 420px) !important;
+  overflow: auto !important;
+  padding-right: 2px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadPackageRow{
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  gap: 4px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadPackageCard{
+  display: grid !important;
+  grid-template-columns: auto minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  gap: 8px !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 34px !important;
+  padding: 0 10px !important;
+  border: 0 !important;
+  border-radius: 12px !important;
+  background: transparent !important;
+  color: #1f2937 !important;
+  text-align: left !important;
+  box-shadow: none !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadPackageCard:hover{
+  background: rgba(15, 23, 42, 0.05) !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadPackageCard.active,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadPackageRow.active .sidebarThreadPackageCard,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadPackageCard.draft{
+  background: #ece9e3 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadPackageGlyph{
+  display: inline-flex !important;
+  width: 15px !important;
+  height: 15px !important;
+  color: #6b7280 !important;
+  flex: 0 0 auto !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadPackageMain{
+  min-width: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadPackageTitle{
+  min-width: 0 !important;
+  display: block !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  font-size: 12.5px !important;
+  font-weight: 620 !important;
+  line-height: 1.4 !important;
+  color: #4b5563 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadPackageSub{
+  display: none !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadPackageStamp{
+  flex: 0 0 auto !important;
+  font-size: 10.5px !important;
+  font-weight: 650 !important;
+  color: #adb3bc !important;
+  white-space: nowrap !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadPackageRow.active .sidebarThreadPackageStamp{
+  color: #8f968e !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadPackageRow.active .sidebarThreadPackageTitle,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarIconBtn.active .sidebarLabel,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarSettingsBtn.active .sidebarLabel,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarIconBtn.accent .sidebarLabel{
+  color: #374151 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadPackageRemove{
+  width: 22px !important;
+  height: 22px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+  color: #a1a1aa !important;
+  opacity: 0.7 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadPackageRemove:hover{
+  background: rgba(15, 23, 42, 0.05) !important;
+  color: #52525b !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadEmpty{
+  padding: 6px 8px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: #9aa0a6 !important;
+  font-size: 11.5px !important;
+  line-height: 1.55 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarSettingsBtn{
+  margin-top: auto !important;
+}
+
+/* =====================================================================
+   2026-04-11 case create datetime overflow fix
+   - avoid clipping inside nested scroll containers
+   ===================================================================== */
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceSection.casesSection{
+  overflow-y: auto !important;
+  overflow-x: visible !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .casesMain,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseShell.caseShellWorkspace.caseShellSolo{
+  height: auto !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseShell.caseShellWorkspace.caseShellSolo{
+  display: block !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseShell.caseShellWorkspace.caseShellSolo .caseCommandDeck,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseShell.caseShellWorkspace.caseShellSolo .caseCommandPanel,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseShell.caseShellWorkspace.caseShellSolo .caseCommandPanelScroll{
+  overflow: visible !important;
+  max-height: none !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseShell.caseShellWorkspace.caseShellSolo .caseCommandPanelScroll{
+  padding-right: 0 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseCreateFlow .fold-content{
+  overflow: visible !important;
+  padding-bottom: 6px !important;
+}
+
+/* =====================================================================
+   2026-04-11 strategy chat conversational pass
+   - remove card feel from assistant replies
+   - keep user prompts lightly separated
+   ===================================================================== */
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyChatThreadOnly{
+  padding: 4px 4px 18px 0 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyIntroMsg,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategySummaryMsg,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyStatusMsg,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyResponseMsg,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyUserMsg{
+  margin: 0 0 14px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyResponseMsg .strategyBubble,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyIntroMsg .strategyBubble,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategySummaryMsg .strategyBubble,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyStatusMsg .strategyBubble{
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyResponseMsg .strategyAvatar,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyIntroMsg .strategyAvatar,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategySummaryMsg .strategyAvatar,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyStatusMsg .strategyAvatar{
+  width: 28px !important;
+  height: 28px !important;
+  border-radius: 999px !important;
+  background: #eef2f6 !important;
+  color: #64748b !important;
+  box-shadow: none !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyBubbleMetaOnly{
+  margin-bottom: 6px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyBubbleMetaOnly span,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyInlineMeta span{
+  padding: 0 !important;
+  min-height: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  color: #94a3b8 !important;
+  font-size: 10.5px !important;
+  font-weight: 700 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategySummaryMsg .strategyLead,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyIntroMsg .strategyLead,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyStatusMsg .strategyLead,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyResponseMsg .strategyLead{
+  margin-bottom: 6px !important;
+  color: #0f172a !important;
+  font-size: 14px !important;
+  line-height: 1.62 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyResponseMsg .strategyParagraph,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategySummaryMsg .strategyParagraph,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyIntroMsg .strategyParagraph,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyStatusMsg .strategyParagraph{
+  color: #334155 !important;
+  font-size: 13.5px !important;
+  line-height: 1.78 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyUserMsg{
+  justify-content: flex-end !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyUserCard{
+  padding: 11px 14px !important;
+  border: 1px solid #e7eaee !important;
+  border-radius: 16px !important;
+  background: #f6f7f8 !important;
+  box-shadow: none !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyUserMsg .strategyParagraph{
+  color: #334155 !important;
+  font-size: 13px !important;
+  line-height: 1.7 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyThreadPackageBanner{
+  margin: 0 0 10px 36px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyThreadPackageBannerLabel{
+  font-size: 10.5px !important;
+  font-weight: 700 !important;
+  color: #94a3b8 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyThreadPackageBannerTitle{
+  font-size: 12.5px !important;
+  font-weight: 700 !important;
+  color: #475569 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyThreadPackageBannerMeta{
+  font-size: 11px !important;
+  color: #94a3b8 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyChatOnlyContext{
+  margin: 0 0 14px 36px !important;
+  padding: 12px 0 0 12px !important;
+  border-left: 2px solid #eceff3 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyChatOnlyContext > summary{
+  padding: 0 !important;
+  min-height: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  color: #64748b !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyChatOnlyContextGrid{
+  margin-top: 10px !important;
+  gap: 10px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyChatOnlyPanel,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyContextChecklist{
+  border-radius: 14px !important;
+  box-shadow: none !important;
+}

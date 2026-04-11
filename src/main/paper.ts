@@ -707,19 +707,19 @@ function integrityVerdictTone(status: string, trusted: boolean) {
 
 function formatIntegrityVerdict(row: Partial<PaperRecordRow>) {
   const status = String(row.verificationStatus || '').trim();
-  if (String(row.kind || '') !== 'record') return '사건 대응 조치 로그';
+  if (String(row.kind || '') !== 'record') return '컬렉션 실행 로그';
   if (row.trusted || status === 'verified') return row.signedOnThisDevice ? '기기서명·해시체인 검증완료' : '기기서명 검증완료';
   if (status === 'foreign') return '해시체인 일치 · 타기기 서명';
   if (status === 'legacy') return 'SHA-256 리비전 체인 보존';
   if (status === 'pending') return '해시체인 일치 · 서명검증 대기';
   if (status === 'missing') return '해시체인 점검 가능 · 메타 보강 필요';
-  if (status === 'process-log') return '사건 대응 조치 로그';
+  if (status === 'process-log') return '컬렉션 실행 로그';
   return '추가 포렌식 검토 필요';
 }
 
 function formatIntegrityEvidence(row: Partial<PaperRecordRow>) {
   if (String(row.kind || '') !== 'record') {
-    return row.verificationMessage || '발신인이 별도로 남긴 사건 대응 경과 로그입니다.';
+    return row.verificationMessage || '작성자가 별도로 남긴 실행 경과 로그입니다.';
   }
   const parts = [
     `REV ${Number(row.revisionCount || 0)}`,
@@ -800,9 +800,9 @@ function buildFactsSummary(recs: RecordItem[]) {
 
 function buildActionSummary(c: CaseItem) {
   const steps = (c.steps || []).slice().sort((a, b) => String(a.ts || '').localeCompare(String(b.ts || '')));
-  if (!steps.length) return '발신인은 본 사안과 관련하여 별도 조치 로그를 정리·보관 중입니다.';
+  if (!steps.length) return '작성자는 이 컬렉션과 관련한 후속 메모와 실행 로그를 별도로 정리·보관 중입니다.';
   const joined = steps.slice(0, 3).map((s) => `${fmt(String(s.ts || ''))} ${String(s.name || '').trim()}${String(s.note || '').trim() ? `(${trunc(String(s.note || '').trim(), 40)})` : ''}`).join(' / ');
-  return `발신인의 확인·대응 조치로는 ${joined} 등이 있습니다.`;
+  return `작성자가 남긴 후속 메모와 실행 로그로는 ${joined} 등이 있습니다.`;
 }
 
 function buildIntegritySummary(records: PaperRecordRow[]) {
@@ -813,11 +813,11 @@ function buildIntegritySummary(records: PaperRecordRow[]) {
   const amended = records.filter((r) => r.kind === 'record' && Number(r.revisionCount || 0) > 1).length;
   const review = records.filter((r) => r.kind === 'record' && ['invalid', 'missing'].includes(String(r.verificationStatus || ''))).length;
   return [
-    '각 기록은 사건시각·주체·장소·요약 등 핵심 스냅샷을 정규화한 payload를 기준으로 SHA-256 해시를 산출하고, 각 리비전을 prevHash → currentHash 형태로 연쇄 연결해 관리합니다.',
+    '각 기록은 기록시각·주체·장소·요약 등 핵심 스냅샷을 정규화한 payload를 기준으로 SHA-256 해시를 산출하고, 각 리비전을 prevHash → currentHash 형태로 연쇄 연결해 관리합니다.',
     '서명 가능한 기록은 Rust Ed25519 전자서명, 공개키, 공개키 지문(fingerprint)을 함께 보관하여, 동일한 payload 재계산 결과와 전자서명 검증 결과를 이중으로 확인할 수 있도록 구성하였습니다.',
     `검증 분류: 총 ${total}건 중 기기서명·해시체인 검증완료 ${verified}건, 타기기 서명 포함 해시체인 일치 ${foreign}건, 레거시 해시체인 보존 ${legacy}건, 추가 검토 필요 ${review}건, 정정 이력 존재 ${amended}건입니다.`,
     '각 항목별 상세에는 최초 입력봉인 시각, 최종 수정봉인 시각, REV, 현재 SHA-256, 공개키 지문, revision trail을 병기하여 입력 이후 변경 여부를 추적할 수 있도록 하였습니다.',
-    '다만 위 기술적 검증 결과는 증거보전과 설명을 위한 자료이며, 최종적인 증거능력과 증명력 판단은 원본 대조, 제출 경위, 증인신문 등과 함께 수사기관·법원의 심리에 따라 이루어집니다.',
+    '위 기술적 검증 결과는 기록 보전과 설명을 위한 참고 자료이며, 실제 제출·검토 과정에서는 원본 자료와 작성 경위 등을 함께 확인하는 편이 안전합니다.',
   ];
 }
 
@@ -832,7 +832,7 @@ function buildPaperPayload(
   const recs = dedupeRecordsForPaper(recsAll).slice().sort((a, b) => String(a.ts || '').localeCompare(String(b.ts || '')));
   const facts = buildFactsSummary(recs);
   const actionSummary = buildActionSummary(c);
-  const subject = `[${String(c.title || '사안').trim() || '사안'}] 증거 증빙의 건`;
+  const subject = `[${String(c.title || '컬렉션').trim() || '컬렉션'}] 공유/제출 자료`;
 
   const records: PaperRecordRow[] = recs.map((r) => {
     const meta = getPaperRecordMeta(r);
@@ -845,7 +845,7 @@ function buildPaperPayload(
       place: placeLabel(r.place, r.placeOther),
       summary: String(r.summary || '').trim(),
       id: r.id,
-      reason: '사건 관련 증빙자료',
+      reason: '컬렉션 관련 참고자료',
       originalSealedAt: meta.originalSealedAt ? fmt(meta.originalSealedAt) : '',
       lastSealedAt: meta.lastSealedAt ? fmt(meta.lastSealedAt) : '',
       revisionCount: meta.revisionCount,
@@ -876,9 +876,9 @@ function buildPaperPayload(
       summary: [String(s.name || '').trim(), String(s.note || '').trim()].filter(Boolean).join(' — ') || '-',
       id: String(s.id || ''),
       verificationStatus: 'process-log',
-      verificationMessage: '사건 대응 경과를 설명하는 조치 로그입니다.',
-      integrityVerdict: '사건 대응 조치 로그',
-      integrityEvidence: '발신인이 보관 중인 조치 경과 기록입니다.',
+      verificationMessage: '컬렉션 흐름을 설명하는 실행 로그입니다.',
+      integrityVerdict: '컬렉션 실행 로그',
+      integrityEvidence: '작성자가 보관 중인 실행 경과 기록입니다.',
     });
   }
 
@@ -895,15 +895,15 @@ function buildPaperPayload(
     recipientAddress: sanitizeAddress(String(proofDraft?.recipientAddress || '')),
     subject,
     statementLines: [
-      `귀하와 관련된 「${String(c.title || '').trim() || '사안'}」 사안에 관하여, 사실관계 및 증빙자료를 아래와 같이 정리하여 통지합니다.`,
+      `다음은 「${String(c.title || '').trim() || '컬렉션'}」와 관련된 사실관계와 기록 자료를 정리한 공유용 문서입니다.`,
       ...facts,
       actionSummary,
-      '별지 기재 각 자료는 본 사안의 경위, 관련 의사소통, 조치 내용 및 후속 대응 필요성을 확인하기 위한 증빙자료입니다.',
+      '아래 첨부된 각 자료는 경위, 의사소통 흐름, 후속 메모를 확인하기 위한 참고 기록입니다.',
     ],
     actionLines: [
-      '귀하는 본 통지서를 수령한 즉시 본 사안과 관련된 문자, 메신저, 이메일, 녹음, 사진, 문서 기타 원본 자료를 임의로 삭제·수정·은닉하지 마시기 바랍니다.',
-      '귀하의 입장이나 소명자료가 있는 경우 서면으로 회신해 주시기 바랍니다.',
-      '향후 사실과 다른 주장 또는 추가적인 불이익 조치가 계속될 경우, 발신인은 본 통지서 및 첨부 증빙을 토대로 관계 기관 제출, 수사기관 신고, 법률 검토 및 민·형사상 절차 진행 여부를 검토할 예정입니다.',
+      '관련 원본 자료가 있다면 삭제하거나 수정하지 말고 그대로 보존해 주세요.',
+      '추가 설명이나 보완할 자료가 있다면 같은 문맥 안에서 함께 정리해 주세요.',
+      '필요 시 이 문서와 첨부 기록을 바탕으로 내부 공유, 공식 제출, 추가 검토 여부를 차분히 판단할 수 있습니다.',
     ],
     integrityLines,
     records,
@@ -1012,8 +1012,8 @@ export function renderCasePaperModal() {
   <dialog class="modal paperModal" id="paperModal">
     <div class="modalHead">
       <div class="paperModalLead">
-        <div class="h2">내용증명 생성</div>
-        <div class="muted">발신인·수신인 이름과 주소를 분리 입력한 뒤, 증빙자료 및 무결성 검증 요약이 포함된 PDF를 저장할 수 있어요.</div>
+        <div class="h2">공유/제출 문서</div>
+        <div class="muted">보내는 사람·받는 사람 정보를 입력한 뒤, 기록 요약과 무결성 검증 정보가 포함된 PDF를 저장할 수 있어요.</div>
       </div>
       <div class="paperModalActions">
         <button class="btn primary" data-action="print-paper" type="button">PDF로 저장</button>
@@ -1021,14 +1021,14 @@ export function renderCasePaperModal() {
       </div>
     </div>
 
-    <div class="paperViewport" aria-label="내용증명 미리보기">
+    <div class="paperViewport" aria-label="공유 문서 미리보기">
       <div class="paperSheet">
         <div class="paperContent">
           <div class="paperProofForm">
             <div class="paperProofFormHead">
               <div>
                 <div class="paperProofFormTitle">송달 정보 입력</div>
-                <div class="paperProofFormHint">이름과 주소를 분리 입력하면 PDF에서 내용증명서 형식으로 정렬되고, 주소 줄바꿈도 그대로 반영돼요.</div>
+                <div class="paperProofFormHint">이름과 주소를 분리 입력하면 PDF에서 문서 형식으로 정렬되고, 주소 줄바꿈도 그대로 반영돼요.</div>
               </div>
               <div class="paperProofStatus" id="contentProofStatus">송달 정보 0/4 입력</div>
             </div>
@@ -1064,7 +1064,7 @@ export function renderCasePaperModal() {
                 </div>
               </section>
             </div>
-            <div class="paperProofQuickHint">PDF에는 원본 보고서 대신 내용증명서 형식으로, 증거별 SHA-256·REV·봉인시각·전자서명/공개키 지문 기반 검증근거가 함께 정리됩니다.</div>
+            <div class="paperProofQuickHint">PDF에는 공유용 문서 형식으로, 기록별 SHA-256·REV·봉인시각·전자서명/공개키 지문 기반 검증근거가 함께 정리됩니다.</div>
           </div>
           ${inner}
         </div>
@@ -1093,4 +1093,3 @@ export async function computeCasePaperHash(c: CaseItem) {
     return null;
   }
 }
-
