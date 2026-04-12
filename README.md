@@ -56,7 +56,12 @@ Tauri(AppDataDir)에 아래 파일로 저장됩니다.
 roosycozy.exe
 resources/models/HyperCLOVAX-SEED-Text-Instruct-0.5B-q4_0.gguf
 sidecar/llama-sidecar-x86_64-pc-windows-msvc.exe
+sidecar/llama.dll
+sidecar/mtmd.dll
+sidecar/*.dll
 ```
+
+윈도우 portable은 `sidecar exe`만으로는 실행되지 않습니다. 같은 빌드에서 나온 `llama.dll`, `mtmd.dll`과 관련 DLL 묶음을 `src-tauri/binaries/windows-x64/`에 두면 패키징 단계에서 같이 포함됩니다. DLL이 빠져 있으면 이제 빌드가 바로 실패해서, 실행 후에야 깨지는 패키지가 나오지 않게 했습니다.
 
 ### 2. Mac App Store Package
 
