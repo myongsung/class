@@ -1,5 +1,5 @@
 import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -16,6 +16,11 @@ const runtimeDirCandidates = [
   resolve(repoRoot, 'src-tauri', 'binaries')
 ];
 const requiredRuntimeDlls = ['llama.dll', 'mtmd.dll'];
+const executableCandidates = [
+  'llama-sidecar-x86_64-pc-windows-msvc.exe',
+  'llama-cli.exe',
+  'llama-server.exe'
+];
 
 function requireFile(filePath, label) {
   if (!existsSync(filePath)) {
@@ -23,14 +28,28 @@ function requireFile(filePath, label) {
   }
 }
 
+function walk(dir) {
+  const out = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      out.push(...walk(full));
+    } else {
+      out.push(full);
+    }
+  }
+  return out;
+}
+
 function resolveRuntimeDlls() {
   for (const runtimeDir of runtimeDirCandidates) {
     if (!existsSync(runtimeDir)) continue;
-    const dllNames = readdirSync(runtimeDir).filter((name) => name.toLowerCase().endsWith('.dll'));
-    if (!dllNames.length) continue;
+    const files = walk(runtimeDir);
+    const dlls = files.filter((filePath) => filePath.toLowerCase().endsWith('.dll'));
+    if (!dlls.length) continue;
 
     const missing = requiredRuntimeDlls.filter(
-      (name) => !dllNames.some((dllName) => dllName.toLowerCase() === name)
+      (name) => !dlls.some((filePath) => filePath.toLowerCase().endsWith(`/${name}`) || filePath.toLowerCase().endsWith(`\\${name}`))
     );
 
     if (missing.length) {
@@ -43,9 +62,9 @@ function resolveRuntimeDlls() {
       );
     }
 
-    return dllNames.map((name) => ({
-      name,
-      source: resolve(runtimeDir, name)
+    return dlls.map((source) => ({
+      name: source.split(/[\\/]/).pop(),
+      source
     }));
   }
 
@@ -59,13 +78,26 @@ function resolveRuntimeDlls() {
   );
 }
 
+function resolveWindowsSidecarExecutable() {
+  for (const runtimeDir of runtimeDirCandidates) {
+    if (!existsSync(runtimeDir)) continue;
+    const files = walk(runtimeDir);
+    for (const candidate of executableCandidates) {
+      const found = files.find((filePath) => filePath.toLowerCase().endsWith(`/${candidate}`) || filePath.toLowerCase().endsWith(`\\${candidate}`));
+      if (found) return found;
+    }
+  }
+  return sidecarPath;
+}
+
 function main() {
   const modelPath = existsSync(builtModelPath) ? builtModelPath : sourceModelPath;
   const runtimeDlls = resolveRuntimeDlls();
+  const resolvedSidecarPath = resolveWindowsSidecarExecutable();
 
   requireFile(executablePath, 'Windows 실행 파일');
   requireFile(modelPath, '모델');
-  requireFile(sidecarPath, 'Windows sidecar');
+  requireFile(resolvedSidecarPath, 'Windows sidecar');
 
   rmSync(portableRoot, { recursive: true, force: true });
   mkdirSync(resolve(portableRoot, 'resources', 'models'), { recursive: true });
@@ -73,7 +105,7 @@ function main() {
 
   copyFileSync(executablePath, resolve(portableRoot, 'roosycozy.exe'));
   copyFileSync(modelPath, resolve(portableRoot, 'resources', 'models', modelName));
-  copyFileSync(sidecarPath, resolve(portableRoot, 'sidecar', 'llama-sidecar-x86_64-pc-windows-msvc.exe'));
+  copyFileSync(resolvedSidecarPath, resolve(portableRoot, 'sidecar', 'llama-sidecar-x86_64-pc-windows-msvc.exe'));
   for (const dll of runtimeDlls) {
     copyFileSync(dll.source, resolve(portableRoot, 'sidecar', dll.name));
   }

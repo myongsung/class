@@ -34,6 +34,11 @@ jobs:
           ROOSYCOZY_MODEL_SHA256: "${{ secrets.ROOSYCOZY_MODEL_SHA256 || vars.ROOSYCOZY_MODEL_SHA256 }}"
         run: npm run ci:ensure-model
 
+      - name: ensure windows runtime bundle
+        env:
+          ROOSYCOZY_WINDOWS_RUNTIME_URL: "${{ secrets.ROOSYCOZY_WINDOWS_RUNTIME_URL || vars.ROOSYCOZY_WINDOWS_RUNTIME_URL || 'https://github.com/ggml-org/llama.cpp/releases/download/b8763/llama-b8763-bin-win-cpu-x64.zip' }}"
+        run: npm run ci:ensure-windows-runtime
+
       - name: build windows portable bundle
         run: npm run windows:portable
 

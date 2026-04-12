@@ -61,7 +61,13 @@ sidecar/mtmd.dll
 sidecar/*.dll
 ```
 
-윈도우 portable은 `sidecar exe`만으로는 실행되지 않습니다. 같은 빌드에서 나온 `llama.dll`, `mtmd.dll`과 관련 DLL 묶음을 `src-tauri/binaries/windows-x64/`에 두면 패키징 단계에서 같이 포함됩니다. DLL이 빠져 있으면 이제 빌드가 바로 실패해서, 실행 후에야 깨지는 패키지가 나오지 않게 했습니다.
+윈도우 portable은 `sidecar exe`만으로는 실행되지 않습니다. 이제 CI는 먼저 Windows runtime zip을 받아 `llama.dll`, `mtmd.dll`과 관련 DLL을 준비한 뒤 패키징합니다. 기본값은 2026년 4월 11일 기준 공식 llama.cpp Windows x64 CPU asset입니다.
+
+```text
+https://github.com/ggml-org/llama.cpp/releases/download/b8763/llama-b8763-bin-win-cpu-x64.zip
+```
+
+필요하면 `ROOSYCOZY_WINDOWS_RUNTIME_URL`로 다른 runtime zip을 지정할 수 있습니다. 예를 들어 네가 직접 빌드한 같은 버전의 DLL 묶음을 올려두고 그 주소를 넣는 방식이 가장 안전합니다.
 
 ### 2. Mac App Store Package
 
@@ -81,6 +87,8 @@ sidecar/*.dll
   - self-hosted runner나 로컬 경로가 있을 때 사용
 - `ROOSYCOZY_MODEL_URL`
   - GitHub Actions가 모델을 받아올 URL
+- `ROOSYCOZY_WINDOWS_RUNTIME_URL`
+  - Windows sidecar용 exe / DLL 묶음 zip URL
 - `ROOSYCOZY_MODEL_SHA256`
   - 선택사항
   - 내려받은 모델 무결성 검사용
