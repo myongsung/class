@@ -5,6 +5,8 @@ use std::fs;
 use std::io::{BufRead, BufReader, Read};
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::OnceLock;
@@ -852,6 +854,8 @@ const STRATEGY_MODEL_RESOURCE_PATH: &str = "models/HyperCLOVAX-SEED-Text-Instruc
 const STRATEGY_SIDECAR_STEM: &str = "llama-sidecar";
 const STRATEGY_PROGRESS_EVENT: &str = "strategy-chat-progress";
 const STRATEGY_CHAT_TIMEOUT_SECS: u64 = 90;
+#[cfg(target_os = "windows")]
+const STRATEGY_CREATE_NO_WINDOW: u32 = 0x08000000;
 
 #[cfg(target_os = "windows")]
 const STRATEGY_SIDECAR_GENERIC_FILENAME: &str = "llama-sidecar.exe";
@@ -999,6 +1003,54 @@ fn strategy_runner_hint_text() -> String {
     STRATEGY_SIDECAR_FILENAME,
     STRATEGY_SIDECAR_GENERIC_FILENAME
   )
+}
+
+#[cfg(target_os = "windows")]
+fn configure_strategy_child_process(command: &mut Command) {
+  command.creation_flags(STRATEGY_CREATE_NO_WINDOW);
+}
+
+#[cfg(not(target_os = "windows"))]
+fn configure_strategy_child_process(_command: &mut Command) {}
+
+fn looks_like_windows_path_line(s: &str) -> bool {
+  let bytes = s.as_bytes();
+  bytes.len() > 3 && bytes[1] == b':' && matches!(bytes[2], b'\\' | b'/')
+}
+
+fn is_strategy_runtime_noise(trimmed: &str) -> bool {
+  let lower = trimmed.to_ascii_lowercase();
+  looks_like_windows_path_line(trimmed)
+    || lower.contains("using custom system prompt")
+    || lower.contains("llama-sidecar")
+    || lower.contains("llama-cli")
+    || lower.contains("llama-server")
+    || lower.contains(".gguf")
+    || lower.starts_with("main: ")
+    || lower.starts_with("system info")
+    || lower.starts_with("sampler ")
+    || lower.starts_with("generate: ")
+    || lower.starts_with("n_ctx")
+    || lower.starts_with("n_batch")
+    || lower.starts_with("build info")
+    || lower.starts_with("load_tensors")
+    || lower.starts_with("load_backend")
+    || lower.starts_with("common params")
+    || lower.starts_with("print_info")
+    || lower.starts_with("encode ")
+    || lower.starts_with("decode ")
+    || lower.starts_with("slot ")
+    || lower.starts_with("srv ")
+}
+
+fn should_emit_strategy_runtime_log(trimmed: &str) -> bool {
+  let lower = trimmed.to_ascii_lowercase();
+  !is_strategy_runtime_noise(trimmed)
+    && (lower.contains("error")
+      || lower.contains("failed")
+      || lower.contains("cannot")
+      || lower.contains("invalid")
+      || lower.contains("exception"))
 }
 
 #[cfg(unix)]
@@ -1743,6 +1795,9 @@ fn cleanup_strategy_output(raw: &str) -> String {
   for line in out.lines() {
     let trimmed = line.trim();
     let is_block_art = !trimmed.is_empty() && trimmed.chars().all(|ch| matches!(ch, '▄' | '█' | '▀' | ' '));
+    if trimmed.contains('\u{fffd}') {
+      continue;
+    }
     if skipping_user_echo {
       if trimmed.is_empty() {
         skipping_user_echo = false;
@@ -1762,6 +1817,7 @@ fn cleanup_strategy_output(raw: &str) -> String {
     if is_block_art
       || trimmed == ">>>"
       || trimmed == "..."
+      || is_strategy_runtime_noise(trimmed)
       || trimmed.contains("(truncated)")
       || trimmed.starts_with("common params")
       || trimmed.starts_with("example-specific params")
@@ -1914,7 +1970,8 @@ pub fn run_strategy_chat(
   emit_strategy_progress(app, "준비", format!("실행기 {} 와 모델 {} 를 찾았어요.", runner_name, model_name));
   emit_strategy_progress(app, "준비", format!("시스템 {}자 + 사용자 {}자, 컨텍스트 {}, 최대 토큰 {}로 실행해요.", system_prompt.chars().count(), user_prompt.chars().count(), n_ctx, max_tokens));
 
-  let mut child = Command::new(&runner)
+  let mut command = Command::new(&runner);
+  command
     .arg("-m")
     .arg(&model_path)
     .arg("-c")
@@ -1946,15 +2003,19 @@ pub fn run_strategy_chat(
     .arg(&system_prompt)
     .arg("-p")
     .arg(&user_prompt)
+    .stdin(Stdio::null())
     .stdout(Stdio::piped())
-    .stderr(Stdio::piped())
+    .stderr(Stdio::piped());
+  configure_strategy_child_process(&mut command);
+
+  let mut child = command
     .spawn()
     .map_err(|e| format!(
       "내장 추론기 실행에 실패했어요. sidecar 포함 여부와 실행 권한을 확인해주세요. runner={} / 상세: {}",
       runner.display(),
       e
     ))?;
-  emit_strategy_progress(app, "실행", "전략자문 추론기를 시작했어요. 콘솔 로그를 함께 흘려보낼게요.");
+  emit_strategy_progress(app, "실행", "전략자문 추론기를 시작했어요. 응답을 생성하고 있어요.");
 
   let stdout = child.stdout.take().ok_or_else(|| "전략자문 표준출력을 연결하지 못했어요.".to_string())?;
   let stderr = child.stderr.take().ok_or_else(|| "전략자문 표준에러를 연결하지 못했어요.".to_string())?;
@@ -1977,7 +2038,7 @@ pub fn run_strategy_chat(
         Ok(_) => {
           collected.push_str(&line);
           let trimmed = line.trim();
-          if !trimmed.is_empty() {
+          if !trimmed.is_empty() && should_emit_strategy_runtime_log(trimmed) {
             emit_strategy_progress(app_for_stderr.as_ref(), "모델로그", strategy_trim(trimmed, 260));
           }
         }

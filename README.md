@@ -50,6 +50,7 @@ Tauri(AppDataDir)에 아래 파일로 저장됩니다.
 
 - `main` 브랜치 push 또는 수동 실행 시 동작합니다.
 - 결과물은 Actions artifact `roosycozy-windows-x64-portable`로 올라갑니다.
+- artifact 자체가 GitHub에서 한 번만 압축되므로, 다운로드 후 한 번만 풀면 됩니다.
 - 내부에는 아래 구조가 들어갑니다.
 
 ```text

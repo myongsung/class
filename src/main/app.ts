@@ -624,6 +624,14 @@ const clearStrategyChatProgress = () => {
   (ui as any).strategyChatProgressStage = '';
 };
 
+const formatStrategyRunnerLabel = (runner: unknown) => {
+  const raw = String(runner || '').trim();
+  const file = raw.split(/[\\/]/).pop() || raw;
+  if (!file) return '로컬 추론기';
+  if (/llama-(sidecar|cli|server)/i.test(file)) return '로컬 추론기';
+  return file;
+};
+
 const appendStrategyChatProgress = (stage: string, content: string, rerender = true) => {
   const safeStage = String(stage || '').trim();
   const safeContent = String(content || '').trim();
@@ -756,7 +764,7 @@ const sendStrategyAgentMessage = async (overrideMessage?: string) => {
     appendStrategyChatMessage(
       'assistant',
       answer,
-      `${String(result.runner || 'llama-cli')} · 근거 ${String(result.recordsUsed || records.length)}개`
+      `${formatStrategyRunnerLabel(result.runner)} · 근거 ${String(result.recordsUsed || records.length)}개`
     );
     toast('AI 분석 답변이 도착했어요');
   } catch (err) {

@@ -42,19 +42,9 @@ jobs:
       - name: build windows portable bundle
         run: npm run windows:portable
 
-      - name: compress windows portable bundle
-        shell: pwsh
-        run: |
-          $portableDir = "src-tauri/target/release/portable/roosycozy-windows-x64"
-          $zipPath = "src-tauri/target/release/portable/roosycozy-windows-x64.zip"
-          if (Test-Path $zipPath) {
-            Remove-Item $zipPath -Force
-          }
-          Compress-Archive -Path $portableDir -DestinationPath $zipPath -Force
-
       - name: upload windows portable artifact
         uses: actions/upload-artifact@v6
         with:
           name: roosycozy-windows-x64-portable
-          path: src-tauri/target/release/portable/roosycozy-windows-x64.zip
+          path: src-tauri/target/release/portable/roosycozy-windows-x64/
           if-no-files-found: error

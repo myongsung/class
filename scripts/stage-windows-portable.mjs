@@ -79,6 +79,9 @@ function resolveRuntimeDlls() {
 }
 
 function resolveWindowsSidecarExecutable() {
+  if (existsSync(sidecarPath)) {
+    return sidecarPath;
+  }
   for (const runtimeDir of runtimeDirCandidates) {
     if (!existsSync(runtimeDir)) continue;
     const files = walk(runtimeDir);

@@ -13,12 +13,6 @@ const runtimeUrl =
   'https://github.com/ggml-org/llama.cpp/releases/download/b8763/llama-b8763-bin-win-cpu-x64.zip';
 
 const requiredDlls = ['llama.dll', 'mtmd.dll'];
-const executableCandidates = [
-  'llama-sidecar-x86_64-pc-windows-msvc.exe',
-  'llama-cli.exe',
-  'llama-server.exe'
-];
-
 function walk(dir) {
   const out = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -35,9 +29,7 @@ function walk(dir) {
 function hasRuntimeBundle() {
   if (!existsSync(runtimeDir)) return false;
   const files = walk(runtimeDir).map((filePath) => filePath.toLowerCase());
-  const dllReady = requiredDlls.every((name) => files.some((filePath) => filePath.endsWith(`/${name}`) || filePath.endsWith(`\\${name}`)));
-  const exeReady = executableCandidates.some((name) => files.some((filePath) => filePath.endsWith(`/${name}`) || filePath.endsWith(`\\${name}`)));
-  return dllReady && exeReady;
+  return requiredDlls.every((name) => files.some((filePath) => filePath.endsWith(`/${name}`) || filePath.endsWith(`\\${name}`)));
 }
 
 function runOrThrow(command, args) {
@@ -84,10 +76,9 @@ async function main() {
   if (!hasRuntimeBundle()) {
     throw new Error(
       [
-        'Windows runtime zip 압축을 풀었지만 필요한 실행기/DLL 구성이 보이지 않아요.',
+        'Windows runtime zip 압축을 풀었지만 필요한 DLL 구성이 보이지 않아요.',
         `확인 폴더: ${runtimeDir}`,
-        `필수 DLL: ${requiredDlls.join(', ')}`,
-        `허용 실행기: ${executableCandidates.join(', ')}`
+        `필수 DLL: ${requiredDlls.join(', ')}`
       ].join('\n')
     );
   }
