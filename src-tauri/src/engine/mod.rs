@@ -962,6 +962,91 @@ fn strategy_trim(s: &str, limit: usize) -> String {
   s.chars().take(limit).collect::<String>()
 }
 
+fn strategy_is_supported_char(ch: char) -> bool {
+  let cp = ch as u32;
+  if cp > 0xFFFF {
+    return false;
+  }
+  if (0xE000..=0xF8FF).contains(&cp) {
+    return false;
+  }
+  if (0xFDD0..=0xFDEF).contains(&cp) {
+    return false;
+  }
+  if (cp & 0xFFFF) == 0xFFFE || (cp & 0xFFFF) == 0xFFFF {
+    return false;
+  }
+  true
+}
+
+fn strategy_sanitize_text(input: &str) -> String {
+  let mut out = String::with_capacity(input.len());
+  let mut prev_blank = false;
+  for ch in input.chars() {
+    if ch == '\u{fffd}' {
+      continue;
+    }
+    if !strategy_is_supported_char(ch) {
+      continue;
+    }
+    if ch == '\r' {
+      continue;
+    }
+    let normalized = if ch == '\t' { ' ' } else { ch };
+    if normalized == '\n' {
+      if prev_blank {
+        continue;
+      }
+      out.push('\n');
+      prev_blank = true;
+      continue;
+    }
+    if normalized.is_control() {
+      continue;
+    }
+    if normalized.is_whitespace() {
+      out.push(' ');
+      prev_blank = false;
+      continue;
+    }
+    out.push(normalized);
+    prev_blank = false;
+  }
+  out.trim().to_string()
+}
+
+fn write_strategy_prompt_file(prefix: &str, content: &str) -> Result<PathBuf, String> {
+  let dir = std::env::temp_dir().join("roosycozy_strategy");
+  fs::create_dir_all(&dir).map_err(|e| format!("전략자문 임시 폴더를 만들지 못했어요: {e}"))?;
+  let stamp = SystemTime::now()
+    .duration_since(UNIX_EPOCH)
+    .unwrap_or_default()
+    .as_millis();
+  let name = format!("{}_{}_{}.txt", prefix, std::process::id(), stamp);
+  let path = dir.join(name);
+  fs::write(&path, content.as_bytes()).map_err(|e| format!("전략자문 임시 프롬프트를 쓰지 못했어요: {e}"))?;
+  Ok(path)
+}
+
+fn cleanup_strategy_prompt_file(path: &Path) {
+  let _ = fs::remove_file(path);
+}
+
+fn strategy_fit_prompt_to_budget(input: &str, n_ctx: u32, max_tokens: u32) -> String {
+  let budget = (n_ctx as usize).saturating_sub(max_tokens as usize + 320).max(1400);
+  let char_count = input.chars().count();
+  if char_count <= budget {
+    return input.to_string();
+  }
+
+  let head_len = ((budget as f32) * 0.68) as usize;
+  let tail_len = budget.saturating_sub(head_len + 18);
+  let head = input.chars().take(head_len).collect::<String>();
+  let tail_chars = input.chars().rev().take(tail_len).collect::<Vec<_>>();
+  let tail = tail_chars.into_iter().rev().collect::<String>();
+  format!("{}\n\n[중간 맥락 일부 압축]\n\n{}", head.trim_end(), tail.trim_start())
+}
+
 fn emit_strategy_progress(app: Option<&AppHandle>, stage: &str, message: impl Into<String>) {
   let safe_stage = stage.trim();
   let safe_message = message.into().trim().to_string();
@@ -1657,13 +1742,13 @@ fn summarize_conversation(history: &[StrategyChatTurn]) -> String {
   history
     .iter()
     .rev()
-    .take(6)
+    .take(4)
     .collect::<Vec<_>>()
     .into_iter()
     .rev()
     .map(|turn| {
       let role = if turn.role.trim() == "user" { "사용자" } else { "어시스턴트" };
-      format!("- {}: {}", role, strategy_trim(turn.content.trim(), 240))
+      format!("- {}: {}", role, strategy_trim(&strategy_sanitize_text(turn.content.trim()), 160))
     })
     .collect::<Vec<_>>()
     .join("\n")
@@ -1704,9 +1789,9 @@ fn build_strategy_user_prompt(
       .collect::<Vec<_>>()
       .join("\n")
   };
-  let note_block = strategy_trim(strategy_note.unwrap_or("없음"), 800);
+  let note_block = strategy_trim(&strategy_sanitize_text(strategy_note.unwrap_or("없음")), 320);
   let history_block = summarize_conversation(conversation);
-  let question_block = strategy_trim(message.trim(), 600);
+  let question_block = strategy_trim(&strategy_sanitize_text(message.trim()), 360);
   let actor_block = if evidence_packet.actor_summary.is_empty() {
     "- 정리된 인물 없음".to_string()
   } else {
@@ -1748,7 +1833,7 @@ fn build_strategy_user_prompt(
       .join("\n")
   };
 
-  format!(
+  strategy_sanitize_text(&format!(
     "[현재 사건 맥락]\n{}\n\n[증거 패킷 요약]\n- {}\n- {}\n\n[핵심 인물]\n{}\n\n[시간 흐름]\n{}\n\n[위험 신호]\n{}\n\n[비어 있는 정보]\n{}\n\n[증거 참조표]\n{}\n\n[전략 메모]\n{}\n\n[직전 대화]\n{}\n\n[이번 요청]\n{}\n\n[응답 조건]\n- 한국어만 사용\n- 학교 현장에서 바로 쓰는 표현\n- 너무 긴 설명보다 핵심 위주\n- 필요한 경우 bullet 사용 가능\n- 사건에 없는 사실은 추정하지 말 것\n- '현재 근거 묶음 보기' 같은 별도 섹션 제목은 만들지 말 것\n- 근거는 답변 문장 안에 [E1]처럼 자연스럽게 섞어 쓸 것\n- 비어 있는 정보나 확인 필요 사항도 별도 큰 섹션보다 문장 말미에 자연스럽게 덧붙일 것\n- 근거가 약한 내용은 '확실하지 않음'이라고 쓸 것",
     case_block,
     evidence_packet.focus_summary,
@@ -1761,7 +1846,7 @@ fn build_strategy_user_prompt(
     note_block,
     history_block,
     question_block
-  )
+  ))
 }
 
 fn cleanup_strategy_output(raw: &str) -> String {
@@ -1939,7 +2024,8 @@ pub fn run_strategy_chat(
   conversation: &[StrategyChatTurn],
   opts: Option<StrategyChatOptions>,
 ) -> Result<StrategyChatRunResult, String> {
-  let safe_message = message.trim();
+  let safe_message_owned = strategy_sanitize_text(message.trim());
+  let safe_message = safe_message_owned.trim();
   if safe_message.is_empty() {
     return Err("질문 내용이 비어 있어요.".to_string());
   }
@@ -1960,15 +2046,28 @@ pub fn run_strategy_chat(
 
   let model_path = resolve_strategy_model_path(app)?;
   let runner = resolve_strategy_runner_path(app)?;
-  let system_prompt = build_strategy_system_prompt();
-  let user_prompt = build_strategy_user_prompt(&evidence_packet, case_item, safe_message, strategy_note, conversation);
+  let system_prompt = strategy_sanitize_text(&build_strategy_system_prompt());
   let max_tokens = opts.as_ref().and_then(|x| x.max_tokens).unwrap_or(320).clamp(64, 512);
-  let n_ctx = opts.as_ref().and_then(|x| x.n_ctx).unwrap_or(2048).clamp(1024, 4096);
+  let n_ctx = opts.as_ref().and_then(|x| x.n_ctx).unwrap_or(4096).clamp(2048, 4096);
+  let user_prompt = strategy_fit_prompt_to_budget(
+    &build_strategy_user_prompt(&evidence_packet, case_item, safe_message, strategy_note, conversation),
+    n_ctx,
+    max_tokens,
+  );
   let threads = opts.as_ref().and_then(|x| x.threads).unwrap_or(4).clamp(1, 8);
   let runner_name = runner.file_name().and_then(|x| x.to_str()).unwrap_or("llama-sidecar");
   let model_name = model_path.file_name().and_then(|x| x.to_str()).unwrap_or(STRATEGY_MODEL_FILENAME);
   emit_strategy_progress(app, "준비", format!("실행기 {} 와 모델 {} 를 찾았어요.", runner_name, model_name));
   emit_strategy_progress(app, "준비", format!("시스템 {}자 + 사용자 {}자, 컨텍스트 {}, 최대 토큰 {}로 실행해요.", system_prompt.chars().count(), user_prompt.chars().count(), n_ctx, max_tokens));
+
+  let system_prompt_file = write_strategy_prompt_file("system_prompt", &system_prompt)?;
+  let user_prompt_file = match write_strategy_prompt_file("user_prompt", &user_prompt) {
+    Ok(path) => path,
+    Err(err) => {
+      cleanup_strategy_prompt_file(&system_prompt_file);
+      return Err(err);
+    }
+  };
 
   let mut command = Command::new(&runner);
   command
@@ -1999,10 +2098,10 @@ pub fn run_strategy_chat(
     .arg("off")
     .arg("--log-colors")
     .arg("off")
-    .arg("--system-prompt")
-    .arg(&system_prompt)
-    .arg("-p")
-    .arg(&user_prompt)
+    .arg("--system-prompt-file")
+    .arg(&system_prompt_file)
+    .arg("--file")
+    .arg(&user_prompt_file)
     .stdin(Stdio::null())
     .stdout(Stdio::piped())
     .stderr(Stdio::piped());
@@ -2010,11 +2109,15 @@ pub fn run_strategy_chat(
 
   let mut child = command
     .spawn()
-    .map_err(|e| format!(
-      "내장 추론기 실행에 실패했어요. sidecar 포함 여부와 실행 권한을 확인해주세요. runner={} / 상세: {}",
-      runner.display(),
-      e
-    ))?;
+    .map_err(|e| {
+      cleanup_strategy_prompt_file(&system_prompt_file);
+      cleanup_strategy_prompt_file(&user_prompt_file);
+      format!(
+        "내장 추론기 실행에 실패했어요. sidecar 포함 여부와 실행 권한을 확인해주세요. runner={} / 상세: {}",
+        runner.display(),
+        e
+      )
+    })?;
   emit_strategy_progress(app, "실행", "전략자문 추론기를 시작했어요. 응답을 생성하고 있어요.");
 
   let stdout = child.stdout.take().ok_or_else(|| "전략자문 표준출력을 연결하지 못했어요.".to_string())?;
@@ -2078,6 +2181,8 @@ pub fn run_strategy_chat(
 
   let stdout = String::from_utf8_lossy(&stdout_handle.join().unwrap_or_default()).to_string();
   let stderr = stderr_handle.join().unwrap_or_else(|_| "stderr 수집 스레드가 비정상 종료되었어요.".to_string());
+  cleanup_strategy_prompt_file(&system_prompt_file);
+  cleanup_strategy_prompt_file(&user_prompt_file);
   let answer = finalize_strategy_answer(&cleanup_strategy_output(&stdout), &evidence_packet);
 
   if timed_out {

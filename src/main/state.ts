@@ -51,6 +51,8 @@ export const ui = {
     nextSteps: string[],
   },
   strategyChatInput: '',
+  strategyChatModel: 'hyperclova-x' as 'hyperclova-x' | 'roosy-x',
+  strategyChatModelMenuOpen: false,
   strategyChatPending: false,
   strategyChatError: '',
   strategyChatProgressLines: [] as string[],

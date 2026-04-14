@@ -19,6 +19,10 @@ function recordActorText(r: any) {
   return mains.length ? mains.map(actorShort).join(' · ') : '—';
 }
 
+function paperMultilineHtml(text: unknown) {
+  return esc(String(text || '').trim() || '-').replace(/\n/g, '<br />');
+}
+
 /* ======================================================
  * Paper styles
  * ====================================================== */
@@ -217,6 +221,17 @@ dialog.modal.paperModal > .modalHead{
   background: #f5f7fb;
   font-weight: 900;
   color: rgba(0,0,0,0.70);
+}
+.paperSummaryCell{
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.paperSummaryText{
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
 }
 .paperTable td code{
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
@@ -936,7 +951,7 @@ function renderContentProofHTML(payload: PaperPayload) {
         <td data-label="번호">${idx + 1}</td>
         <td data-label="구분">${esc(kindLabel(r.kind))}</td>
         <td data-label="일시">${esc(r.when || '-')}</td>
-        <td data-label="증빙 요지">${esc(trunc(r.summary || '-', 82))}</td>
+        <td data-label="증빙 요지" class="paperSummaryCell"><div class="paperSummaryText">${paperMultilineHtml(r.summary || '-')}</div></td>
         <td data-label="무결성 결론"><span class="paperVerdictTag ${esc(tone)}">${esc(String(r.integrityVerdict || formatIntegrityVerdict(r)))}</span></td>
         <td data-label="검증 근거"><div class="paperEvidenceMeta"><div class="paperEvidenceSub">${esc(String(r.integrityEvidence || formatIntegrityEvidence(r) || '-'))}</div></div></td>
       </tr>

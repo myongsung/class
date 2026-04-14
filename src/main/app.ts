@@ -632,6 +632,19 @@ const formatStrategyRunnerLabel = (runner: unknown) => {
   return file;
 };
 
+const normalizeStrategyModel = (value: unknown) => String(value || '').trim() === 'roosy-x' ? 'roosy-x' : 'hyperclova-x';
+
+const getStrategyChatModel = () => {
+  const next = normalizeStrategyModel((ui as any).strategyChatModel);
+  (ui as any).strategyChatModel = next;
+  return next;
+};
+
+const closeStrategyChatModelMenu = () => {
+  if (!(ui as any).strategyChatModelMenuOpen) return;
+  (ui as any).strategyChatModelMenuOpen = false;
+};
+
 const appendStrategyChatProgress = (stage: string, content: string, rerender = true) => {
   const safeStage = String(stage || '').trim();
   const safeContent = String(content || '').trim();
@@ -676,6 +689,7 @@ const clearStrategyChat = () => {
   (ui as any).strategyChatMessages = [];
   (ui as any).strategyChatInput = '';
   (ui as any).strategyChatError = '';
+  closeStrategyChatModelMenu();
   (ui as any).strategyChatPending = false;
   (ui as any).strategyChatEvidencePacket = null;
   (ui as any).strategyChatRetrievalQuery = '';
@@ -712,6 +726,7 @@ const buildStrategyNote = () => {
 };
 
 const sendStrategyAgentMessage = async (overrideMessage?: string) => {
+  getStrategyChatModel();
   const records = getStrategySelectedRecords();
   if (!records.length) {
     toast('먼저 AI 분석에 연결할 기록을 1개 이상 붙여주세요');
@@ -738,6 +753,7 @@ const sendStrategyAgentMessage = async (overrideMessage?: string) => {
   appendStrategyChatMessage('user', message);
   (ui as any).strategyChatInput = '';
   (ui as any).strategyChatError = '';
+  closeStrategyChatModelMenu();
   (ui as any).strategyChatPending = true;
   clearStrategyChatProgress();
   appendStrategyChatProgress('준비', 'AI 분석 요청을 접수했어요.', false);
@@ -752,7 +768,7 @@ const sendStrategyAgentMessage = async (overrideMessage?: string) => {
         strategyNote: buildStrategyNote(),
         conversation: history,
         maxTokens: 320,
-        nCtx: 2048,
+        nCtx: 4096,
         threads: 4,
       },
     }) as StrategyChatInvokeResult;
@@ -1590,6 +1606,7 @@ function bindEvents() {
       log('legal tab ->', next);
     },
     'open-simulation-picker': () => {
+      closeStrategyChatModelMenu();
       (ui as any).simulationPickerOpen = true;
       (ui as any).simulationPickerQuery = '';
       syncSimulationPickerSelectionFromLive();
@@ -1721,6 +1738,22 @@ function bindEvents() {
     'send-strategy-chat': async () => {
       if ((ui as any).strategyChatPending) return;
       await sendStrategyAgentMessage();
+    },
+    'toggle-strategy-model-menu': () => {
+      (ui as any).strategyChatModelMenuOpen = !(ui as any).strategyChatModelMenuOpen;
+      render();
+      log('strategy model menu', (ui as any).strategyChatModelMenuOpen ? 'open' : 'close');
+    },
+    'select-strategy-model': (btn) => {
+      const next = normalizeStrategyModel(btn.dataset.model || '');
+      if (next === 'roosy-x') {
+        toast('Roosy-X는 준비 중이에요');
+        return;
+      }
+      (ui as any).strategyChatModel = next;
+      closeStrategyChatModelMenu();
+      render();
+      log('strategy model ->', next);
     },
     'clear-strategy-chat': () => {
       clearStrategyChat();
@@ -2311,6 +2344,15 @@ function bindEvents() {
     const btn = (e.target as HTMLElement | null)?.closest<HTMLElement>('[data-action]');
     const action = btn?.dataset.action; if (!btn || !action) return;
     try { const fn = click[action]; if (fn) await fn(btn); } catch (err) { toast('오류 발생: 로그를 확인하세요'); log('ERROR', err); }
+  });
+
+  document.addEventListener('click', (e) => {
+    const target = e.target as HTMLElement | null;
+    if (!target) return;
+    if (target.closest('.strategyModelPicker')) return;
+    if (!(ui as any).strategyChatModelMenuOpen) return;
+    closeStrategyChatModelMenu();
+    render();
   });
 
 

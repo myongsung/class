@@ -22011,3 +22011,122 @@ dialog.modal.strategyPickerModal::backdrop{
 .container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyChatOnlyComposer{
   background:#ffffff !important;
 }
+
+/* =====================================================================
+   2026-04-13 strategy model picker
+   ===================================================================== */
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyModelPicker{
+  position:relative !important;
+  display:flex !important;
+  align-items:center !important;
+  flex:0 0 auto !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyModelTrigger{
+  appearance:none !important;
+  border:1px solid #e5e7eb !important;
+  background:#ffffff !important;
+  color:#64748b !important;
+  min-height:34px !important;
+  padding:0 12px !important;
+  border-radius:999px !important;
+  display:inline-flex !important;
+  align-items:center !important;
+  gap:6px !important;
+  font-size:11px !important;
+  line-height:1 !important;
+  font-weight:600 !important;
+  letter-spacing:-0.01em !important;
+  box-shadow:none !important;
+  cursor:pointer !important;
+  transition:border-color .16s ease, background-color .16s ease, color .16s ease !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyModelTrigger:hover{
+  background:#f8fafc !important;
+  border-color:#dbe2ea !important;
+  color:#475569 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyModelTriggerLabel{
+  white-space:nowrap !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyModelTriggerChevron{
+  font-size:10px !important;
+  color:#94a3b8 !important;
+  transform:translateY(-0.5px) !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyModelPicker.open .strategyModelTrigger{
+  border-color:#d6dee8 !important;
+  color:#334155 !important;
+  background:#f8fafc !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyModelMenu{
+  position:absolute !important;
+  left:0 !important;
+  bottom:calc(100% + 10px) !important;
+  min-width:196px !important;
+  padding:6px !important;
+  border-radius:16px !important;
+  border:1px solid #e5e7eb !important;
+  background:rgba(255,255,255,0.98) !important;
+  box-shadow:0 18px 40px rgba(15, 23, 42, 0.10) !important;
+  backdrop-filter:blur(16px) !important;
+  z-index:14 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyModelOption{
+  width:100% !important;
+  appearance:none !important;
+  border:none !important;
+  background:transparent !important;
+  color:#334155 !important;
+  min-height:36px !important;
+  padding:0 10px !important;
+  border-radius:12px !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:space-between !important;
+  gap:10px !important;
+  text-align:left !important;
+  font-size:12px !important;
+  line-height:1.2 !important;
+  font-weight:600 !important;
+  cursor:pointer !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyModelOption:hover{
+  background:#f8fafc !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyModelOption.active{
+  background:#f8fafc !important;
+  color:#0f172a !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyModelOption.pending{
+  color:#a0aec0 !important;
+  cursor:not-allowed !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyModelOption.pending:hover{
+  background:transparent !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyModelOptionCheck{
+  color:#64748b !important;
+  font-size:12px !important;
+  font-weight:700 !important;
+}
+
+@media (max-width: 860px){
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyModelMenu{
+    left:auto !important;
+    right:0 !important;
+    min-width:180px !important;
+  }
+}

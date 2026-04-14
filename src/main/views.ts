@@ -741,12 +741,34 @@ function renderLegalSimulationPanel() {
   const chatPending = !!(ui as any).strategyChatPending;
   const chatInput = String((ui as any).strategyChatInput || '');
   const chatError = String((ui as any).strategyChatError || '').trim();
+  const strategyChatModel = String((ui as any).strategyChatModel || 'hyperclova-x').trim() === 'roosy-x' ? 'roosy-x' : 'hyperclova-x';
+  const strategyChatModelMenuOpen = !!(ui as any).strategyChatModelMenuOpen;
   const progressLines = Array.isArray((ui as any).strategyChatProgressLines) ? ((ui as any).strategyChatProgressLines as string[]).slice(-6) : [];
   const progressStage = String((ui as any).strategyChatProgressStage || '').trim();
   const activeThreadPackageId = String((ui as any).strategyThreadPackageId || '').trim();
   const activeThreadPackage = Array.isArray((S as any).strategyThreadPackages)
     ? ((S as any).strategyThreadPackages as any[]).find((item) => String(item?.id || '') === activeThreadPackageId) || null
     : null;
+  const strategyModelLabel = strategyChatModel === 'roosy-x' ? 'Roosy-X' : 'HyperCLOVA-X';
+  const strategyModelPicker = `
+    <div class="strategyModelPicker ${strategyChatModelMenuOpen ? 'open' : ''}">
+      <button class="strategyModelTrigger" data-action="toggle-strategy-model-menu" type="button" aria-haspopup="menu" aria-expanded="${strategyChatModelMenuOpen ? 'true' : 'false'}">
+        <span class="strategyModelTriggerLabel">${esc(strategyModelLabel)}</span>
+        <span class="strategyModelTriggerChevron" aria-hidden="true">▾</span>
+      </button>
+      ${strategyChatModelMenuOpen ? `
+        <div class="strategyModelMenu" role="menu" aria-label="모델 선택">
+          <button class="strategyModelOption ${strategyChatModel === 'hyperclova-x' ? 'active' : ''}" data-action="select-strategy-model" data-model="hyperclova-x" type="button" role="menuitemradio" aria-checked="${strategyChatModel === 'hyperclova-x' ? 'true' : 'false'}">
+            <span class="strategyModelOptionText">HyperCLOVA-X</span>
+            ${strategyChatModel === 'hyperclova-x' ? '<span class="strategyModelOptionCheck">✓</span>' : ''}
+          </button>
+          <button class="strategyModelOption pending" type="button" role="menuitem" disabled aria-disabled="true" tabindex="-1">
+            <span class="strategyModelOptionText">Roosy-X(준비중)</span>
+          </button>
+        </div>
+      ` : ''}
+    </div>
+  `;
 
   const goalLabelMap: Record<string, string> = {
     stabilize: '상황을 더 키우지 않는 정리',
@@ -895,6 +917,7 @@ function renderLegalSimulationPanel() {
           <div class="strategyChatOnlyComposerBar">
             <div class="strategyChatOnlyComposerTools">
               ${H.btn(selectedRecords.length ? `기록 ${selectedRecords.length}개` : '기록 붙이기', 'open-simulation-picker', '', 'btn ghost')}
+              ${strategyModelPicker}
               <div class="strategyChatOnlyComposerHint">${chatPending ? esc(progressStage || '분석 생성 중') : 'Enter 전송 · Shift+Enter 줄바꿈'}</div>
             </div>
             <div class="strategyComposerActions">
