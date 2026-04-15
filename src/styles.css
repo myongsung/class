@@ -9284,8 +9284,8 @@ dialog.recordComposerModal{
 }
 
 .classRosterPanel{
-  width: min(calc(100vw - 28px), 560px);
-  max-width: 560px;
+  width: min(calc(100vw - 28px), 980px);
+  max-width: 980px;
   max-height: min(calc(100dvh - 28px), 860px);
   display: flex;
   flex-direction: column;
@@ -9308,9 +9308,9 @@ dialog.recordComposerModal{
 .classRosterModalBody{
   flex: 1 1 auto;
   min-height: 0;
-  padding: 14px;
+  padding: 16px;
   overflow: auto;
-  background: linear-gradient(180deg, #f7f8fb 0%, #ffffff 100%);
+  background: linear-gradient(180deg, #f8f9fb 0%, #ffffff 100%);
 }
 
 @media (max-width: 640px){
@@ -9320,7 +9320,7 @@ dialog.recordComposerModal{
   }
 
   .classRosterPanel{
-    width: min(calc(100vw - 20px), 560px);
+    width: min(calc(100vw - 20px), 980px);
     max-height: min(calc(100dvh - 20px), 860px);
     border-radius: 22px;
   }
@@ -9331,8 +9331,8 @@ dialog.recordComposerModal{
 }
 
 dialog.modal.classRosterModal.__legacy_unused__{
-  width: min(calc(100vw - 28px), 560px);
-  max-width: 560px;
+  width: min(calc(100vw - 28px), 980px);
+  max-width: 980px;
   max-height: min(calc(100dvh - 28px), 860px);
   padding: 0;
   border: none;
@@ -9360,23 +9360,23 @@ dialog.modal.classRosterModal.__legacy_unused__::backdrop{
 }
 
 .classRosterModalBody{
-  padding: 14px;
+  padding: 16px;
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
-  background: linear-gradient(180deg, #f7f8fb 0%, #ffffff 100%);
+  background: linear-gradient(180deg, #f8f9fb 0%, #ffffff 100%);
 }
 
 .classRosterHero{
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: 14px;
   margin-bottom: 14px;
-  padding: 14px;
+  padding: 14px 16px;
   border: 1px solid rgba(15, 23, 42, 0.06);
   border-radius: 18px;
   background: #ffffff;
@@ -9402,6 +9402,165 @@ dialog.modal.classRosterModal.__legacy_unused__::backdrop{
   color: #111827;
   font-size: 13px;
   font-weight: 950;
+}
+
+.relationshipManagerShell{
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 14px;
+  min-height: 440px;
+}
+
+.relationshipSidebar{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: 18px;
+  background: rgba(255,255,255,0.95);
+}
+
+.relationshipSidebarHead{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+}
+
+.relationshipSidebarLabel,
+.relationshipEditorLabel{
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8f7d6e;
+}
+
+.relationshipFolderList{
+  display: grid;
+  gap: 8px;
+}
+
+.relationshipSidebarHint{
+  margin-top: 2px;
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: #94a3b8;
+}
+
+.relationshipFolderItem{
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: 14px;
+  background: #fcfcfd;
+  color: #334155;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .18s ease, background-color .18s ease, box-shadow .18s ease;
+}
+
+.relationshipFolderItem:hover{
+  border-color: rgba(15, 23, 42, 0.12);
+  background: #ffffff;
+}
+
+.relationshipFolderItem.active{
+  border-color: rgba(34, 57, 94, 0.14);
+  background: #f6f8fb;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05);
+}
+
+.relationshipFolderGlyph{
+  font-size: 12px;
+  color: #64748b;
+}
+
+.relationshipFolderText{
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.relationshipFolderTitle{
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.3;
+  font-weight: 700;
+  color: #111827;
+}
+
+.relationshipFolderMeta{
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.relationshipEditorCard{
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: 18px;
+  background: rgba(255,255,255,0.98);
+}
+
+.relationshipEditorHead{
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.relationshipEditorMeta{
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.relationshipGroupTitleInput{
+  margin-top: 6px;
+  font-weight: 800;
+}
+
+.relationshipMemberGrid{
+  display: grid;
+  gap: 8px;
+  padding-bottom: 8px;
+  overflow-y: auto;
+}
+
+.relationshipMemberRow{
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+}
+
+.relationshipRemoveBtn,
+.relationshipAddBtn{
+  white-space: nowrap;
+}
+
+.relationshipSidebarAddBtn{
+  min-height: 28px !important;
+  height: 28px !important;
+  padding: 0 10px !important;
+  border-radius: 999px !important;
+  white-space: nowrap;
+  font-size: 10.5px !important;
+  font-weight: 700 !important;
+}
+
+.relationshipSidebarAddBtn[disabled]{
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.relationshipEmptyHint{
+  padding: 6px 2px 2px;
+  font-size: 12px;
 }
 
 .classRosterGrid{
@@ -9467,6 +9626,23 @@ dialog.modal.classRosterModal.__legacy_unused__::backdrop{
 
   .classRosterCount{
     width: fit-content;
+  }
+
+  .relationshipManagerShell{
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+
+  .relationshipSidebar{
+    padding: 12px;
+  }
+
+  .relationshipEditorCard{
+    padding: 14px;
+  }
+
+  .relationshipEditorHead{
+    grid-template-columns: 1fr;
   }
 }
 
@@ -18402,10 +18578,15 @@ body{
 .container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyChatOnlyComposerBar{
   align-items: center !important;
   gap: 12px !important;
+  flex-wrap: wrap !important;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyChatOnlyComposerTools{
   gap: 10px !important;
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyChatOnlyComposerTools .btn.ghost{
@@ -18419,6 +18600,8 @@ body{
 .container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyChatOnlyComposerHint{
   font-size: 10.5px !important;
   color: #94a3b8 !important;
+  flex: 0 1 auto !important;
+  min-width: 0 !important;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyComposerTextareaOnly{
@@ -19548,6 +19731,13 @@ body{
   font-size: var(--compact-font-sm);
 }
 
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseCreateFlow .fieldSubLabel{
+  margin: 10px 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #6b7280;
+}
+
 .container.mobileRefined.iphonePremium.fluidDesktopShell .caseCreateFlow textarea,
 .container.mobileRefined.iphonePremium.fluidDesktopShell .caseCreateFlow input,
 .container.mobileRefined.iphonePremium.fluidDesktopShell .caseCreateFlow select{
@@ -19941,6 +20131,643 @@ dialog.recordComposerModal[open]{
 }
 
 /* =====================================================================
+   2026-04-15 quick capture modal refresh
+   - tossbank-like minimal white sheet
+   - smaller type, lighter weight, quieter sections
+   ===================================================================== */
+
+dialog.recordComposerModal[open]{
+  width: min(820px, calc(100vw - 40px)) !important;
+  max-width: 820px !important;
+  height: min(740px, calc(100dvh - 36px)) !important;
+  max-height: min(740px, calc(100dvh - 36px)) !important;
+  border-radius: 22px !important;
+  background: #ffffff !important;
+  box-shadow: 0 24px 64px rgba(15, 23, 42, 0.08) !important;
+}
+
+.recordComposerModal::backdrop,
+dialog.recordComposerModal::backdrop{
+  background: rgba(15, 23, 42, 0.18) !important;
+  backdrop-filter: blur(6px);
+}
+
+.recordComposerModal .modalHead{
+  padding: 14px 18px !important;
+  border-bottom: 1px solid #f0f2f5 !important;
+  background: rgba(255, 255, 255, 0.98) !important;
+  backdrop-filter: none !important;
+}
+
+.recordComposerModal .modalHead .h2{
+  font-size: 16px !important;
+  line-height: 1.28 !important;
+  letter-spacing: -0.025em !important;
+  font-weight: 640 !important;
+  color: #191f28 !important;
+}
+
+.recordComposerModal .modalHead .muted{
+  margin-top: 4px !important;
+  font-size: 11.5px !important;
+  line-height: 1.52 !important;
+  color: #8b95a1 !important;
+}
+
+.recordComposerModal .modalHead .btn{
+  min-height: 30px !important;
+  height: 30px !important;
+  padding: 0 11px !important;
+  border-radius: 999px !important;
+  border: 1px solid #eceff3 !important;
+  background: #ffffff !important;
+  color: #4e5968 !important;
+  font-size: 11.5px !important;
+  font-weight: 560 !important;
+  box-shadow: none !important;
+}
+
+.recordComposerModal .recordComposerModalBody{
+  padding: 14px !important;
+  background: #ffffff !important;
+}
+
+.recordComposerModal .recordFormSimple{
+  gap: 10px;
+}
+
+.recordComposerModal .recordFormStatusBar{
+  padding: 2px 2px 8px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  border-bottom: 1px solid #f3f4f6 !important;
+}
+
+.recordComposerModal .recordFormKicker{
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.12em !important;
+  color: #a0a8b3 !important;
+}
+
+.recordComposerModal .recordFormTitle{
+  margin-top: 4px !important;
+  font-size: 20px !important;
+  line-height: 1.22 !important;
+  letter-spacing: -0.045em !important;
+  font-weight: 650 !important;
+  color: #191f28 !important;
+}
+
+.recordComposerModal .recordFormSub{
+  margin-top: 6px !important;
+  font-size: 12px !important;
+  line-height: 1.62 !important;
+  color: #8b95a1 !important;
+  max-width: 54ch;
+}
+
+.recordComposerModal .recordFormTopActions{
+  gap: 8px !important;
+  align-items: center !important;
+}
+
+.recordComposerModal .recordFormStatusPill{
+  min-height: 26px !important;
+  padding: 0 10px !important;
+  border-radius: 999px !important;
+  border: 1px solid #e8edf3 !important;
+  background: #f8fafc !important;
+  color: #6b7684 !important;
+  font-size: 10.5px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.01em !important;
+}
+
+.recordComposerModal .recordFormStatusPill.ready{
+  background: #eef6ff !important;
+  border-color: #d9e8ff !important;
+  color: #3182f6 !important;
+}
+
+.recordComposerModal .recordFormStatusPill.warn{
+  background: #f8fafc !important;
+  border-color: #e8edf3 !important;
+  color: #6b7684 !important;
+}
+
+.recordComposerModal .recordFormGhostBtn{
+  min-height: 30px !important;
+  height: 30px !important;
+  padding: 0 11px !important;
+  border-radius: 999px !important;
+  border: 1px solid #eceff3 !important;
+  background: #ffffff !important;
+  color: #6b7684 !important;
+  font-size: 11px !important;
+  font-weight: 560 !important;
+}
+
+.recordComposerModal .recordFormCard,
+.recordComposerModal .recordRelatedDetails,
+.recordComposerModal .recordFormFooter{
+  border: 1px solid #f0f2f5 !important;
+  border-radius: 18px !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+}
+
+.recordComposerModal .recordFormCard{
+  padding: 14px 15px !important;
+}
+
+.recordComposerModal .recordFormCardHead{
+  margin-bottom: 10px !important;
+}
+
+.recordComposerModal .recordFormCardTitle{
+  font-size: 13px !important;
+  line-height: 1.32 !important;
+  font-weight: 620 !important;
+  color: #191f28 !important;
+}
+
+.recordComposerModal .recordFormCardDesc{
+  margin-top: 4px !important;
+  font-size: 11.5px !important;
+  line-height: 1.55 !important;
+  color: #8b95a1 !important;
+}
+
+.recordComposerModal .recordFormGrid{
+  gap: 9px !important;
+}
+
+.recordComposerModal .recordFormCard .field,
+.recordComposerModal .recordRelatedPanel .field{
+  gap: 5px;
+}
+
+.recordComposerModal .recordFormCard label,
+.recordComposerModal .recordRelatedPanel label{
+  font-size: 11px !important;
+  line-height: 1.4 !important;
+  font-weight: 570 !important;
+  color: #4e5968 !important;
+}
+
+.recordComposerModal .recordFormCard input,
+.recordComposerModal .recordFormCard select,
+.recordComposerModal .recordFormCard textarea,
+.recordComposerModal .recordRelatedPanel input,
+.recordComposerModal .recordRelatedPanel select,
+.recordComposerModal .recordRelatedPanel textarea{
+  min-height: 36px !important;
+  padding: 9px 11px !important;
+  border-radius: 14px !important;
+  border: 1px solid #edf1f5 !important;
+  background: #fbfcfd !important;
+  color: #191f28 !important;
+  font-size: 12px !important;
+  line-height: 1.58 !important;
+  font-weight: 430 !important;
+  box-shadow: none !important;
+}
+
+.recordComposerModal .recordFormCard input::placeholder,
+.recordComposerModal .recordFormCard textarea::placeholder,
+.recordComposerModal .recordRelatedPanel input::placeholder,
+.recordComposerModal .recordRelatedPanel textarea::placeholder{
+  color: #b0b8c1 !important;
+}
+
+.recordComposerModal .recordFormCard input:focus,
+.recordComposerModal .recordFormCard select:focus,
+.recordComposerModal .recordFormCard textarea:focus,
+.recordComposerModal .recordRelatedPanel input:focus,
+.recordComposerModal .recordRelatedPanel select:focus,
+.recordComposerModal .recordRelatedPanel textarea:focus{
+  border-color: #cfe0ff !important;
+  background: #ffffff !important;
+  box-shadow: 0 0 0 3px rgba(49, 130, 246, 0.08) !important;
+}
+
+.recordComposerModal .recordFormCard textarea,
+.recordComposerModal .recordRelatedPanel textarea{
+  min-height: 66px !important;
+}
+
+.recordComposerModal .simpleComposerTextarea{
+  min-height: 88px !important;
+}
+
+.recordComposerModal .recordFormFieldCard,
+.recordComposerModal .recordFormActorCard{
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.recordComposerModal .recordRelatedDetails{
+  overflow: hidden;
+}
+
+.recordComposerModal .recordRelatedDetails > summary{
+  padding: 13px 15px !important;
+  font-size: 12px !important;
+  line-height: 1.4 !important;
+  font-weight: 600 !important;
+  color: #191f28 !important;
+  background: #ffffff !important;
+}
+
+.recordComposerModal .recordRelatedDetails > summary:hover{
+  background: #fbfcfd !important;
+}
+
+.recordComposerModal .recordMetaFoldBody,
+.recordComposerModal .recordRelatedPanel,
+.recordComposerModal .recordMetaFoldCard{
+  padding-left: 15px !important;
+  padding-right: 15px !important;
+  padding-bottom: 15px !important;
+  background: #ffffff !important;
+}
+
+.recordComposerModal .metaMoreCount,
+.recordComposerModal .composerFoldHint{
+  font-size: 10.5px !important;
+  font-weight: 560 !important;
+  color: #a0a8b3 !important;
+}
+
+.recordComposerModal .gatherActorRow,
+.recordComposerModal .gatherRelatedRow,
+.recordComposerModal .gatherInlineRow{
+  gap: 6px !important;
+  align-items: stretch !important;
+}
+
+.recordComposerModal .gatherActorRow .btn.small,
+.recordComposerModal .gatherRelatedRow .btn.small,
+.recordComposerModal .gatherNowBtn{
+  min-height: 36px !important;
+  height: 36px !important;
+  padding: 0 12px !important;
+  border-radius: 12px !important;
+  border: 1px solid #eceff3 !important;
+  background: #ffffff !important;
+  color: #4e5968 !important;
+  font-size: 11.5px !important;
+  font-weight: 560 !important;
+  box-shadow: none !important;
+}
+
+.recordComposerModal .gatherActorChips{
+  gap: 6px !important;
+}
+
+.recordComposerModal .gatherActorChips .chip,
+.recordComposerModal .chips.mini .chip{
+  min-height: 25px !important;
+  padding: 0 9px !important;
+  border-radius: 999px !important;
+  border: 1px solid #edf1f5 !important;
+  background: #fafbfc !important;
+  color: #4e5968 !important;
+  font-size: 10.5px !important;
+  font-weight: 540 !important;
+}
+
+.recordComposerModal .gatherMutedHint,
+.recordComposerModal .composerEmptyHint{
+  font-size: 11px !important;
+  line-height: 1.5 !important;
+  color: #a0a8b3 !important;
+}
+
+.recordComposerModal .simpleWarn,
+.recordComposerModal .miniWarn.simpleWarn{
+  margin-top: 6px !important;
+  padding: 6px 9px !important;
+  border-radius: 11px !important;
+  background: #fff7f7 !important;
+  color: #d14343 !important;
+  font-size: 10.5px !important;
+  font-weight: 560 !important;
+}
+
+.recordComposerModal .recordFormFooter{
+  padding: 13px 15px !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  gap: 10px !important;
+}
+
+.recordComposerModal .recordFormFooterText{
+  font-size: 11px !important;
+  line-height: 1.5 !important;
+  color: #8b95a1 !important;
+}
+
+.recordComposerModal .recordFormSaveBtn{
+  min-width: 112px !important;
+  height: 38px !important;
+  padding: 0 15px !important;
+  border-radius: 13px !important;
+  border: 1px solid transparent !important;
+  background: #3182f6 !important;
+  color: #ffffff !important;
+  font-size: 12px !important;
+  font-weight: 620 !important;
+  box-shadow: none !important;
+}
+
+.recordComposerModal .recordFormSaveBtn[disabled]{
+  background: #eef2f6 !important;
+  color: #a0a8b3 !important;
+}
+
+@media (max-width: 720px){
+  dialog.recordComposerModal[open]{
+    width: min(calc(100vw - 16px), 100vw) !important;
+    height: min(calc(100dvh - 16px), 100dvh) !important;
+    max-height: min(calc(100dvh - 16px), 100dvh) !important;
+    border-radius: 18px !important;
+  }
+
+  .recordComposerModal .modalHead,
+  .recordComposerModal .recordComposerModalBody{
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+
+  .recordComposerModal .recordFormStatusBar{
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  .recordComposerModal .recordFormTitle{
+    font-size: 18px !important;
+  }
+}
+
+/* 2026-04-15 quick capture input-first refinement */
+.recordComposerModal .modalHead{
+  padding-top: 12px !important;
+  padding-bottom: 12px !important;
+}
+
+.recordComposerModal .modalHead .muted{
+  font-size: 10.5px !important;
+  line-height: 1.45 !important;
+}
+
+.recordComposerModal .recordComposerModalBody{
+  padding: 12px !important;
+}
+
+.recordComposerModal .recordFormSimple{
+  gap: 8px !important;
+}
+
+.recordComposerModal .recordFormStatusBar{
+  padding: 0 0 6px !important;
+  align-items: flex-start !important;
+}
+
+.recordComposerModal .recordFormTitle{
+  margin-top: 0 !important;
+  font-size: 18px !important;
+  line-height: 1.2 !important;
+}
+
+.recordComposerModal .recordFormSub{
+  margin-top: 3px !important;
+  font-size: 11px !important;
+  line-height: 1.5 !important;
+  max-width: 40ch !important;
+}
+
+.recordComposerModal .recordFormTopActions{
+  gap: 6px !important;
+}
+
+.recordComposerModal .recordFormStatusPill,
+.recordComposerModal .recordFormGhostBtn{
+  min-height: 25px !important;
+  height: 25px !important;
+  padding: 0 9px !important;
+  font-size: 10px !important;
+}
+
+.recordComposerModal .recordFormCard{
+  padding: 12px 13px !important;
+  border-radius: 16px !important;
+}
+
+.recordComposerModal .recordFormCardHead{
+  margin-bottom: 8px !important;
+}
+
+.recordComposerModal .recordFormCardTitle{
+  font-size: 12px !important;
+  font-weight: 610 !important;
+}
+
+.recordComposerModal .recordFormCardDesc{
+  font-size: 10.5px !important;
+  line-height: 1.45 !important;
+}
+
+.recordComposerModal .recordFormCard .field,
+.recordComposerModal .recordRelatedPanel .field{
+  gap: 4px !important;
+}
+
+.recordComposerModal .recordRelatedDetails > summary{
+  padding: 11px 13px !important;
+  font-size: 11.5px !important;
+}
+
+.recordComposerModal .recordMetaFoldBody,
+.recordComposerModal .recordRelatedPanel,
+.recordComposerModal .recordMetaFoldCard{
+  padding-left: 13px !important;
+  padding-right: 13px !important;
+  padding-bottom: 13px !important;
+}
+
+.recordComposerModal .recordFormFooter{
+  padding: 11px 13px !important;
+}
+
+.recordComposerModal .recordFormFooterText{
+  font-size: 10.5px !important;
+}
+
+/* 2026-04-15 quick capture flat minimal pass */
+.recordComposerModal .recordFormStatusBar{
+  border-bottom: 0 !important;
+  padding-bottom: 2px !important;
+}
+
+.recordComposerModal .recordFormTopActions{
+  align-items: center !important;
+}
+
+.recordComposerModal .recordFormStatusText{
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  font-size: 10.5px;
+  line-height: 1;
+  font-weight: 560;
+  color: #8b95a1;
+  white-space: nowrap;
+}
+
+.recordComposerModal .recordFormStatusText.ready{
+  color: #3182f6;
+}
+
+.recordComposerModal .recordFormStatusText.warn{
+  color: #8b95a1;
+}
+
+.recordComposerModal .recordFormGhostBtn{
+  min-height: 24px !important;
+  height: 24px !important;
+  padding: 0 8px !important;
+  border: 0 !important;
+  background: transparent !important;
+  color: #8b95a1 !important;
+}
+
+.recordComposerModal .recordFormCard,
+.recordComposerModal .recordFormFooter,
+.recordComposerModal .recordRelatedDetails{
+  border-color: #f3f4f6 !important;
+  border-radius: 14px !important;
+}
+
+.recordComposerModal .recordFormCard{
+  padding: 11px 12px !important;
+}
+
+.recordComposerModal .recordFormCardHead{
+  margin-bottom: 7px !important;
+}
+
+.recordComposerModal .recordFormCardTitle{
+  font-size: 11.5px !important;
+  font-weight: 600 !important;
+  color: #333d4b !important;
+}
+
+.recordComposerModal .recordFormCardDesc{
+  margin-top: 2px !important;
+  font-size: 10px !important;
+  line-height: 1.42 !important;
+  color: #a0a8b3 !important;
+}
+
+.recordComposerModal .recordFormGrid{
+  gap: 8px !important;
+}
+
+.recordComposerModal .recordFormCard label,
+.recordComposerModal .recordRelatedPanel label{
+  font-size: 10.5px !important;
+  font-weight: 550 !important;
+  color: #6b7684 !important;
+}
+
+.recordComposerModal .recordFormCard input,
+.recordComposerModal .recordFormCard select,
+.recordComposerModal .recordFormCard textarea,
+.recordComposerModal .recordRelatedPanel input,
+.recordComposerModal .recordRelatedPanel select,
+.recordComposerModal .recordRelatedPanel textarea{
+  min-height: 34px !important;
+  padding: 8px 10px !important;
+  border-radius: 12px !important;
+  border-color: #eef1f4 !important;
+  background: #ffffff !important;
+  font-size: 11.5px !important;
+}
+
+.recordComposerModal .recordFormCard textarea,
+.recordComposerModal .recordRelatedPanel textarea{
+  min-height: 62px !important;
+}
+
+.recordComposerModal .simpleComposerTextarea{
+  min-height: 82px !important;
+}
+
+.recordComposerModal .recordFormPrimaryMeta,
+.recordComposerModal .recordFormSecondaryCard{
+  background: #ffffff !important;
+}
+
+.recordComposerModal .recordRelatedDetails > summary{
+  padding: 10px 12px !important;
+  font-size: 11px !important;
+  color: #4e5968 !important;
+}
+
+.recordComposerModal .metaMoreCount,
+.recordComposerModal .composerFoldHint{
+  font-size: 10px !important;
+  color: #b0b8c1 !important;
+}
+
+.recordComposerModal .recordRelatedPanel,
+.recordComposerModal .recordMetaFoldBody,
+.recordComposerModal .recordMetaFoldCard{
+  padding-left: 12px !important;
+  padding-right: 12px !important;
+  padding-bottom: 12px !important;
+}
+
+.recordComposerModal .gatherActorRow .btn.small,
+.recordComposerModal .gatherRelatedRow .btn.small,
+.recordComposerModal .gatherNowBtn{
+  min-height: 34px !important;
+  height: 34px !important;
+  padding: 0 10px !important;
+  border-radius: 11px !important;
+  font-size: 11px !important;
+}
+
+.recordComposerModal .gatherActorChips .chip,
+.recordComposerModal .chips.mini .chip{
+  min-height: 23px !important;
+  font-size: 10px !important;
+}
+
+.recordComposerModal .recordFormFooter{
+  padding: 10px 12px !important;
+  border-radius: 12px !important;
+  background: #fbfcfd !important;
+}
+
+.recordComposerModal .recordFormFooterText{
+  font-size: 10px !important;
+  color: #a0a8b3 !important;
+}
+
+.recordComposerModal .recordFormSaveBtn{
+  min-width: 104px !important;
+  height: 36px !important;
+  border-radius: 12px !important;
+  font-size: 11.5px !important;
+}
+
+/* =====================================================================
    2026-04-09 home workspace refresh
    - cleaner hero
    - wider dashboard grid
@@ -19948,24 +20775,22 @@ dialog.recordComposerModal[open]{
    ===================================================================== */
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeWorkspace{
-  width:min(100%, 1240px) !important;
-  max-width:1240px !important;
+  width:min(100%, 1180px) !important;
+  max-width:1180px !important;
   margin:0 auto !important;
-  gap:18px !important;
+  gap:12px !important;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroPanel{
   display:grid;
   grid-template-columns:minmax(0, 1.45fr) minmax(300px, 0.9fr);
-  gap:20px;
+  gap:14px;
   align-items:stretch;
-  padding:30px;
-  border-radius:30px;
-  border:1px solid #e9e2db;
-  background:
-    radial-gradient(circle at top left, rgba(255,255,255,0.96), rgba(255,255,255,0) 42%),
-    linear-gradient(135deg, #fcfaf7 0%, #f7f4ee 36%, #ffffff 100%);
-  box-shadow:0 30px 70px rgba(15,23,42,0.06);
+  padding:22px;
+  border-radius:22px;
+  border:1px solid #eee7df;
+  background:#fffdfa;
+  box-shadow:0 12px 28px rgba(15,23,42,0.035);
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroContent{
@@ -19973,77 +20798,77 @@ dialog.recordComposerModal[open]{
   display:flex;
   flex-direction:column;
   justify-content:space-between;
-  gap:16px;
+  gap:10px;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroEyebrow{
-  font-size:11px;
-  font-weight:800;
-  letter-spacing:0.18em;
+  font-size:10px;
+  font-weight:650;
+  letter-spacing:0.16em;
   text-transform:uppercase;
-  color:#97765d;
+  color:#a08772;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroTitle{
-  max-width:11ch;
-  font-size:clamp(30px, 3vw, 44px);
-  line-height:1.04;
-  letter-spacing:-0.06em;
-  font-weight:860;
+  max-width:12ch;
+  font-size:clamp(22px, 2.1vw, 32px);
+  line-height:1.06;
+  letter-spacing:-0.055em;
+  font-weight:740;
   color:#171717;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroText{
-  max-width:64ch;
-  font-size:14px;
-  line-height:1.78;
-  color:#57534e;
+  max-width:58ch;
+  font-size:12.5px;
+  line-height:1.64;
+  color:#6b6258;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroActions{
   display:flex;
   flex-wrap:wrap;
-  gap:10px;
+  gap:8px;
   align-items:center;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroActions .btn{
-  min-height:44px !important;
-  height:44px !important;
-  padding:0 16px !important;
-  border-radius:14px !important;
-  font-size:12px !important;
-  font-weight:750 !important;
+  min-height:36px !important;
+  height:36px !important;
+  padding:0 13px !important;
+  border-radius:11px !important;
+  font-size:11px !important;
+  font-weight:620 !important;
   box-shadow:none !important;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroActions .btn.primary{
-  background:#18181b !important;
-  border:1px solid rgba(24,24,27,0.08) !important;
+  background:#23262d !important;
+  border:1px solid rgba(35,38,45,0.08) !important;
   color:#ffffff !important;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroActions .btn.ghost{
-  background:rgba(255,255,255,0.78) !important;
-  border:1px solid rgba(24,24,27,0.08) !important;
-  color:#27272a !important;
+  background:rgba(255,255,255,0.92) !important;
+  border:1px solid rgba(24,24,27,0.07) !important;
+  color:#52525b !important;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroQuietAction{
-  color:#6b7280 !important;
+  color:#7b7b86 !important;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroAside{
   min-width:0;
   display:flex;
   flex-direction:column;
-  gap:14px;
-  padding:20px;
-  border-radius:24px;
-  border:1px solid rgba(24,24,27,0.08);
-  background:rgba(255,255,255,0.78);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,0.85);
-  backdrop-filter:blur(14px);
+  gap:10px;
+  padding:16px;
+  border-radius:18px;
+  border:1px solid rgba(24,24,27,0.07);
+  background:rgba(255,255,255,0.9);
+  box-shadow:none;
+  backdrop-filter:none;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroAsideTop,
@@ -20055,22 +20880,22 @@ dialog.recordComposerModal[open]{
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroAsideMeta{
-  font-size:11px;
-  font-weight:700;
+  font-size:10px;
+  font-weight:560;
   letter-spacing:0.03em;
-  color:#9a8b7d;
+  color:#a09489;
   white-space:nowrap;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeProgressPill{
   display:inline-flex;
   align-items:center;
-  min-height:28px;
-  padding:0 11px;
+  min-height:24px;
+  padding:0 9px;
   border-radius:999px;
   border:1px solid transparent;
-  font-size:11px;
-  font-weight:800;
+  font-size:10px;
+  font-weight:620;
   letter-spacing:0.04em;
 }
 
@@ -20106,18 +20931,18 @@ dialog.recordComposerModal[open]{
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroAsideTitle,
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeFocusTitle{
-  font-size:23px;
-  line-height:1.2;
-  letter-spacing:-0.045em;
-  font-weight:800;
+  font-size:18px;
+  line-height:1.22;
+  letter-spacing:-0.04em;
+  font-weight:690;
   color:#18181b;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroAsideText,
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeFocusSummary{
-  font-size:13px;
-  line-height:1.72;
-  color:#57534e;
+  font-size:12px;
+  line-height:1.6;
+  color:#6c6259;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeProgressList{
@@ -20126,80 +20951,80 @@ dialog.recordComposerModal[open]{
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeProgressItem{
-  padding:12px 0 0;
-  font-size:12.5px;
-  line-height:1.68;
-  color:#44403c;
+  padding:9px 0 0;
+  font-size:11px;
+  line-height:1.56;
+  color:#5a554f;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeProgressItem + .homeProgressItem{
-  margin-top:10px;
+  margin-top:8px;
   border-top:1px solid rgba(24,24,27,0.08);
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroAsideFooter{
   margin-top:auto;
-  padding-top:12px;
+  padding-top:10px;
   border-top:1px solid rgba(24,24,27,0.08);
-  font-size:11.5px;
-  line-height:1.55;
-  color:#8a7c70;
+  font-size:10.5px;
+  line-height:1.48;
+  color:#92867b;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeStatRail{
   display:grid;
   grid-template-columns:repeat(4, minmax(0, 1fr));
-  gap:14px;
+  gap:10px;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeStatCard{
   min-width:0;
   display:flex;
   flex-direction:column;
-  gap:8px;
-  padding:18px 20px;
-  border-radius:22px;
+  gap:6px;
+  padding:14px 16px;
+  border-radius:16px;
   border:1px solid #ece5de;
   background:#ffffff;
-  box-shadow:0 18px 40px rgba(15,23,42,0.04);
+  box-shadow:0 10px 24px rgba(15,23,42,0.03);
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeStatLabel{
-  font-size:11px;
-  font-weight:800;
-  letter-spacing:0.14em;
+  font-size:10px;
+  font-weight:620;
+  letter-spacing:0.12em;
   text-transform:uppercase;
-  color:#97765d;
+  color:#a08772;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeStatValue{
-  font-size:34px;
+  font-size:26px;
   line-height:1;
-  letter-spacing:-0.08em;
-  font-weight:860;
+  letter-spacing:-0.06em;
+  font-weight:710;
   color:#18181b;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeStatNote{
-  font-size:12.5px;
-  line-height:1.62;
-  color:#6b7280;
+  font-size:11px;
+  line-height:1.48;
+  color:#7a7f8a;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeDashboardMatrix{
   display:grid;
   grid-template-columns:repeat(12, minmax(0, 1fr));
-  gap:14px;
+  gap:10px;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homePanel{
   grid-column:span 4;
   min-width:0;
-  padding:20px;
-  border-radius:24px;
+  padding:16px;
+  border-radius:18px;
   border:1px solid #ece5de;
   background:#ffffff;
-  box-shadow:0 18px 45px rgba(15,23,42,0.04);
+  box-shadow:0 10px 24px rgba(15,23,42,0.03);
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homePanelWide{
@@ -20222,24 +21047,24 @@ dialog.recordComposerModal[open]{
   display:flex;
   align-items:flex-start;
   justify-content:space-between;
-  gap:12px;
-  margin-bottom:14px;
+  gap:8px;
+  margin-bottom:10px;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homePanelTitle{
-  font-size:18px;
+  font-size:15px;
   line-height:1.25;
-  letter-spacing:-0.04em;
-  font-weight:800;
+  letter-spacing:-0.035em;
+  font-weight:690;
   color:#18181b;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homePanelText{
-  margin-top:6px;
+  margin-top:4px;
   max-width:40ch;
-  font-size:13px;
-  line-height:1.68;
-  color:#6b7280;
+  font-size:11px;
+  line-height:1.5;
+  color:#7a7f8a;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeChecklist,
@@ -20247,7 +21072,7 @@ dialog.recordComposerModal[open]{
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeEntryList{
   display:flex;
   flex-direction:column;
-  gap:12px;
+  gap:8px;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeChecklistItem,
@@ -20256,8 +21081,8 @@ dialog.recordComposerModal[open]{
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeEntryEmpty{
   width:100%;
   min-width:0;
-  padding:14px 16px;
-  border-radius:18px;
+  padding:10px 12px;
+  border-radius:14px;
   border:1px solid #efe9e2;
   background:#fbfaf8;
 }
@@ -20265,82 +21090,83 @@ dialog.recordComposerModal[open]{
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeChecklistItem{
   display:flex;
   align-items:flex-start;
-  gap:12px;
+  gap:10px;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeChecklistNumber{
   display:inline-flex;
   align-items:center;
   justify-content:center;
-  width:26px;
-  height:26px;
-  flex:0 0 26px;
+  width:20px;
+  height:20px;
+  flex:0 0 20px;
   border-radius:999px;
   background:#18181b;
   color:#ffffff;
-  font-size:11px;
-  font-weight:800;
+  font-size:9px;
+  font-weight:650;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeChecklistText{
-  font-size:14px;
-  line-height:1.66;
-  color:#292524;
+  font-size:12px;
+  line-height:1.5;
+  color:#35302c;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeSignalItem{
-  font-size:13.5px;
-  line-height:1.72;
-  color:#292524;
-  background:linear-gradient(180deg, #faf8f5, #ffffff);
+  font-size:11.5px;
+  line-height:1.52;
+  color:#35302c;
+  background:#fcfbf9;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeFocusTags{
   display:flex;
   flex-wrap:wrap;
-  gap:8px;
-  margin-top:16px;
+  gap:6px;
+  margin-top:12px;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeInlineStat{
   display:inline-flex;
   align-items:center;
-  min-height:30px;
-  padding:0 11px;
+  min-height:24px;
+  padding:0 9px;
   border-radius:999px;
   border:1px solid rgba(24,24,27,0.08);
   background:rgba(255,255,255,0.84);
-  font-size:11px;
-  font-weight:750;
+  font-size:10px;
+  font-weight:560;
   color:#4b5563;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeFocusActionRow{
   display:flex;
   flex-wrap:wrap;
-  gap:10px;
-  margin-top:18px;
+  gap:8px;
+  margin-top:12px;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeFocusActionRow .btn{
-  min-height:40px !important;
-  height:40px !important;
-  padding:0 14px !important;
-  border-radius:12px !important;
-  font-size:12px !important;
+  min-height:34px !important;
+  height:34px !important;
+  padding:0 12px !important;
+  border-radius:10px !important;
+  font-size:10.5px !important;
+  font-weight:620 !important;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeEntryButton{
   text-align:left;
   cursor:pointer;
-  transition:transform .18s ease, border-color .18s ease, background-color .18s ease, box-shadow .18s ease;
+  transition:border-color .18s ease, background-color .18s ease, box-shadow .18s ease;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeEntryButton:hover{
-  transform:translateY(-2px);
-  border-color:#d8cfc6;
+  transform:none;
+  border-color:#e2d8ce;
   background:#ffffff;
-  box-shadow:0 16px 26px rgba(15,23,42,0.05);
+  box-shadow:0 8px 18px rgba(15,23,42,0.035);
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeEntryButtonRisk{
@@ -20351,7 +21177,7 @@ dialog.recordComposerModal[open]{
   display:flex;
   align-items:flex-start;
   justify-content:space-between;
-  gap:12px;
+  gap:8px;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeEntryTopLoose{
@@ -20360,36 +21186,36 @@ dialog.recordComposerModal[open]{
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeEntryTitle{
   min-width:0;
-  font-size:14px;
-  line-height:1.52;
-  font-weight:750;
+  font-size:12px;
+  line-height:1.42;
+  font-weight:630;
   color:#18181b;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeEntryMeta{
   flex:0 0 auto;
-  font-size:11px;
-  color:#a8a29e;
+  font-size:10px;
+  color:#b0aba6;
   white-space:nowrap;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeEntrySub{
-  margin-top:8px;
-  font-size:12.5px;
-  line-height:1.68;
-  color:#57534e;
+  margin-top:6px;
+  font-size:11px;
+  line-height:1.48;
+  color:#6b6258;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeRiskTitle{
-  margin-top:10px;
+  margin-top:6px;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeEntryEmpty{
   border-style:dashed;
   background:#fafaf9;
-  font-size:13px;
-  line-height:1.72;
-  color:#6b7280;
+  font-size:11px;
+  line-height:1.52;
+  color:#7a7f8a;
 }
 
 @media (max-width: 1180px){
@@ -22023,6 +22849,67 @@ dialog.modal.strategyPickerModal::backdrop{
   flex:0 0 auto !important;
 }
 
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyHybridDesk{
+  display:inline-flex !important;
+  align-items:center !important;
+  flex:0 1 auto !important;
+  flex-wrap:wrap !important;
+  gap:8px !important;
+  min-height:28px !important;
+  max-width:100% !important;
+  padding:4px 10px !important;
+  border-radius:16px !important;
+  border:1px solid #dbe7f3 !important;
+  background:#f1f6fb !important;
+  white-space:normal !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyHybridDeskKicker{
+  color:#6e8298 !important;
+  font-size:10px !important;
+  line-height:1 !important;
+  font-weight:700 !important;
+  letter-spacing:-0.01em !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyHybridDeskRoleInline{
+  display:inline-flex !important;
+  align-items:center !important;
+  flex-wrap:wrap !important;
+  gap:5px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyHybridDeskRoleInline strong{
+  color:#304256 !important;
+  font-size:10.5px !important;
+  line-height:1 !important;
+  font-weight:700 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyHybridDeskRoleInline em{
+  color:#7a8ea4 !important;
+  font-size:10px !important;
+  line-height:1 !important;
+  font-style:normal !important;
+  font-weight:600 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyHybridDeskDivider{
+  color:#9caec0 !important;
+  font-size:10px !important;
+  line-height:1 !important;
+  font-weight:700 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyComposerActions{
+  flex:0 0 auto !important;
+  margin-left:auto !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyModelPicker.isStatic .strategyModelTrigger{
+  cursor:default !important;
+}
+
 .container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyModelTrigger{
   appearance:none !important;
   border:1px solid #e5e7eb !important;
@@ -22047,6 +22934,12 @@ dialog.modal.strategyPickerModal::backdrop{
   background:#f8fafc !important;
   border-color:#dbe2ea !important;
   color:#475569 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyModelPicker.isStatic .strategyModelTrigger:hover{
+  background:#ffffff !important;
+  border-color:#e5e7eb !important;
+  color:#64748b !important;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyModelTriggerLabel{
@@ -22129,4 +23022,365 @@ dialog.modal.strategyPickerModal::backdrop{
     right:0 !important;
     min-width:180px !important;
   }
+}
+
+/* =====================================================================
+   2026-04-15 strategy chat pending polish
+   ===================================================================== */
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyPendingHero{
+  display:flex !important;
+  align-items:flex-start !important;
+  gap:12px !important;
+  margin:6px 0 10px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyPendingPulse{
+  display:flex !important;
+  align-items:flex-end !important;
+  gap:4px !important;
+  min-width:26px !important;
+  padding-top:4px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyPendingPulse span{
+  display:block !important;
+  width:6px !important;
+  border-radius:999px !important;
+  background:linear-gradient(180deg, #90a7c0 0%, #6e85a1 100%) !important;
+  opacity:.88 !important;
+  animation:strategyPendingBounce 1.15s ease-in-out infinite !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyPendingPulse span:nth-child(1){
+  height:12px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyPendingPulse span:nth-child(2){
+  height:18px !important;
+  animation-delay:.16s !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyPendingPulse span:nth-child(3){
+  height:14px !important;
+  animation-delay:.32s !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyPendingBody{
+  flex:1 1 auto !important;
+  min-width:0 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyPendingTeamLabel{
+  color:#8194a8 !important;
+  font-size:10px !important;
+  line-height:1 !important;
+  font-weight:700 !important;
+  letter-spacing:.08em !important;
+  text-transform:uppercase !important;
+  margin-bottom:5px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyPendingTitle{
+  color:#0f172a !important;
+  font-size:14px !important;
+  line-height:1.45 !important;
+  font-weight:720 !important;
+  letter-spacing:-0.01em !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyPendingDesc{
+  margin-top:4px !important;
+  color:#6b7b8f !important;
+  font-size:12px !important;
+  line-height:1.58 !important;
+  font-weight:520 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyPendingSteps{
+  display:flex !important;
+  flex-wrap:wrap !important;
+  gap:6px !important;
+  margin-top:10px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyPendingStep{
+  display:inline-flex !important;
+  flex-direction:column !important;
+  align-items:flex-start !important;
+  justify-content:center !important;
+  gap:2px !important;
+  min-width:122px !important;
+  min-height:42px !important;
+  padding:8px 10px !important;
+  border-radius:14px !important;
+  border:1px solid #e2e8f0 !important;
+  background:#f8fbfe !important;
+  color:#8a9aad !important;
+  transition:all .18s ease !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyPendingStep strong{
+  color:inherit !important;
+  font-size:11px !important;
+  line-height:1.1 !important;
+  font-weight:700 !important;
+  letter-spacing:-0.01em !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyPendingStep em{
+  color:inherit !important;
+  opacity:.9 !important;
+  font-size:10px !important;
+  line-height:1.2 !important;
+  font-style:normal !important;
+  font-weight:600 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyPendingStep.isActive{
+  border-color:#d8e4f0 !important;
+  background:#eef5fb !important;
+  color:#5f7793 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyPendingStep.isCurrent{
+  border-color:#c7d8eb !important;
+  background:#e7f0fa !important;
+  color:#45627f !important;
+  box-shadow:0 6px 18px rgba(111, 140, 171, 0.14) !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyPendingSkeleton{
+  display:grid !important;
+  gap:7px !important;
+  margin-top:12px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyPendingSkeletonLine{
+  display:block !important;
+  width:82% !important;
+  height:8px !important;
+  border-radius:999px !important;
+  background:linear-gradient(90deg, rgba(226, 232, 240, 0.58) 0%, rgba(241, 245, 249, 0.96) 48%, rgba(226, 232, 240, 0.58) 100%) !important;
+  background-size:220% 100% !important;
+  animation:strategyPendingShimmer 1.45s linear infinite !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyPendingSkeletonLine.isWide{
+  width:92% !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyPendingSkeletonLine.isShort{
+  width:58% !important;
+}
+
+@media (max-width: 860px){
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyPendingStep{
+    min-width:0 !important;
+    flex:1 1 140px !important;
+  }
+}
+
+@keyframes strategyPendingBounce{
+  0%, 100%{
+    transform:translateY(0) scaleY(1);
+    opacity:.78;
+  }
+  50%{
+    transform:translateY(-2px) scaleY(1.16);
+    opacity:1;
+  }
+}
+
+@keyframes strategyPendingShimmer{
+  0%{
+    background-position:200% 0;
+  }
+  100%{
+    background-position:-20% 0;
+  }
+}
+
+/* =====================================================================
+   2026-04-15 sidebar + home blue-grey tone pass
+   ===================================================================== */
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeMain{
+  background:#f5f8fc !important;
+  padding-top:8px !important;
+  box-sizing:border-box !important;
+  overflow:visible !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeWorkspace{
+  padding-top:6px !important;
+  box-sizing:border-box !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroPanel{
+  margin-top:4px !important;
+  border-color:#e3eaf3 !important;
+  background:#f9fbfe !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroEyebrow,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeStatLabel{
+  color:#7f93ab !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroText,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroAsideText,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeFocusSummary,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeProgressItem,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeEntrySub,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homePanelText{
+  color:#64748b !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroActions .btn.primary{
+  background:#5f738d !important;
+  border-color:#5f738d !important;
+  color:#ffffff !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroActions .btn.ghost{
+  border-color:#d9e2ec !important;
+  color:#526274 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroQuietAction,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroAsideMeta,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroAsideFooter,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeEntryMeta{
+  color:#90a0b4 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeProgressPill.is-active{
+  background:#edf4fb !important;
+  color:#4f6b8a !important;
+  border-color:#d6e3f0 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeProgressPill.is-calm{
+  background:#eff5fa !important;
+  color:#5d748c !important;
+  border-color:#dbe5ef !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeProgressPill.is-accent{
+  background:#eaf1fb !important;
+  color:#4f6480 !important;
+  border-color:#d6e1f0 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeProgressPill.is-ready{
+  background:#eef4f8 !important;
+  color:#5e7486 !important;
+  border-color:#dde7ee !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeStatCard,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homePanel{
+  border-color:#e4ebf2 !important;
+  background:#fbfdff !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homePanelSoft{
+  background:linear-gradient(180deg, rgba(244,248,252,0.98), rgba(251,253,255,1)) !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeChecklistItem,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeSignalItem,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeEntryButton,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeEntryEmpty{
+  border-color:#e7edf4 !important;
+  background:#f8fbfe !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeChecklistNumber{
+  background:#6a7f99 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeChecklistText,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeSignalItem{
+  color:#435266 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeEntryButton:hover{
+  border-color:#d6e0ea !important;
+  background:#ffffff !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeEntryButtonRisk{
+  background:linear-gradient(180deg, rgba(245,249,253,0.98), rgba(255,255,255,1)) !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceSidebar{
+  background:#f4f7fb !important;
+  border-right:1px solid #e2e9f1 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceLogo{
+  color:#334155 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceLogo::before{
+  background:#6d829c !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarIconBtn,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarSettingsBtn{
+  color:#607082 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarIconBtn:hover,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarSettingsBtn:hover,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadHeaderBtn:hover,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadPackageCard:hover,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadPackageRemove:hover{
+  background:rgba(109,130,156,0.08) !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarIconBtn.active,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarSettingsBtn.active,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarIconBtn.accent,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadPackageCard,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadFolder{
+  color:#415367 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceSidebarThreadTitle{
+  color:#7f91a5 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceSidebarThreadMeta,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadPackageStamp,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadEmpty{
+  color:#9aa9ba !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadHeaderBtn,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadFolderIcon,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadPackageGlyph,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadPackageRemove{
+  color:#7f90a2 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadFolderLabel,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadPackageTitle,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadPackageRow.active .sidebarThreadPackageTitle,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarIconBtn.active .sidebarLabel,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarSettingsBtn.active .sidebarLabel,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarIconBtn.accent .sidebarLabel{
+  color:#4d6075 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadPackageCard.active,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadPackageRow.active .sidebarThreadPackageCard,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadPackageCard.draft{
+  background:#eaf1f7 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadPackageRow.active .sidebarThreadPackageStamp{
+  color:#75899e !important;
 }

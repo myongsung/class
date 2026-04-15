@@ -547,6 +547,83 @@ dialog.modal.paperModal > .modalHead{
 .paperProofList{ list-style:none; margin:0; padding:0; display:grid; gap:10px; }
 .paperProofList li{ display:grid; grid-template-columns:34px 1fr; gap:10px; align-items:start; }
 .paperNo{ font-weight:900; }
+.paperEvidenceList{
+  display:grid;
+  gap:12px;
+}
+.paperEvidenceCard{
+  padding:12px 14px;
+  border-radius:14px;
+  border:1px solid rgba(15,23,42,0.10);
+  background:#fff;
+  break-inside:auto;
+  page-break-inside:auto;
+}
+.paperEvidenceCardHead{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.paperEvidenceCardTitle{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.paperEvidenceIndex{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:24px;
+  height:24px;
+  padding:0 8px;
+  border-radius:999px;
+  background:rgba(15,23,42,0.08);
+  color:#111827;
+  font-size:11px;
+  font-weight:900;
+}
+.paperEvidenceKind{
+  font-size:12px;
+  font-weight:800;
+  color:#475569;
+}
+.paperEvidenceWhen{
+  font-size:12px;
+  color:#64748b;
+}
+.paperEvidenceSummary{
+  margin-top:10px;
+  font-size:13px;
+  line-height:1.62;
+  color:#111827;
+  white-space:pre-wrap;
+  word-break:break-word;
+  overflow-wrap:anywhere;
+}
+.paperEvidenceDetailGrid{
+  display:grid;
+  grid-template-columns:120px minmax(0, 1fr);
+  gap:8px 12px;
+  margin-top:12px;
+}
+.paperEvidenceDetailKey{
+  font-size:11px;
+  font-weight:800;
+  letter-spacing:0.02em;
+  color:#64748b;
+}
+.paperEvidenceDetailVal{
+  min-width:0;
+  font-size:12px;
+  line-height:1.58;
+  color:#334155;
+  white-space:pre-wrap;
+  word-break:break-word;
+  overflow-wrap:anywhere;
+}
 .paperVerdictTag{
   display:inline-flex;
   align-items:center;
@@ -592,6 +669,17 @@ dialog.modal.paperModal > .modalHead{
   .paperProofPartyCard{
     padding: 12px;
   }
+  .paperEvidenceCard{
+    padding:11px 12px;
+  }
+  .paperEvidenceCardHead{
+    flex-direction:column;
+    align-items:flex-start;
+  }
+  .paperEvidenceDetailGrid{
+    grid-template-columns:1fr;
+    gap:5px;
+  }
   .paperDocTitle{
     font-size: 21px;
     letter-spacing: 0.26em;
@@ -615,6 +703,9 @@ dialog.modal.paperModal > .modalHead{
     box-shadow: none;
   }
   .paperContent{ padding: 0; }
+  .paperEvidenceCard{
+    box-shadow:none;
+  }
 }
   `.trim();
 }
@@ -808,7 +899,7 @@ function buildFactsSummary(recs: RecordItem[]) {
     .sort((a, b) => a[0].localeCompare(b[0]))
     .slice(0, 4)
     .map(([day, items]) => {
-      const joined = items.slice(0, 2).map((r) => `${recordActorText(r)}(${placeLabel(r.place, r.placeOther)}): ${trunc(String(r.summary || '').trim(), 70)}`).join(' / ');
+      const joined = items.slice(0, 2).map((r) => `${recordActorText(r)}(${placeLabel(r.place, r.placeOther)}): ${String(r.summary || '').trim()}`).join(' / ');
       return `${day} 기준 주요 경위는 다음과 같습니다. ${joined}`;
     });
 }
@@ -816,7 +907,7 @@ function buildFactsSummary(recs: RecordItem[]) {
 function buildActionSummary(c: CaseItem) {
   const steps = (c.steps || []).slice().sort((a, b) => String(a.ts || '').localeCompare(String(b.ts || '')));
   if (!steps.length) return '작성자는 이 컬렉션과 관련한 후속 메모와 실행 로그를 별도로 정리·보관 중입니다.';
-  const joined = steps.slice(0, 3).map((s) => `${fmt(String(s.ts || ''))} ${String(s.name || '').trim()}${String(s.note || '').trim() ? `(${trunc(String(s.note || '').trim(), 40)})` : ''}`).join(' / ');
+  const joined = steps.slice(0, 3).map((s) => `${fmt(String(s.ts || ''))} ${String(s.name || '').trim()}${String(s.note || '').trim() ? `(${String(s.note || '').trim()})` : ''}`).join(' / ');
   return `작성자가 남긴 후속 메모와 실행 로그로는 ${joined} 등이 있습니다.`;
 }
 
@@ -947,14 +1038,21 @@ function renderContentProofHTML(payload: PaperPayload) {
     .map((r, idx) => {
       const tone = integrityVerdictTone(String(r.verificationStatus || ''), !!r.trusted);
       return `
-      <tr>
-        <td data-label="번호">${idx + 1}</td>
-        <td data-label="구분">${esc(kindLabel(r.kind))}</td>
-        <td data-label="일시">${esc(r.when || '-')}</td>
-        <td data-label="증빙 요지" class="paperSummaryCell"><div class="paperSummaryText">${paperMultilineHtml(r.summary || '-')}</div></td>
-        <td data-label="무결성 결론"><span class="paperVerdictTag ${esc(tone)}">${esc(String(r.integrityVerdict || formatIntegrityVerdict(r)))}</span></td>
-        <td data-label="검증 근거"><div class="paperEvidenceMeta"><div class="paperEvidenceSub">${esc(String(r.integrityEvidence || formatIntegrityEvidence(r) || '-'))}</div></div></td>
-      </tr>
+      <article class="paperEvidenceCard">
+        <div class="paperEvidenceCardHead">
+          <div class="paperEvidenceCardTitle">
+            <span class="paperEvidenceIndex">${idx + 1}</span>
+            <span class="paperEvidenceKind">${esc(kindLabel(r.kind))}</span>
+            <span class="paperEvidenceWhen">${esc(r.when || '-')}</span>
+          </div>
+          <span class="paperVerdictTag ${esc(tone)}">${esc(String(r.integrityVerdict || formatIntegrityVerdict(r)))}</span>
+        </div>
+        <div class="paperEvidenceSummary">${paperMultilineHtml(r.summary || '-')}</div>
+        <div class="paperEvidenceDetailGrid">
+          <div class="paperEvidenceDetailKey">검증 근거</div>
+          <div class="paperEvidenceDetailVal">${esc(String(r.integrityEvidence || formatIntegrityEvidence(r) || '-'))}</div>
+        </div>
+      </article>
     `;
     })
     .join('');
@@ -991,12 +1089,7 @@ function renderContentProofHTML(payload: PaperPayload) {
 
       <div class="paperSection">
         <div class="paperH">3) 증빙자료 목록</div>
-        <div class="paperTableWrap">
-          <table class="paperTable paperTableResponsive">
-            <thead><tr><th style="width:48px">번호</th><th style="width:64px">구분</th><th style="width:102px">일시</th><th>증빙 요지</th><th style="width:188px">무결성 결론</th><th style="width:280px">검증 근거</th></tr></thead>
-            <tbody>${evidenceRows}</tbody>
-          </table>
-        </div>
+        <div class="paperEvidenceList">${evidenceRows}</div>
       </div>
 
       <div class="paperSection">

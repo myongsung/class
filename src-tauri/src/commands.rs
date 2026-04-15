@@ -45,6 +45,8 @@ pub struct StrategyChatArgs {
   pub records: Vec<RecordItem>,
   pub message: String,
   #[serde(default)]
+  pub model: Option<String>,
+  #[serde(default)]
   pub strategy_note: Option<String>,
   #[serde(default)]
   pub conversation: Vec<StrategyChatTurn>,
@@ -60,6 +62,7 @@ pub struct StrategyChatArgs {
 pub async fn strategy_agent_chat(app: AppHandle, args: StrategyChatArgs) -> Result<StrategyChatRunResult, String> {
   tauri::async_runtime::spawn_blocking(move || {
     let opts = StrategyChatOptions {
+      model: args.model,
       max_tokens: args.max_tokens,
       n_ctx: args.n_ctx,
       threads: args.threads,
@@ -681,7 +684,7 @@ pub fn export_case_pdf(args: ExportPdfArgs) -> Result<String, String> {
       }
       let tail = clean(row.verification_message.as_deref().unwrap_or(""));
       if tail != "-" {
-        parts.push(clamp_chars(tail, 84));
+        parts.push(tail.to_string());
       }
       parts.join(" / ")
     }
@@ -723,14 +726,14 @@ pub fn export_case_pdf(args: ExportPdfArgs) -> Result<String, String> {
 
     doc.push(elements::Break::new(1));
     doc.push(elements::Paragraph::new("1. 통지 내용").styled(s_h1.clone()));
-    for (idx, line) in paper.statement_lines.iter().map(|s| s.trim()).filter(|s| !s.is_empty()).take(5).enumerate() {
-      doc.push(elements::Paragraph::new(format!("{}. {}", idx + 1, clamp_chars(&normalize_pdf_inline_text(line), 220))).styled(s_body.clone()).padded((0.5, 0.0, 0.0, 0.0)));
+    for (idx, line) in paper.statement_lines.iter().map(|s| normalize_pdf_inline_text(s.trim())).filter(|s| !s.is_empty()).enumerate() {
+      doc.push(elements::Paragraph::new(format!("{}. {}", idx + 1, line)).styled(s_body.clone()).padded((0.5, 0.0, 0.0, 0.0)));
     }
 
     doc.push(elements::Break::new(1));
     doc.push(elements::Paragraph::new("2. 요구 및 향후 조치").styled(s_h1.clone()));
-    for (idx, line) in paper.action_lines.iter().map(|s| s.trim()).filter(|s| !s.is_empty()).take(3).enumerate() {
-      doc.push(elements::Paragraph::new(format!("{}. {}", idx + 1, clamp_chars(&normalize_pdf_inline_text(line), 200))).styled(s_body.clone()).padded((0.5, 0.0, 0.0, 0.0)));
+    for (idx, line) in paper.action_lines.iter().map(|s| normalize_pdf_inline_text(s.trim())).filter(|s| !s.is_empty()).enumerate() {
+      doc.push(elements::Paragraph::new(format!("{}. {}", idx + 1, line)).styled(s_body.clone()).padded((0.5, 0.0, 0.0, 0.0)));
     }
 
     doc.push(elements::Break::new(1));
@@ -742,10 +745,10 @@ pub fn export_case_pdf(args: ExportPdfArgs) -> Result<String, String> {
     } else {
       for (idx, r) in paper.records.iter().enumerate() {
         doc.push(elements::Paragraph::new(format!("[{}] {} / {}", idx + 1, normalize_pdf_inline_text(kind_ko(&r.kind)), normalize_pdf_inline_text(clean(&r.when)))).styled(s_h2.clone()).padded((0.6, 0.0, 0.0, 0.0)));
-        doc.push(elements::Paragraph::new(format!("요지 : {}", clamp_chars(&normalize_pdf_inline_text(clean(&r.summary)), 110))).styled(s_body.clone()).padded((0.2, 0.0, 0.0, 0.0)));
-        doc.push(elements::Paragraph::new(format!("주체 / 장소 : {} / {}", clamp_chars(&normalize_pdf_inline_text(clean(&r.actor)), 42), clamp_chars(&normalize_pdf_inline_text(clean(&r.place)), 28))).styled(s_meta.clone()).padded((0.2, 0.0, 0.0, 0.0)));
-        doc.push(elements::Paragraph::new(format!("무결성 결론 : {}", clamp_chars(&normalize_pdf_inline_text(&verdict_ko(r)), 50))).styled(s_meta.clone()).padded((0.2, 0.0, 0.0, 0.0)));
-        let evidence = clamp_chars(&normalize_pdf_inline_text(&evidence_ko(r)), 110);
+        doc.push(elements::Paragraph::new(format!("요지 : {}", normalize_pdf_inline_text(clean(&r.summary)))).styled(s_body.clone()).padded((0.2, 0.0, 0.0, 0.0)));
+        doc.push(elements::Paragraph::new(format!("주체 / 장소 : {} / {}", normalize_pdf_inline_text(clean(&r.actor)), normalize_pdf_inline_text(clean(&r.place)))).styled(s_meta.clone()).padded((0.2, 0.0, 0.0, 0.0)));
+        doc.push(elements::Paragraph::new(format!("무결성 결론 : {}", normalize_pdf_inline_text(&verdict_ko(r)))).styled(s_meta.clone()).padded((0.2, 0.0, 0.0, 0.0)));
+        let evidence = normalize_pdf_inline_text(&evidence_ko(r));
         if r.kind.trim().eq_ignore_ascii_case("record") {
           let rev = r.revision_count.unwrap_or(0);
           let sealed = compact_hash(&normalize_pdf_inline_text(clean(r.last_sealed_at.as_deref().unwrap_or("-"))), 10, 8);
@@ -762,8 +765,8 @@ pub fn export_case_pdf(args: ExportPdfArgs) -> Result<String, String> {
     doc.push(elements::Break::new(1));
     doc.push(elements::Paragraph::new("4. 무결성 검증 요약").styled(s_h1.clone()));
     doc.push(elements::Paragraph::new(hr).styled(s_meta.clone()));
-    for (idx, line) in paper.integrity_lines.iter().map(|s| s.trim()).filter(|s| !s.is_empty()).take(3).enumerate() {
-      doc.push(elements::Paragraph::new(format!("{}. {}", idx + 1, clamp_chars(&normalize_pdf_inline_text(line), 220))).styled(s_body.clone()).padded((0.5, 0.0, 0.0, 0.0)));
+    for (idx, line) in paper.integrity_lines.iter().map(|s| normalize_pdf_inline_text(s.trim())).filter(|s| !s.is_empty()).enumerate() {
+      doc.push(elements::Paragraph::new(format!("{}. {}", idx + 1, line)).styled(s_body.clone()).padded((0.5, 0.0, 0.0, 0.0)));
     }
 
     doc.push(elements::Break::new(1));

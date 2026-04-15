@@ -5,7 +5,12 @@ import { rustClassifyRecordsRisk, rustGenerateAdvisorsForCase, rustRankRecordsFo
 
 export type Sensitivity = 'LV1' | 'LV2' | 'LV3' | 'LV4' | 'LV5';
 export type ActorType = '관리자' | '학부모' | '학생' | '동료교사' | '외부인' | '기타';
-export type ActorRef = { type: ActorType; name: string };
+export type ActorRef = {
+  type: ActorType;
+  name: string;
+  groupId?: string;
+  groupLabel?: string;
+};
 export type StoreType = string;
 export type PlaceType = string;
 
@@ -146,10 +151,17 @@ export const OTHER = '__OTHER__' as const;
 
 export const actorEq = (a: ActorRef, b: ActorRef) =>
   String(a?.type ?? '') === String(b?.type ?? '') &&
-  String(a?.name ?? '').trim() === String(b?.name ?? '').trim();
+  String(a?.name ?? '').trim() === String(b?.name ?? '').trim() &&
+  String((a as any)?.groupId ?? '') === String((b as any)?.groupId ?? '') &&
+  String((a as any)?.groupLabel ?? '') === String((b as any)?.groupLabel ?? '');
 
 export function addActorToList(list: ActorRef[], actor: ActorRef) {
-  const a = { type: actor.type, name: String(actor.name || '').trim() };
+  const a = {
+    type: actor.type,
+    name: String(actor.name || '').trim(),
+    ...(String((actor as any)?.groupId || '').trim() ? { groupId: String((actor as any).groupId).trim() } : {}),
+    ...(String((actor as any)?.groupLabel || '').trim() ? { groupLabel: String((actor as any).groupLabel).trim() } : {}),
+  };
   if (!a.name) return (list || []).slice();
   const out = (Array.isArray(list) ? list : []).slice();
   if (!out.some((x) => actorEq(x, a))) out.push(a);
@@ -170,6 +182,8 @@ export function recordMainActors(r: RecordItem) {
     .map((a) => ({
       type: (a?.type ?? '외부인') as ActorType,
       name: String(a?.name ?? '').trim(),
+      ...(String((a as any)?.groupId || '').trim() ? { groupId: String((a as any).groupId).trim() } : {}),
+      ...(String((a as any)?.groupLabel || '').trim() ? { groupLabel: String((a as any).groupLabel).trim() } : {}),
     }))
     .filter((a) => a.name);
 
@@ -183,6 +197,8 @@ export function recordActors(r: RecordItem) {
     .map((a) => ({
       type: (a?.type ?? '외부인') as ActorType,
       name: String(a?.name ?? '').trim(),
+      ...(String((a as any)?.groupId || '').trim() ? { groupId: String((a as any).groupId).trim() } : {}),
+      ...(String((a as any)?.groupLabel || '').trim() ? { groupLabel: String((a as any).groupLabel).trim() } : {}),
     }))
     .filter((a) => a.name);
 
@@ -266,6 +282,8 @@ export function buildRecordFromDraft(d: RecordDraftInput, makeId: () => string) 
     .map((a) => ({
       type: (a?.type ?? '외부인') as ActorType,
       name: String(a?.name ?? '').trim(),
+      ...(String((a as any)?.groupId || '').trim() ? { groupId: String((a as any).groupId).trim() } : {}),
+      ...(String((a as any)?.groupLabel || '').trim() ? { groupLabel: String((a as any).groupLabel).trim() } : {}),
     }))
     .filter((a) => a.name)
     .reduce((acc, a) => addActorToList(acc, a), [] as ActorRef[]);
@@ -291,6 +309,8 @@ export function buildRecordFromDraft(d: RecordDraftInput, makeId: () => string) 
     .map((a) => ({
       type: (a?.type ?? '외부인') as ActorType,
       name: String(a?.name ?? '').trim(),
+      ...(String((a as any)?.groupId || '').trim() ? { groupId: String((a as any).groupId).trim() } : {}),
+      ...(String((a as any)?.groupLabel || '').trim() ? { groupLabel: String((a as any).groupLabel).trim() } : {}),
     }))
     .filter((a) => a.name && !actorList.some((mainActor) => actorEq(a, mainActor)))
     .reduce((acc, a) => addActorToList(acc, a), [] as ActorRef[]);

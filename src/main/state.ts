@@ -1,5 +1,5 @@
-import { nowISO, toLocalInputValue, esc, mustGetEl, defaultState, ensureRecordV8, LS_KEY } from '../utils';
-import type { AppState } from '../utils';
+import { nowISO, toLocalInputValue, esc, mustGetEl, defaultState, ensureRecordV8, LS_KEY, RELATIONSHIP_DEFAULT_GROUPS } from '../utils';
+import type { AppState, RelationshipGroup, RelationshipGroupMember } from '../utils';
 import type { Sensitivity, ActorType, ActorRef, StoreType, PlaceType, CaseSensFilter, CaseStatus, CaseItem, CaseUpdateCandidate, RecordItem, RecordSummaryParts } from '../engine';
 import { OTHER } from '../engine';
 
@@ -51,9 +51,10 @@ export const ui = {
     nextSteps: string[],
   },
   strategyChatInput: '',
-  strategyChatModel: 'hyperclova-x' as 'hyperclova-x' | 'roosy-x',
+  strategyChatModel: 'roosy-hybrid' as 'roosy-hybrid',
   strategyChatModelMenuOpen: false,
   strategyChatPending: false,
+  strategyChatPendingStartedAt: '',
   strategyChatError: '',
   strategyChatProgressLines: [] as string[],
   strategyChatProgressStage: '',
@@ -100,7 +101,8 @@ export const ui = {
   flashStepId: null as string | null,
   flashStepTimer: null as number | null,
   classRosterOpen: false,
-  classRosterDraft: Array.from({ length: 40 }, () => '') as string[],
+  classRosterDraft: [] as RelationshipGroup[],
+  classRosterGroupId: '' as string,
   pinLocked: false,
   pinModalOpen: false,
   pinEntryDraft: '',
@@ -121,6 +123,12 @@ export const PLACE_TYPES: PlaceType[] = (['온라인','메신저','전화/회의
 
 export const CLASS_ROSTER_SIZE = 40;
 export const emptyClassRoster = () => Array.from({ length: CLASS_ROSTER_SIZE }, () => '');
+export const emptyRelationshipGroups = (): RelationshipGroup[] =>
+  RELATIONSHIP_DEFAULT_GROUPS.map((group) => ({
+    id: group.id,
+    title: group.title,
+    members: [],
+  }));
 export const STUDENT_NAMES = Array.from({ length: 40 }, (_, i) => `당사자${i + 1}`);
 export const PARENT_NAMES = Array.from({ length: 40 }, (_, i) => `상대방${i + 1}`);
 export const ADMIN_NAMES = ['기관 담당', '연락 창구', '외부 자문', '지원 담당'];
@@ -188,10 +196,105 @@ export const actorTypeInternalFromText = (v: string): ActorType => {
   return ((ACTOR_TYPES as any).includes(s) ? s : '외부인') as ActorType;
 };
 export const getClassRoster = () => {
+  const flattened = getRelationshipGroups()
+    .flatMap((group) => group.members.map((member) => String(member.name || '').trim()))
+    .filter(Boolean)
+    .slice(0, CLASS_ROSTER_SIZE);
   const raw = Array.isArray(S.classRoster) ? S.classRoster : [];
-  return Array.from({ length: CLASS_ROSTER_SIZE }, (_, i) => String(raw[i] || '').trim());
+  return Array.from({ length: CLASS_ROSTER_SIZE }, (_, i) => String(flattened[i] || raw[i] || '').trim());
 };
 export const getClassRosterNames = () => getClassRoster().map((name) => String(name || '').trim()).filter(Boolean);
+
+export const cloneRelationshipGroups = (groups?: RelationshipGroup[]) =>
+  (Array.isArray(groups) ? groups : emptyRelationshipGroups()).map((group, groupIndex) => ({
+    id: String(group?.id || RELATIONSHIP_DEFAULT_GROUPS[groupIndex]?.id || `group-${groupIndex + 1}`),
+    title: String(group?.title || RELATIONSHIP_DEFAULT_GROUPS[groupIndex]?.title || `그룹${groupIndex + 1}`).trim(),
+    members: (Array.isArray(group?.members) ? group.members : []).map((member, memberIndex) => ({
+      id: String(member?.id || `${String(group?.id || `group-${groupIndex + 1}`)}-member-${memberIndex + 1}`),
+      name: String(member?.name || '').trim(),
+    })),
+  }));
+
+export const getRelationshipGroups = () => {
+  const raw = Array.isArray((S as any).relationshipGroups) ? ((S as any).relationshipGroups as RelationshipGroup[]) : [];
+  const groups = cloneRelationshipGroups(raw.length ? raw : emptyRelationshipGroups());
+  for (const fallback of RELATIONSHIP_DEFAULT_GROUPS) {
+    if (!groups.some((group) => group.id === fallback.id)) {
+      groups.push({ id: fallback.id, title: fallback.title, members: [] });
+    }
+  }
+  return groups.slice(0, Math.max(groups.length, RELATIONSHIP_DEFAULT_GROUPS.length));
+};
+
+export const getRelationshipGroup = (groupId: string) =>
+  getRelationshipGroups().find((group) => group.id === String(groupId || '').trim()) || null;
+
+export const getRelationshipMembers = (groupId: string): RelationshipGroupMember[] =>
+  (getRelationshipGroup(groupId)?.members || []).filter((member) => String(member?.name || '').trim());
+
+export const getRelationshipMember = (groupId: string, memberId: string) =>
+  getRelationshipMembers(groupId).find((member) => member.id === String(memberId || '').trim()) || null;
+
+export const makeRelationshipActorRef = (groupId: string, memberId: string): ActorRef | null => {
+  const group = getRelationshipGroup(groupId);
+  const member = getRelationshipMember(groupId, memberId);
+  if (!group || !member) return null;
+  const name = String(member.name || '').trim();
+  const groupLabel = String(group.title || '').trim();
+  if (!name) return null;
+  return {
+    type: '기타',
+    name,
+    groupId: group.id,
+    ...(groupLabel ? { groupLabel } : {}),
+  };
+};
+
+export const serializeActorChoice = (actor: ActorRef) =>
+  [
+    encodeURIComponent(String(actor?.type || '').trim()),
+    encodeURIComponent(String(actor?.name || '').trim()),
+    encodeURIComponent(String((actor as any)?.groupId || '').trim()),
+    encodeURIComponent(String((actor as any)?.groupLabel || '').trim()),
+  ].join('::');
+
+export const parseActorChoice = (raw: string): ActorRef | null => {
+  const [type, name, groupId, groupLabel] = String(raw || '').split('::').map((part) => decodeURIComponent(part || ''));
+  if (!String(name || '').trim()) return null;
+  return {
+    type: ((String(type || '').trim() || '기타') as ActorType),
+    name: String(name || '').trim(),
+    ...(String(groupId || '').trim() ? { groupId: String(groupId || '').trim() } : {}),
+    ...(String(groupLabel || '').trim() ? { groupLabel: String(groupLabel || '').trim() } : {}),
+  };
+};
+
+export const getRecordArchiveMainActors = () => {
+  const out: ActorRef[] = [];
+  for (const record of S.records || []) {
+    for (const actor of recordMainActors(record)) {
+      if (!out.some((item) => actorEqLite(item, actor))) out.push(actor);
+    }
+  }
+  return out.sort((a, b) => actorShort(a).localeCompare(actorShort(b), 'ko'));
+};
+
+export const getRecordArchiveRelatedActors = () => {
+  const out: ActorRef[] = [];
+  for (const record of S.records || []) {
+    for (const actor of Array.isArray(record.related) ? record.related : []) {
+      const safe = {
+        type: (actor?.type || '기타') as ActorType,
+        name: String(actor?.name || '').trim(),
+        ...(String((actor as any)?.groupId || '').trim() ? { groupId: String((actor as any).groupId).trim() } : {}),
+        ...(String((actor as any)?.groupLabel || '').trim() ? { groupLabel: String((actor as any).groupLabel).trim() } : {}),
+      } as ActorRef;
+      if (!safe.name) continue;
+      if (!out.some((item) => actorEqLite(item, safe))) out.push(safe);
+    }
+  }
+  return out.sort((a, b) => actorShort(a).localeCompare(actorShort(b), 'ko'));
+};
 
 export const nameDatalistIdForActorTypeText = (typeText: string) => {
   const t = String(typeText || '').trim();
@@ -235,12 +338,21 @@ export const renderNameFieldForType = (args: { typeText: string; value: string; 
 
 export const matchLite = (text: string, q: string) => !String(q || '').trim() || String(text || '').toLowerCase().includes(String(q || '').trim().toLowerCase());
 export const uniq = <T,>(arr: T[]) => Array.from(new Set(arr));
-export const actorEqLite = (a: ActorRef, b: ActorRef) => String(a?.type ?? '').trim() === String(b?.type ?? '').trim() && String(a?.name ?? '').trim() === String(b?.name ?? '').trim();
+export const actorEqLite = (a: ActorRef, b: ActorRef) =>
+  String(a?.type ?? '').trim() === String(b?.type ?? '').trim() &&
+  String(a?.name ?? '').trim() === String(b?.name ?? '').trim() &&
+  String((a as any)?.groupId ?? '').trim() === String((b as any)?.groupId ?? '').trim() &&
+  String((a as any)?.groupLabel ?? '').trim() === String((b as any)?.groupLabel ?? '').trim();
 export const recordMainActors = (r: any): ActorRef[] => {
   const raw = Array.isArray(r?.actors) && r.actors.length ? r.actors : [r?.actor];
   const out: ActorRef[] = [];
   for (const item of raw) {
-    const a = { type: ((item?.type || '외부인') as ActorType), name: String(item?.name || '').trim() };
+    const a = {
+      type: ((item?.type || '외부인') as ActorType),
+      name: String(item?.name || '').trim(),
+      ...(String((item as any)?.groupId || '').trim() ? { groupId: String((item as any).groupId).trim() } : {}),
+      ...(String((item as any)?.groupLabel || '').trim() ? { groupLabel: String((item as any).groupLabel).trim() } : {}),
+    } as ActorRef;
     if (!a.name) continue;
     if (!out.some((x) => actorEqLite(x, a))) out.push(a);
   }
@@ -264,9 +376,15 @@ export const daysDiff = (aISO: string, bISO: string) => {
 export const lvLabel = (lv: Sensitivity) => lv;
 export const storeLabel = (t: StoreType, other: string) => (t !== '기타' ? t : (other?.trim() ? `기타:${other.trim()}` : '기타'));
 export const placeLabel = (p: PlaceType, other: string) => (p !== '기타' ? p : (other?.trim() ? `기타:${other.trim()}` : '기타'));
-export const actorLabel = (a: ActorRef) => `${actorTypeTextFromInternal((a.type || '외부인') as any)} · ${a.name || '기타'}`;
+export const actorLabel = (a: ActorRef) => {
+  const groupLabel = String((a as any)?.groupLabel || '').trim();
+  if (groupLabel) return `${groupLabel} · ${a.name || '기타'}`;
+  return `${actorTypeTextFromInternal((a.type || '외부인') as any)} · ${a.name || '기타'}`;
+};
 export const actorShort = (a: ActorRef) => {
   const n = a.name || '기타';
+  const groupLabel = String((a as any)?.groupLabel || '').trim();
+  if (groupLabel) return `${groupLabel} ${n}`.trim();
   if (a.type === '학생') return `당사자 ${n}`;
   if (a.type === '학부모') return `상대방 ${n}`;
   if (a.type === '관리자') return `기관/조직 ${n}`;
@@ -424,7 +542,11 @@ const summaryPartsFromRecord = (record: any): Required<RecordSummaryParts> => {
 const RECORD_DRAFT_BASE = () => ({
   intake: '상담' as const,
   actorTypeText: '당사자', actorType: '학생' as ActorType, actorNameChoice: OTHER, actorNameOther: '', actors: [] as ActorRef[],
+  actorGroupId: RELATIONSHIP_DEFAULT_GROUPS[0].id as string,
+  actorMemberId: '',
   relTypeText: '상대방', relType: '학부모' as ActorType, relNameChoice: OTHER, relNameOther: '', related: [] as ActorRef[],
+  relGroupId: RELATIONSHIP_DEFAULT_GROUPS[0].id as string,
+  relMemberId: '',
   placeText: '온라인', place: '온라인' as PlaceType, placeOther: '',
   storeTypeText: '전화', storeType: '전화' as StoreType, storeOther: '',
   lvText: 'LV2', lv: 'LV2' as Sensitivity,
@@ -488,7 +610,8 @@ export const draftCase = {
   actors: [] as ActorRef[],
   sensFilterText: 'any', sensFilter: 'any' as CaseSensFilter,
   statusText: '진행중', status: '진행중' as CaseStatus,
-  addTypeText: '당사자', addType: '학생' as ActorType, addNameChoice: OTHER, addNameOther: '',
+  mainActorKey: '',
+  relatedActorKey: '',
 };
 export const draftStep = { ts: toLocalInputValue(nowISO()), name: '', note: '' };
 

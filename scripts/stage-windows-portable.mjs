@@ -4,12 +4,19 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, '..');
-const modelName = 'HyperCLOVAX-SEED-Text-Instruct-0.5B-q4_0.gguf';
 const targetDir = resolve(repoRoot, 'src-tauri', 'target', 'release');
 const portableRoot = resolve(targetDir, 'portable', 'roosycozy-windows-x64');
 const executablePath = resolve(targetDir, 'roosycozy.exe');
-const builtModelPath = resolve(targetDir, 'models', modelName);
-const sourceModelPath = resolve(repoRoot, 'src-tauri', 'resources', 'models', modelName);
+const modelSpecs = [
+  {
+    name: 'HyperCLOVAX-SEED-Text-Instruct-0.5B-q4_0.gguf',
+    required: true,
+  },
+  {
+    name: 'hyperclovax_roosy_Q4_K_M.gguf',
+    required: false,
+  },
+];
 const sidecarPath = resolve(repoRoot, 'src-tauri', 'binaries', 'llama-sidecar-x86_64-pc-windows-msvc.exe');
 const runtimeDirCandidates = [
   resolve(repoRoot, 'src-tauri', 'binaries', 'windows-x64'),
@@ -93,13 +100,30 @@ function resolveWindowsSidecarExecutable() {
   return sidecarPath;
 }
 
+function resolveModelFiles() {
+  return modelSpecs.flatMap((spec) => {
+    const builtModelPath = resolve(targetDir, 'models', spec.name);
+    const sourceModelPath = resolve(repoRoot, 'src-tauri', 'resources', 'models', spec.name);
+    const chosen = existsSync(builtModelPath) ? builtModelPath : sourceModelPath;
+    if (!existsSync(chosen)) {
+      if (spec.required) {
+        throw new Error(`필수 모델 파일을 찾지 못했어요: ${spec.name}`);
+      }
+      return [];
+    }
+    return [{
+      name: spec.name,
+      source: chosen,
+    }];
+  });
+}
+
 function main() {
-  const modelPath = existsSync(builtModelPath) ? builtModelPath : sourceModelPath;
+  const modelFiles = resolveModelFiles();
   const runtimeDlls = resolveRuntimeDlls();
   const resolvedSidecarPath = resolveWindowsSidecarExecutable();
 
   requireFile(executablePath, 'Windows 실행 파일');
-  requireFile(modelPath, '모델');
   requireFile(resolvedSidecarPath, 'Windows sidecar');
 
   rmSync(portableRoot, { recursive: true, force: true });
@@ -107,7 +131,9 @@ function main() {
   mkdirSync(resolve(portableRoot, 'sidecar'), { recursive: true });
 
   copyFileSync(executablePath, resolve(portableRoot, 'roosycozy.exe'));
-  copyFileSync(modelPath, resolve(portableRoot, 'resources', 'models', modelName));
+  for (const model of modelFiles) {
+    copyFileSync(model.source, resolve(portableRoot, 'resources', 'models', model.name));
+  }
   copyFileSync(resolvedSidecarPath, resolve(portableRoot, 'sidecar', 'llama-sidecar-x86_64-pc-windows-msvc.exe'));
   for (const dll of runtimeDlls) {
     copyFileSync(dll.source, resolve(portableRoot, 'sidecar', dll.name));

@@ -56,6 +56,7 @@ Tauri(AppDataDir)에 아래 파일로 저장됩니다.
 ```text
 roosycozy.exe
 resources/models/HyperCLOVAX-SEED-Text-Instruct-0.5B-q4_0.gguf
+resources/models/hyperclovax_roosy_Q4_K_M.gguf
 sidecar/llama-sidecar-x86_64-pc-windows-msvc.exe
 sidecar/llama.dll
 sidecar/mtmd.dll
@@ -88,16 +89,29 @@ https://github.com/ggml-org/llama.cpp/releases/download/b8763/llama-b8763-bin-wi
   - self-hosted runner나 로컬 경로가 있을 때 사용
 - `ROOSYCOZY_MODEL_URL`
   - GitHub Actions가 모델을 받아올 URL
+- `ROOSYCOZY_ROOSY_MODEL_PATH`
+  - Roosy-X 로컬 모델 경로
+- `ROOSYCOZY_ROOSY_MODEL_URL`
+  - GitHub Actions가 Roosy-X 모델을 받아올 URL
 - `ROOSYCOZY_WINDOWS_RUNTIME_URL`
   - Windows sidecar용 exe / DLL 묶음 zip URL
 - `ROOSYCOZY_MODEL_SHA256`
   - 선택사항
   - 내려받은 모델 무결성 검사용
+- `ROOSYCOZY_ROOSY_MODEL_SHA256`
+  - 선택사항
+  - 내려받은 Roosy-X 모델 무결성 검사용
 
 현재 워크플로에는 아래 public release asset URL이 기본값으로 들어가 있어, 별도 설정이 없어도 우선 이 주소에서 모델을 받습니다.
 
 ```text
 https://github.com/myongsung/roosycozy-models/releases/download/model_v1/HyperCLOVAX-SEED-Text-Instruct-0.5B-q4_0.gguf
+```
+
+Roosy-X도 기본값이 연결되어 있어, 별도 설정이 없으면 아래 public release asset URL에서 같이 받아옵니다.
+
+```text
+https://github.com/myongsung/roosycozy-models2/releases/download/model/hyperclovax_roosy_Q4_K_M.gguf
 ```
 
 ### Mac App Store 전용 secrets

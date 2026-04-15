@@ -26,6 +26,8 @@ struct RiskLinearModel {
 }
 
 static RISK_MODEL: OnceLock<RiskLinearModel> = OnceLock::new();
+static STRATEGY_LEGAL_DATASET: OnceLock<StrategyLegalDataset> = OnceLock::new();
+static STRATEGY_LEGAL_FLAT_CHUNKS: OnceLock<Vec<StrategyLegalFlatChunk>> = OnceLock::new();
 
 fn read_u32_le(bytes: &[u8], pos: &mut usize) -> Result<u32, String> {
   let end = *pos + 4;
@@ -849,11 +851,18 @@ pub fn generate_advisors_for_case(case_item: &CaseItem, _records: &[RecordItem])
 }
 
 
+const STRATEGY_MODEL_DEFAULT_ID: &str = "hyperclova-x";
+const STRATEGY_MODEL_ROOSY_ID: &str = "roosy-x";
+const STRATEGY_MODEL_HYBRID_ID: &str = "roosy-hybrid";
 const STRATEGY_MODEL_FILENAME: &str = "HyperCLOVAX-SEED-Text-Instruct-0.5B-q4_0.gguf";
 const STRATEGY_MODEL_RESOURCE_PATH: &str = "models/HyperCLOVAX-SEED-Text-Instruct-0.5B-q4_0.gguf";
+const STRATEGY_MODEL_ROOSY_FILENAME: &str = "hyperclovax_roosy_Q4_K_M.gguf";
+const STRATEGY_MODEL_ROOSY_RESOURCE_PATH: &str = "models/hyperclovax_roosy_Q4_K_M.gguf";
 const STRATEGY_SIDECAR_STEM: &str = "llama-sidecar";
 const STRATEGY_PROGRESS_EVENT: &str = "strategy-chat-progress";
 const STRATEGY_CHAT_TIMEOUT_SECS: u64 = 90;
+const STRATEGY_LEGAL_RAG_JSON: &str = include_str!("../legal/kr_school_guidance_laws_rag_expanded.json");
+const STRATEGY_LEGAL_RAG_JSONL: &str = include_str!("../legal/kr_school_guidance_laws_rag_expanded_flat.jsonl");
 #[cfg(target_os = "windows")]
 const STRATEGY_CREATE_NO_WINDOW: u32 = 0x08000000;
 
@@ -892,6 +901,8 @@ pub struct StrategyChatTurn {
 #[serde(rename_all = "camelCase")]
 pub struct StrategyChatOptions {
   #[serde(default)]
+  pub model: Option<String>,
+  #[serde(default)]
   pub max_tokens: Option<u32>,
   #[serde(default)]
   pub n_ctx: Option<u32>,
@@ -909,6 +920,121 @@ pub struct StrategyChatRunResult {
   pub records_used: usize,
   pub retrieval_query: String,
   pub evidence_packet: StrategyEvidencePacket,
+}
+
+#[derive(Debug, Clone)]
+struct StrategyModelExecution {
+  answer: String,
+  model_path: String,
+  runner: String,
+  prompt_chars: usize,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct StrategyRuntimeConfig {
+  n_ctx: u32,
+  threads: u32,
+  n_gpu_layers: u32,
+  device: &'static str,
+}
+
+fn strategy_default_threads() -> u32 {
+  let logical_cores = thread::available_parallelism()
+    .map(|value| value.get() as u32)
+    .unwrap_or(4);
+  #[cfg(all(target_os = "windows", target_arch = "x86_64"))]
+  {
+    let tuned = ((logical_cores as f32) * 0.75).round() as u32;
+    return tuned.max(1).clamp(1, 10);
+  }
+  let reserve = if logical_cores >= 10 { 2 } else { 1 };
+  logical_cores.saturating_sub(reserve).max(1).clamp(1, 12)
+}
+
+fn strategy_runtime_device_config() -> (&'static str, u32) {
+  ("none", 0)
+}
+
+fn strategy_runtime_config(
+  requested_n_ctx: Option<u32>,
+  requested_threads: Option<u32>,
+) -> StrategyRuntimeConfig {
+  let (device, n_gpu_layers) = strategy_runtime_device_config();
+  let n_ctx = requested_n_ctx.unwrap_or(4096).clamp(2048, 4096);
+  let threads = requested_threads.unwrap_or_else(strategy_default_threads).clamp(1, 12);
+  StrategyRuntimeConfig {
+    n_ctx,
+    threads,
+    n_gpu_layers,
+    device,
+  }
+}
+
+fn strategy_hybrid_draft_n_ctx(base_n_ctx: u32) -> u32 {
+  base_n_ctx.min(3584).max(2560)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum StrategyQuestionRoute {
+  FastRoosy,
+  Hybrid,
+}
+
+fn strategy_question_is_comparison(message: &str) -> bool {
+  let compact = strategy_compact_text(message);
+  [
+    "누가가장문제",
+    "누가더문제",
+    "누가문제",
+    "누가더잘못",
+    "누가잘못",
+    "누가더책임",
+    "책임은누구",
+    "가해자",
+    "a의잘못",
+    "b의잘못",
+    "비하면어떰",
+    "비하면어때",
+  ]
+  .iter()
+  .any(|keyword| compact.contains(keyword))
+}
+
+fn strategy_question_is_message_drafting(message: &str) -> bool {
+  let compact = strategy_compact_text(message);
+  [
+    "뭐라고말",
+    "어떻게말",
+    "어떻게정리",
+    "답장",
+    "문자",
+    "보낼지",
+    "써줘",
+  ]
+  .iter()
+  .any(|keyword| compact.contains(keyword))
+}
+
+fn strategy_question_route(message: &str) -> StrategyQuestionRoute {
+  let compact = strategy_compact_text(message);
+  let is_trivial_smalltalk = [
+    "안녕",
+    "반가워",
+    "고마워",
+    "감사",
+    "오케이",
+    "확인",
+    "좋아",
+  ]
+  .iter()
+  .any(|keyword| compact.contains(keyword))
+    && compact.chars().count() <= 12;
+
+  if is_trivial_smalltalk {
+    StrategyQuestionRoute::FastRoosy
+  } else {
+    StrategyQuestionRoute::Hybrid
+  }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -949,6 +1075,97 @@ pub struct StrategyEvidencePacket {
   pub gaps: Vec<String>,
   #[serde(default)]
   pub evidence_records: Vec<StrategyEvidenceRecord>,
+  #[serde(default)]
+  pub legal_references: Vec<StrategyLegalReference>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct StrategyLegalReference {
+  pub ref_id: String,
+  pub law_id: String,
+  pub law_name: String,
+  #[serde(default)]
+  pub short_name: String,
+  #[serde(default)]
+  pub article_ref: String,
+  #[serde(default)]
+  pub article_title: String,
+  #[serde(default)]
+  pub legal_point: String,
+  #[serde(default)]
+  pub teacher_use_case: String,
+  #[serde(default)]
+  pub source_url: String,
+  #[serde(default)]
+  pub status_label: String,
+  #[serde(default)]
+  pub relevance_reasons: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(default)]
+struct StrategyLegalDataset {
+  retrieval_boosters: StrategyLegalRetrievalBoosters,
+  records: Vec<StrategyLegalLawRecord>,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(default)]
+struct StrategyLegalRetrievalBoosters {
+  concept_map: HashMap<String, Vec<String>>,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(default)]
+struct StrategyLegalLawRecord {
+  record_id: String,
+  official_name: String,
+  short_name: String,
+  current_status_label: String,
+  source_url: String,
+  school_relevance: String,
+  rag: StrategyLegalLawRag,
+  key_articles: Vec<StrategyLegalArticle>,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(default)]
+struct StrategyLegalLawRag {
+  aliases: Vec<String>,
+  topical_tags: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(default)]
+struct StrategyLegalArticle {
+  article_no: String,
+  article_title: String,
+  legal_point: String,
+  teacher_use_case: String,
+  keywords: Vec<String>,
+  retrieval_text: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(default)]
+struct StrategyLegalFlatChunk {
+  record_id: String,
+  official_name: String,
+  short_name: String,
+  current_status_label: String,
+  source_url: String,
+  school_relevance: String,
+  topical_tags: Vec<String>,
+  aliases: Vec<String>,
+  chunk_type: String,
+  chunk_id: String,
+  article_no: String,
+  article_title: String,
+  legal_point: String,
+  teacher_use_case: String,
+  keywords: Vec<String>,
+  retrieval_text: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1015,6 +1232,47 @@ fn strategy_sanitize_text(input: &str) -> String {
   out.trim().to_string()
 }
 
+fn strategy_compact_text(input: &str) -> String {
+  strategy_sanitize_text(input)
+    .chars()
+    .filter(|ch| !ch.is_whitespace())
+    .collect::<String>()
+}
+
+fn strategy_question_focus_hint(message: &str) -> Option<String> {
+  if strategy_question_is_comparison(message) {
+    return Some(
+      "- 이번 질문은 책임·잘못 비교 요청이다.\n- 첫 문장에서 바로 비교 결론을 답하라.\n- 현재 증거만으로 한쪽이 더 문제라고 단정하기 어렵다면 그 점을 첫 문장에서 분명히 말하라.\n- 증거 목록 나열보다 결론 → 이유 → 바로 쓸 말 순서로 정리하라.".to_string(),
+    );
+  }
+
+  if strategy_question_is_message_drafting(message) {
+    return Some(
+      "- 이번 질문은 바로 전달할 문장을 원하는 요청이다.\n- 첫 문단에서 상황판단을 짧게 말한 뒤, 바로 복사해 쓸 수 있는 문장을 먼저 제시하라.".to_string(),
+    );
+  }
+
+  None
+}
+
+fn strategy_question_needs_legal_refs(message: &str) -> bool {
+  let compact = strategy_compact_text(message);
+  [
+    "법",
+    "법적",
+    "조문",
+    "근거",
+    "규정",
+    "법령",
+    "위법",
+    "처벌",
+    "고소",
+    "신고",
+  ]
+  .iter()
+  .any(|keyword| compact.contains(keyword))
+}
+
 fn write_strategy_prompt_file(prefix: &str, content: &str) -> Result<PathBuf, String> {
   let dir = std::env::temp_dir().join("roosycozy_strategy");
   fs::create_dir_all(&dir).map_err(|e| format!("전략자문 임시 폴더를 만들지 못했어요: {e}"))?;
@@ -1045,6 +1303,41 @@ fn strategy_fit_prompt_to_budget(input: &str, n_ctx: u32, max_tokens: u32) -> St
   let tail_chars = input.chars().rev().take(tail_len).collect::<Vec<_>>();
   let tail = tail_chars.into_iter().rev().collect::<String>();
   format!("{}\n\n[중간 맥락 일부 압축]\n\n{}", head.trim_end(), tail.trim_start())
+}
+
+fn strategy_strip_prompt_echo(input: &str) -> String {
+  const MARKERS: [&str; 20] = [
+    "[현재 사건 맥락]",
+    "[증거 패킷 요약]",
+    "[핵심 인물]",
+    "[시간 흐름]",
+    "[위험 신호]",
+    "[비어 있는 정보]",
+    "[증거 참조표]",
+    "[관련 법령 참조표]",
+    "[전략 메모]",
+    "[직전 대화]",
+    "[이번 요청]",
+    "[응답 조건]",
+    "[중간 맥락 일부 압축]",
+    "[질문]",
+    "[핵심 근거]",
+    "[관련 법령]",
+    "[HyperCLOVA-X 초안]",
+    "[Roosy-X 초안]",
+    "[합성 지침]",
+    "[추가 정보]",
+  ];
+
+  let mut cut = input.len();
+  for marker in MARKERS {
+    if let Some(idx) = input.find(marker) {
+      if idx > 80 && idx < cut {
+        cut = idx;
+      }
+    }
+  }
+  input[..cut].trim_end().to_string()
 }
 
 fn emit_strategy_progress(app: Option<&AppHandle>, stage: &str, message: impl Into<String>) {
@@ -1088,6 +1381,36 @@ fn strategy_runner_hint_text() -> String {
     STRATEGY_SIDECAR_FILENAME,
     STRATEGY_SIDECAR_GENERIC_FILENAME
   )
+}
+
+fn normalize_strategy_model_id(raw: Option<&str>) -> &'static str {
+  match raw.unwrap_or("").trim().to_ascii_lowercase().as_str() {
+    STRATEGY_MODEL_HYBRID_ID => STRATEGY_MODEL_HYBRID_ID,
+    STRATEGY_MODEL_ROOSY_ID => STRATEGY_MODEL_ROOSY_ID,
+    _ => STRATEGY_MODEL_DEFAULT_ID,
+  }
+}
+
+fn strategy_model_filename_for_id(model_id: &str) -> &'static str {
+  match normalize_strategy_model_id(Some(model_id)) {
+    STRATEGY_MODEL_ROOSY_ID => STRATEGY_MODEL_ROOSY_FILENAME,
+    _ => STRATEGY_MODEL_FILENAME,
+  }
+}
+
+fn strategy_model_resource_path_for_id(model_id: &str) -> &'static str {
+  match normalize_strategy_model_id(Some(model_id)) {
+    STRATEGY_MODEL_ROOSY_ID => STRATEGY_MODEL_ROOSY_RESOURCE_PATH,
+    _ => STRATEGY_MODEL_RESOURCE_PATH,
+  }
+}
+
+fn strategy_model_label_for_id(model_id: &str) -> &'static str {
+  match normalize_strategy_model_id(Some(model_id)) {
+    STRATEGY_MODEL_HYBRID_ID => "ROOSY-Hybrid",
+    STRATEGY_MODEL_ROOSY_ID => "Roosy-X",
+    _ => "HyperCLOVA-X",
+  }
 }
 
 #[cfg(target_os = "windows")]
@@ -1191,11 +1514,13 @@ fn resolve_strategy_runner_path(app: Option<&AppHandle>) -> Result<PathBuf, Stri
   ))
 }
 
-fn strategy_model_candidates(app: Option<&AppHandle>) -> Vec<PathBuf> {
+fn strategy_model_candidates(app: Option<&AppHandle>, model_id: &str) -> Vec<PathBuf> {
   let mut out = Vec::<PathBuf>::new();
+  let resource_path = strategy_model_resource_path_for_id(model_id);
+  let filename = strategy_model_filename_for_id(model_id);
 
   if let Some(app) = app {
-    if let Ok(path) = app.path().resolve(STRATEGY_MODEL_RESOURCE_PATH, BaseDirectory::Resource) {
+    if let Ok(path) = app.path().resolve(resource_path, BaseDirectory::Resource) {
       push_unique_path(&mut out, path);
     }
   }
@@ -1203,35 +1528,37 @@ fn strategy_model_candidates(app: Option<&AppHandle>) -> Vec<PathBuf> {
   if let Ok(exe) = std::env::current_exe() {
     if let Some(dir) = exe.parent() {
       if let Some(contents) = dir.parent() {
-        push_unique_path(&mut out, contents.join("Resources").join("models").join(STRATEGY_MODEL_FILENAME));
+        push_unique_path(&mut out, contents.join("Resources").join("models").join(filename));
       }
-      push_unique_path(&mut out, dir.join("resources").join("models").join(STRATEGY_MODEL_FILENAME));
+      push_unique_path(&mut out, dir.join("resources").join("models").join(filename));
     }
   }
 
   #[cfg(debug_assertions)]
   {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    push_unique_path(&mut out, manifest.join("resources").join("models").join(STRATEGY_MODEL_FILENAME));
-    push_unique_path(&mut out, manifest.join("src").join("engine").join(STRATEGY_MODEL_FILENAME));
-    push_unique_path(&mut out, manifest.join(STRATEGY_MODEL_FILENAME));
+    push_unique_path(&mut out, manifest.join("resources").join("models").join(filename));
+    push_unique_path(&mut out, manifest.join("src").join("engine").join(filename));
+    push_unique_path(&mut out, manifest.join(filename));
     if let Some(parent) = manifest.parent() {
-      push_unique_path(&mut out, parent.join("src-tauri").join("resources").join("models").join(STRATEGY_MODEL_FILENAME));
+      push_unique_path(&mut out, parent.join("src-tauri").join("resources").join("models").join(filename));
     }
   }
 
   out
 }
 
-fn resolve_strategy_model_path(app: Option<&AppHandle>) -> Result<PathBuf, String> {
-  for candidate in strategy_model_candidates(app) {
+fn resolve_strategy_model_path(app: Option<&AppHandle>, model_id: &str) -> Result<PathBuf, String> {
+  let filename = strategy_model_filename_for_id(model_id);
+  for candidate in strategy_model_candidates(app, model_id) {
     if candidate.exists() {
       return Ok(candidate);
     }
   }
   Err(format!(
-    "전략자문 모델 파일을 찾지 못했어요. App Store 배포용 앱 번들의 Resources/models 안에 {} 파일을 포함해주세요.",
-    STRATEGY_MODEL_FILENAME
+    "{} 모델 파일을 찾지 못했어요. App 번들의 Resources/models 안에 {} 파일을 포함해주세요.",
+    strategy_model_label_for_id(model_id),
+    filename
   ))
 }
 
@@ -1319,6 +1646,374 @@ fn summarize_case_context(case_item: Option<&CaseItem>) -> String {
     return lines.join("\n");
   }
   "- 사건 연결 없이 증거만으로 분석 중".to_string()
+}
+
+fn strategy_legal_dataset() -> &'static StrategyLegalDataset {
+  STRATEGY_LEGAL_DATASET.get_or_init(|| {
+    serde_json::from_str::<StrategyLegalDataset>(STRATEGY_LEGAL_RAG_JSON)
+      .unwrap_or_else(|err| panic!("failed to load legal rag dataset: {err}"))
+  })
+}
+
+fn strategy_legal_flat_chunks() -> &'static Vec<StrategyLegalFlatChunk> {
+  STRATEGY_LEGAL_FLAT_CHUNKS.get_or_init(|| {
+    STRATEGY_LEGAL_RAG_JSONL
+      .lines()
+      .filter_map(|line| {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+          return None;
+        }
+        serde_json::from_str::<StrategyLegalFlatChunk>(trimmed).ok()
+      })
+      .collect::<Vec<_>>()
+  })
+}
+
+fn strategy_push_unique_term(out: &mut Vec<String>, seen: &mut HashSet<String>, raw: &str) {
+  let trimmed = raw.trim();
+  if trimmed.is_empty() {
+    return;
+  }
+  let normalized = norm(trimmed);
+  if normalized.chars().count() < 2 {
+    return;
+  }
+  if seen.insert(normalized) {
+    out.push(trimmed.to_string());
+  }
+}
+
+fn strategy_push_unique_reason(out: &mut Vec<String>, reason: String) {
+  let trimmed = reason.trim();
+  if trimmed.is_empty() {
+    return;
+  }
+  if !out.iter().any(|item| item == trimmed) {
+    out.push(trimmed.to_string());
+  }
+}
+
+fn strategy_collect_legal_source_text(
+  case_item: Option<&CaseItem>,
+  selected_records: &[&RecordItem],
+  retrieval_query: &str,
+  message: &str,
+  strategy_note: Option<&str>,
+) -> String {
+  let mut parts = Vec::<String>::new();
+  if let Some(case_item) = case_item {
+    if !case_item.title.trim().is_empty() {
+      parts.push(case_item.title.trim().to_string());
+    }
+    if !case_item.query.trim().is_empty() {
+      parts.push(case_item.query.trim().to_string());
+    }
+    for actor in case_item.actors.iter().take(6) {
+      let label = format_actor_short(actor);
+      if !label.trim().is_empty() {
+        parts.push(label);
+      }
+    }
+  }
+  if !retrieval_query.trim().is_empty() {
+    parts.push(retrieval_query.trim().to_string());
+  }
+  if !message.trim().is_empty() {
+    parts.push(message.trim().to_string());
+  }
+  if let Some(note) = strategy_note.map(str::trim).filter(|note| !note.is_empty()) {
+    parts.push(note.to_string());
+  }
+  for record in selected_records {
+    if !record.summary.trim().is_empty() {
+      parts.push(record.summary.trim().to_string());
+    }
+    let actor = strategy_main_actor_label(record);
+    if !actor.trim().is_empty() {
+      parts.push(actor);
+    }
+    let place = strategy_place_label(record);
+    if !place.trim().is_empty() && place != "장소 미상" {
+      parts.push(place);
+    }
+    if let Some(parts_summary) = record.summary_parts.as_ref() {
+      for field in [
+        parts_summary.background.trim(),
+        parts_summary.teacher_actions.trim(),
+        parts_summary.issues.trim(),
+        parts_summary.evidence_list.trim(),
+        parts_summary.other.trim(),
+      ] {
+        if !field.is_empty() {
+          parts.push(field.to_string());
+        }
+      }
+    }
+    for related in &record.related {
+      let label = format_actor_short(related);
+      if !label.trim().is_empty() {
+        parts.push(label);
+      }
+    }
+  }
+  strategy_trim(&parts.join(" "), 2400)
+}
+
+fn strategy_build_legal_query_terms(source_text: &str, concept_map: &HashMap<String, Vec<String>>) -> Vec<String> {
+  let source_norm = norm(source_text);
+  let mut out = Vec::<String>::new();
+  let mut seen = HashSet::<String>::new();
+
+  for token in tokenize(&source_norm) {
+    strategy_push_unique_term(&mut out, &mut seen, &token);
+  }
+
+  for (concept, expansions) in concept_map {
+    let concept_norm = norm(concept);
+    if concept_norm.is_empty() || !source_norm.contains(&concept_norm) {
+      continue;
+    }
+    strategy_push_unique_term(&mut out, &mut seen, concept);
+    for expansion in expansions {
+      strategy_push_unique_term(&mut out, &mut seen, expansion);
+    }
+  }
+
+  out.truncate(80);
+  out
+}
+
+fn strategy_phrase_score(
+  source_norm: &str,
+  phrases: &[String],
+  weight: f32,
+  reason_prefix: &str,
+  reasons: &mut Vec<String>,
+) -> f32 {
+  let mut score = 0.0;
+  for phrase in phrases {
+    let trimmed = phrase.trim();
+    let normalized = norm(trimmed);
+    if normalized.chars().count() < 2 || !source_norm.contains(&normalized) {
+      continue;
+    }
+    score += weight;
+    strategy_push_unique_reason(reasons, format!("{} {}", reason_prefix, trimmed));
+  }
+  score
+}
+
+fn strategy_overlap_score(source_norm: &str, query_terms: &[String], reasons: &mut Vec<String>) -> f32 {
+  let mut matched = Vec::<String>::new();
+  for term in query_terms {
+    let normalized = norm(term);
+    if normalized.chars().count() < 2 || !source_norm.contains(&normalized) {
+      continue;
+    }
+    if !matched.iter().any(|item| item == term) {
+      matched.push(term.clone());
+    }
+  }
+  for term in matched.iter().take(4) {
+    strategy_push_unique_reason(reasons, format!("질의 일치 {}", term));
+  }
+  (matched.len().min(6) as f32) * 0.22
+}
+
+fn build_strategy_legal_line_for_prompt(reference: &StrategyLegalReference) -> String {
+  let law_name = if reference.short_name.trim().is_empty() {
+    reference.law_name.trim().to_string()
+  } else {
+    format!("{} ({})", reference.short_name.trim(), reference.law_name.trim())
+  };
+  let mut line = format!(
+    "[{}] {} {} {}",
+    reference.ref_id,
+    strategy_trim(&law_name, 52),
+    strategy_trim(reference.article_ref.trim(), 18),
+    strategy_trim(reference.article_title.trim(), 44)
+  );
+  if !reference.legal_point.trim().is_empty() {
+    line.push_str(&format!(" | 취지: {}", strategy_trim(reference.legal_point.trim(), 120)));
+  }
+  if !reference.teacher_use_case.trim().is_empty() {
+    line.push_str(&format!(" | 현장 적용: {}", strategy_trim(reference.teacher_use_case.trim(), 110)));
+  }
+  if !reference.relevance_reasons.is_empty() {
+    line.push_str(&format!(" | 연결 이유: {}", strategy_trim(&reference.relevance_reasons.join(", "), 96)));
+  }
+  line
+}
+
+fn build_strategy_legal_references(
+  case_item: Option<&CaseItem>,
+  selected_records: &[&RecordItem],
+  retrieval_query: &str,
+  message: &str,
+  strategy_note: Option<&str>,
+) -> Vec<StrategyLegalReference> {
+  #[derive(Clone)]
+  struct Candidate<'a> {
+    score: f32,
+    reasons: Vec<String>,
+    chunk: &'a StrategyLegalFlatChunk,
+    law: Option<&'a StrategyLegalLawRecord>,
+  }
+
+  let dataset = strategy_legal_dataset();
+  let flat_chunks = strategy_legal_flat_chunks();
+  if dataset.records.is_empty() && flat_chunks.is_empty() {
+    return Vec::new();
+  }
+
+  let source_text = strategy_collect_legal_source_text(case_item, selected_records, retrieval_query, message, strategy_note);
+  let source_norm = norm(&source_text);
+  let query_terms = strategy_build_legal_query_terms(&source_text, &dataset.retrieval_boosters.concept_map);
+  let law_by_id = dataset
+    .records
+    .iter()
+    .filter_map(|law| {
+      let id = law.record_id.trim().to_string();
+      if id.is_empty() { None } else { Some((id, law)) }
+    })
+    .collect::<HashMap<_, _>>();
+  let mut candidates = Vec::<Candidate>::new();
+
+  for chunk in flat_chunks.iter() {
+    if !chunk.chunk_type.trim().is_empty() && !chunk.chunk_type.trim().eq_ignore_ascii_case("article") {
+      continue;
+    }
+    let law = law_by_id.get(chunk.record_id.trim()).copied();
+
+    let mut law_names = Vec::<String>::new();
+    let mut law_names_seen = HashSet::<String>::new();
+    for raw in [
+      chunk.official_name.as_str(),
+      chunk.short_name.as_str(),
+      law.map(|item| item.official_name.as_str()).unwrap_or(""),
+      law.map(|item| item.short_name.as_str()).unwrap_or(""),
+    ] {
+      strategy_push_unique_term(&mut law_names, &mut law_names_seen, raw);
+    }
+
+    let mut aliases = Vec::<String>::new();
+    let mut aliases_seen = HashSet::<String>::new();
+    for raw in &chunk.aliases {
+      strategy_push_unique_term(&mut aliases, &mut aliases_seen, raw);
+    }
+    if let Some(law_item) = law {
+      for raw in &law_item.rag.aliases {
+        strategy_push_unique_term(&mut aliases, &mut aliases_seen, raw);
+      }
+    }
+
+    let mut topical_tags = Vec::<String>::new();
+    let mut topical_seen = HashSet::<String>::new();
+    for raw in &chunk.topical_tags {
+      strategy_push_unique_term(&mut topical_tags, &mut topical_seen, raw);
+    }
+    if let Some(law_item) = law {
+      for raw in &law_item.rag.topical_tags {
+        strategy_push_unique_term(&mut topical_tags, &mut topical_seen, raw);
+      }
+    }
+
+    let article_titles = vec![
+      chunk.article_title.clone(),
+      format!("{} {}", chunk.article_no.trim(), chunk.article_title.trim()).trim().to_string(),
+    ];
+    let article_keywords = chunk.keywords.clone();
+    let article_text = norm(&format!(
+      "{} {} {} {} {} {} {} {} {}",
+      chunk.official_name,
+      chunk.short_name,
+      chunk.school_relevance,
+      topical_tags.join(" "),
+      chunk.article_no,
+      chunk.article_title,
+      chunk.legal_point,
+      chunk.teacher_use_case,
+      chunk.retrieval_text
+    ));
+
+    let mut reasons = Vec::<String>::new();
+    let mut score = 0.0;
+    score += strategy_phrase_score(&source_norm, &law_names, 3.1, "법령명 일치", &mut reasons);
+    score += strategy_phrase_score(&source_norm, &aliases, 2.7, "법령 별칭 일치", &mut reasons);
+    score += strategy_phrase_score(&source_norm, &topical_tags, 2.3, "주제 일치", &mut reasons);
+    score += strategy_phrase_score(&source_norm, &article_titles, 1.8, "조문 주제 일치", &mut reasons);
+    score += strategy_phrase_score(&source_norm, &article_keywords, 1.6, "키워드 일치", &mut reasons);
+    score += strategy_overlap_score(&article_text, &query_terms, &mut reasons);
+
+    if !chunk.school_relevance.trim().is_empty() {
+      score += strategy_overlap_score(&norm(chunk.school_relevance.trim()), &query_terms, &mut reasons) * 0.7;
+    }
+    if source_norm.contains(&norm(chunk.article_no.trim())) && !chunk.article_no.trim().is_empty() {
+      score += 1.0;
+      strategy_push_unique_reason(&mut reasons, format!("조문 번호 일치 {}", chunk.article_no.trim()));
+    }
+    if !chunk.retrieval_text.trim().is_empty() {
+      score += strategy_overlap_score(&norm(chunk.retrieval_text.trim()), &query_terms, &mut reasons) * 1.15;
+    }
+
+    if score >= 2.2 || reasons.len() >= 2 {
+      candidates.push(Candidate { score, reasons, chunk, law });
+    }
+  }
+
+  candidates.sort_by(|a, b| {
+    b.score
+      .partial_cmp(&a.score)
+      .unwrap_or(Ordering::Equal)
+      .then_with(|| a.chunk.official_name.cmp(&b.chunk.official_name))
+      .then_with(|| a.chunk.article_no.cmp(&b.chunk.article_no))
+  });
+
+  let mut per_law = HashMap::<String, usize>::new();
+  let mut out = Vec::<StrategyLegalReference>::new();
+  for candidate in candidates {
+    let law_id = candidate.chunk.record_id.trim().to_string();
+    if law_id.is_empty() {
+      continue;
+    }
+    let used = per_law.entry(law_id.clone()).or_insert(0);
+    if *used >= 2 {
+      continue;
+    }
+    *used += 1;
+    let index = out.len() + 1;
+    out.push(StrategyLegalReference {
+      ref_id: format!("L{}", index),
+      law_id,
+      law_name: candidate
+        .law
+        .map(|item| item.official_name.trim().to_string())
+        .unwrap_or_else(|| candidate.chunk.official_name.trim().to_string()),
+      short_name: candidate
+        .law
+        .map(|item| item.short_name.trim().to_string())
+        .unwrap_or_else(|| candidate.chunk.short_name.trim().to_string()),
+      article_ref: candidate.chunk.article_no.trim().to_string(),
+      article_title: candidate.chunk.article_title.trim().to_string(),
+      legal_point: candidate.chunk.legal_point.trim().to_string(),
+      teacher_use_case: candidate.chunk.teacher_use_case.trim().to_string(),
+      source_url: candidate
+        .law
+        .map(|item| item.source_url.trim().to_string())
+        .unwrap_or_else(|| candidate.chunk.source_url.trim().to_string()),
+      status_label: candidate
+        .law
+        .map(|item| item.current_status_label.trim().to_string())
+        .unwrap_or_else(|| candidate.chunk.current_status_label.trim().to_string()),
+      relevance_reasons: candidate.reasons.into_iter().take(4).collect(),
+    });
+    if out.len() >= 4 {
+      break;
+    }
+  }
+
+  out
 }
 
 fn build_strategy_retrieval_query(
@@ -1585,6 +2280,7 @@ fn build_strategy_evidence_packet(
   let latest = selected_records.last().map(|record| record.ts.trim()).unwrap_or("");
   let actor_summary = build_strategy_actor_summary(&selected_records);
   let gaps = build_strategy_gaps(case_item, &selected_records, records.len());
+  let legal_references = build_strategy_legal_references(case_item, &selected_records, &retrieval_query, message, strategy_note);
 
   let mut risk_counts = [0usize; 3];
   let mut risk_reasons = Vec::<String>::new();
@@ -1730,6 +2426,7 @@ fn build_strategy_evidence_packet(
       risk_summary,
       gaps,
       evidence_records,
+      legal_references,
     },
     retrieval_query,
   )
@@ -1761,13 +2458,35 @@ fn build_strategy_system_prompt() -> String {
     "- 영어, 중국어, 일본어, 한자 사용 금지.",
     "- 역할: 학교 현장 분쟁·민원 대응을 돕는 증거 기반 전략자문 에이전트.",
     "- 반드시 제공된 사건 맥락과 증거 참조표만 근거로 답하라.",
+    "- 관련 법령 참조표가 함께 주어지면 사건 증거와 연결되는 범위 안에서만 조심스럽게 활용하라.",
+    "- 입력으로 주어진 사건 맥락, 증거 참조표, 법령 참조표 문구를 그대로 길게 다시 베끼지 말라.",
     "- 사건에 없는 사실을 추가하지 말고, 확실하지 않으면 모른다고 적어라.",
+    "- 첫 문장에서 사용자의 질문에 직접 답하라.",
     "- 근거는 별도 '근거 묶음' 섹션으로 떼어내지 말고, 답변 문장 안에 자연스럽게 녹여라.",
     "- 핵심 판단이나 제안마다 가능하면 [E1], [E2] 형식의 근거 표기를 문장 안에 붙여라.",
+    "- 법령을 언급할 때는 가능하면 [L1], [L2]처럼 표시하고, 조문 취지와 현장 적용 포인트만 짧게 연결하라.",
     "- 답변은 교사가 바로 복사해 쓸 수 있게 실무적으로 작성하라.",
-    "- 과도한 법률 단정은 피하고, 기록·증거·말의 톤·다음 행동 중심으로 답하라.",
+    "- 과도한 법률 단정이나 최종 법률판단은 피하고, 기록·증거·말의 톤·다음 행동 중심으로 답하라.",
     "- 응답은 대화형으로 자연스럽게 이어가되, 필요하면 짧은 bullet만 사용하라.",
     "- 응답은 가능하면 1) 상황판단 2) 지금 먼저 할 말 3) 바로 남길 기록 4) 다음 행동 순서를 자연스럽게 따른다.",
+  ].join("\n")
+}
+
+fn build_strategy_hybrid_system_prompt() -> String {
+  [
+    "- AI 언어모델의 이름은 \"CLOVA X\" 이며 네이버에서 만들었다.",
+    "- 반드시 한국어로만 답하라.",
+    "- 역할: 두 개의 전략자문 초안을 하나의 최종 답변으로 합치는 편집 에이전트.",
+    "- 최종 문장과 답변 흐름은 Roosy-X 초안을 기본으로 삼고, HyperCLOVA-X 초안은 사실 과장 방지와 근거 정렬용으로 활용하라.",
+    "- HyperCLOVA-X 초안의 근거성·균형감은 안전장치로 쓰고, Roosy-X 초안의 직관성·실무 문장은 전면에 세워라.",
+    "- 입력 초안을 비교평가하지 말고, 사용자에게 바로 보여줄 최종 답변만 작성하라.",
+    "- 사건·증거·법령은 입력에 포함된 범위만 사용하라.",
+    "- 사실 단정은 조심하고, 확실하지 않은 부분은 확인 필요로 표현하라.",
+    "- 첫 문장에서 사용자의 질문에 직접 답하라.",
+    "- 근거는 문장 안에 자연스럽게 [E1], [L1]처럼 녹여라.",
+    "- 답변은 가능하면 1) 상황판단 2) 지금 먼저 할 말 3) 바로 남길 기록 4) 다음 행동 순서를 자연스럽게 따른다.",
+    "- 초안 문장을 그대로 길게 이어붙이지 말고, 하나의 매끈한 최종 한국어 답변으로 정리하라.",
+    "- 증거 목록을 길게 다시 나열하지 말고, 결론을 뒷받침하는 핵심 근거만 짧게 묶어 설명하라.",
   ].join("\n")
 }
 
@@ -1792,6 +2511,8 @@ fn build_strategy_user_prompt(
   let note_block = strategy_trim(&strategy_sanitize_text(strategy_note.unwrap_or("없음")), 320);
   let history_block = summarize_conversation(conversation);
   let question_block = strategy_trim(&strategy_sanitize_text(message.trim()), 360);
+  let question_focus_block = strategy_question_focus_hint(message)
+    .unwrap_or_else(|| "- 이번 질문의 핵심 의도를 첫 문장에서 직접 답하라.".to_string());
   let actor_block = if evidence_packet.actor_summary.is_empty() {
     "- 정리된 인물 없음".to_string()
   } else {
@@ -1832,9 +2553,20 @@ fn build_strategy_user_prompt(
       .collect::<Vec<_>>()
       .join("\n")
   };
+  let legal_block = if evidence_packet.legal_references.is_empty() {
+    "- 바로 연결된 법령 없음".to_string()
+  } else {
+    evidence_packet
+      .legal_references
+      .iter()
+      .map(build_strategy_legal_line_for_prompt)
+      .map(|line| format!("- {}", line))
+      .collect::<Vec<_>>()
+      .join("\n")
+  };
 
   strategy_sanitize_text(&format!(
-    "[현재 사건 맥락]\n{}\n\n[증거 패킷 요약]\n- {}\n- {}\n\n[핵심 인물]\n{}\n\n[시간 흐름]\n{}\n\n[위험 신호]\n{}\n\n[비어 있는 정보]\n{}\n\n[증거 참조표]\n{}\n\n[전략 메모]\n{}\n\n[직전 대화]\n{}\n\n[이번 요청]\n{}\n\n[응답 조건]\n- 한국어만 사용\n- 학교 현장에서 바로 쓰는 표현\n- 너무 긴 설명보다 핵심 위주\n- 필요한 경우 bullet 사용 가능\n- 사건에 없는 사실은 추정하지 말 것\n- '현재 근거 묶음 보기' 같은 별도 섹션 제목은 만들지 말 것\n- 근거는 답변 문장 안에 [E1]처럼 자연스럽게 섞어 쓸 것\n- 비어 있는 정보나 확인 필요 사항도 별도 큰 섹션보다 문장 말미에 자연스럽게 덧붙일 것\n- 근거가 약한 내용은 '확실하지 않음'이라고 쓸 것",
+    "[현재 사건 맥락]\n{}\n\n[증거 패킷 요약]\n- {}\n- {}\n\n[핵심 인물]\n{}\n\n[시간 흐름]\n{}\n\n[위험 신호]\n{}\n\n[비어 있는 정보]\n{}\n\n[증거 참조표]\n{}\n\n[관련 법령 참조표]\n{}\n\n[전략 메모]\n{}\n\n[직전 대화]\n{}\n\n[이번 요청]\n{}\n\n[질문 초점]\n{}\n\n[응답 조건]\n- 한국어만 사용\n- 학교 현장에서 바로 쓰는 표현\n- 첫 문장에서 질문에 직접 답할 것\n- 너무 긴 설명보다 핵심 위주\n- 필요한 경우 bullet 사용 가능\n- 사건에 없는 사실은 추정하지 말 것\n- '현재 근거 묶음 보기' 같은 별도 섹션 제목은 만들지 말 것\n- 근거는 답변 문장 안에 [E1]처럼 자연스럽게 섞어 쓸 것\n- 법령을 쓸 때는 [L1]처럼 자연스럽게 섞되, 최종 법률판단처럼 단정하지 말 것\n- 비어 있는 정보나 확인 필요 사항도 별도 큰 섹션보다 문장 말미에 자연스럽게 덧붙일 것\n- 근거가 약한 내용은 '확실하지 않음'이라고 쓸 것",
     case_block,
     evidence_packet.focus_summary,
     evidence_packet.overview,
@@ -1843,9 +2575,109 @@ fn build_strategy_user_prompt(
     risk_block,
     gap_block,
     records_block,
+    legal_block,
     note_block,
     history_block,
-    question_block
+    question_block,
+    question_focus_block
+  ))
+}
+
+fn build_strategy_user_prompt_for_draft(
+  evidence_packet: &StrategyEvidencePacket,
+  case_item: Option<&CaseItem>,
+  message: &str,
+  strategy_note: Option<&str>,
+) -> String {
+  let case_block = summarize_case_context(case_item);
+  let note_block = strategy_trim(&strategy_sanitize_text(strategy_note.unwrap_or("없음")), 180);
+  let question_block = strategy_trim(&strategy_sanitize_text(message.trim()), 220);
+  let question_focus_block = strategy_question_focus_hint(message)
+    .unwrap_or_else(|| "- 첫 문장에서 질문에 직접 답하고, 바로 실무 판단으로 이어가라.".to_string());
+  let evidence_block = if evidence_packet.evidence_records.is_empty() {
+    "- 연결된 핵심 근거 없음".to_string()
+  } else {
+    evidence_packet
+      .evidence_records
+      .iter()
+      .take(3)
+      .map(build_strategy_record_line_for_prompt)
+      .map(|line| format!("- {}", line))
+      .collect::<Vec<_>>()
+      .join("\n")
+  };
+  let legal_block = if !strategy_question_needs_legal_refs(message) || evidence_packet.legal_references.is_empty() {
+    "- 이번 질문에서 법령 직접 인용은 우선순위가 낮음".to_string()
+  } else {
+    evidence_packet
+      .legal_references
+      .iter()
+      .take(2)
+      .map(build_strategy_legal_line_for_prompt)
+      .map(|line| format!("- {}", line))
+      .collect::<Vec<_>>()
+      .join("\n")
+  };
+
+  strategy_sanitize_text(&format!(
+    "[현재 사건 맥락]\n{}\n\n[핵심 근거]\n{}\n\n[관련 법령]\n{}\n\n[전략 메모]\n{}\n\n[질문]\n{}\n\n[질문 초점]\n{}\n\n[응답 조건]\n- 첫 문장에서 질문에 직접 답할 것\n- 증거 목록을 길게 다시 늘어놓지 말 것\n- 학교 현장에서 바로 쓸 수 있는 한국어 문장으로 답할 것\n- 너무 긴 설명보다 결론과 행동 제안을 먼저 줄 것",
+    case_block,
+    evidence_block,
+    legal_block,
+    note_block,
+    question_block,
+    question_focus_block
+  ))
+}
+
+fn build_strategy_hybrid_user_prompt(
+  evidence_packet: &StrategyEvidencePacket,
+  case_item: Option<&CaseItem>,
+  message: &str,
+  strategy_note: Option<&str>,
+  hyper_answer: &str,
+  roosy_answer: &str,
+) -> String {
+  let case_block = summarize_case_context(case_item);
+  let note_block = strategy_trim(&strategy_sanitize_text(strategy_note.unwrap_or("없음")), 220);
+  let question_block = strategy_trim(&strategy_sanitize_text(message.trim()), 240);
+  let question_focus_block = strategy_question_focus_hint(message)
+    .unwrap_or_else(|| "- 이번 질문에 먼저 직접 답하고, 그다음 이유와 행동 제안을 붙여라.".to_string());
+  let evidence_block = if evidence_packet.evidence_records.is_empty() {
+    "- 연결된 핵심 근거 없음".to_string()
+  } else {
+    evidence_packet
+      .evidence_records
+      .iter()
+      .take(4)
+      .map(build_strategy_record_line_for_prompt)
+      .map(|line| format!("- {}", line))
+      .collect::<Vec<_>>()
+      .join("\n")
+  };
+  let legal_block = if evidence_packet.legal_references.is_empty() {
+    "- 관련 법령 없음".to_string()
+  } else {
+    evidence_packet
+      .legal_references
+      .iter()
+      .take(3)
+      .map(build_strategy_legal_line_for_prompt)
+      .map(|line| format!("- {}", line))
+      .collect::<Vec<_>>()
+      .join("\n")
+  };
+
+  strategy_sanitize_text(&format!(
+    "[현재 사건 맥락]\n{}\n\n[질문]\n{}\n\n[질문 초점]\n{}\n\n[전략 메모]\n{}\n\n[핵심 근거]\n{}\n\n[관련 법령]\n{}\n\n[HyperCLOVA-X 초안]\n{}\n\n[Roosy-X 초안]\n{}\n\n[합성 지침]\n- 최종 답변의 문장 흐름과 말투는 Roosy-X 초안을 기본으로 삼는다.\n- HyperCLOVA-X 초안은 과한 단정, 근거 누락, 법령 연결 오류를 바로잡는 안전 검토용으로 쓴다.\n- 첫 문장에서 사용자의 질문에 바로 답한다.\n- 둘을 비교하거나 '첫 번째 초안/두 번째 초안'이라고 설명하지 않는다.\n- 사용자에게 바로 전달할 하나의 최종 답변만 쓴다.\n- 대답 속에 [합성 지침], [추가 정보], [관련 법령] 같은 입력 헤더를 절대 다시 출력하지 않는다.\n- 증거 목록을 길게 다시 늘어놓지 말고, 결론을 뒷받침하는 핵심 근거만 짧게 묶어 설명한다.\n- 너무 짧게 줄이지 말고, 두 초안의 좋은 내용을 자연스럽게 충분히 녹여 길이감 있게 정리한다.\n- 답변은 상황판단, 지금 먼저 할 말, 바로 남길 기록, 다음 행동이 모두 드러나도록 3~6문단 정도의 완성형 답변으로 쓴다.\n- 답변은 자연스러운 문단형으로 쓰되, 꼭 필요할 때만 짧은 bullet을 사용한다.",
+    case_block,
+    question_block,
+    question_focus_block,
+    note_block,
+    evidence_block,
+    legal_block,
+    strategy_trim(hyper_answer.trim(), 2200),
+    strategy_trim(roosy_answer.trim(), 2200)
   ))
 }
 
@@ -1932,6 +2764,13 @@ fn cleanup_strategy_output(raw: &str) -> String {
       || trimmed.starts_with("[직전 대화]")
       || trimmed.starts_with("[이번 요청]")
       || trimmed.starts_with("[응답 조건]")
+      || trimmed.starts_with("[질문]")
+      || trimmed.starts_with("[핵심 근거]")
+      || trimmed.starts_with("[관련 법령]")
+      || trimmed.starts_with("[HyperCLOVA-X 초안]")
+      || trimmed.starts_with("[Roosy-X 초안]")
+      || trimmed.starts_with("[합성 지침]")
+      || trimmed.starts_with("[추가 정보]")
       || trimmed.starts_with("현재 목표:")
       || trimmed.starts_with("전략 프리셋:")
       || trimmed.starts_with("AI에게 반영할 메모:")
@@ -1949,6 +2788,12 @@ fn cleanup_strategy_output(raw: &str) -> String {
       || trimmed.starts_with("- 답변은 교사가 바로")
       || trimmed.starts_with("- 과도한 법률 단정은")
       || trimmed.starts_with("- 응답은 가능하면 1) 상황판단")
+      || trimmed.starts_with("- HyperCLOVA-X 초안의")
+      || trimmed.starts_with("- Roosy-X 초안의")
+      || trimmed.starts_with("- 둘을 비교하거나")
+      || trimmed.starts_with("- 사용자에게 바로 전달할")
+      || trimmed.starts_with("- 대답 속에 [합성 지침]")
+      || trimmed.starts_with("- 너무 짧게 줄이지 말고")
     {
       continue;
     }
@@ -1959,15 +2804,16 @@ fn cleanup_strategy_output(raw: &str) -> String {
     filtered.push(normalized);
   }
   let out = filtered.join("\n");
+  let out = strategy_strip_prompt_echo(out.trim());
   let out = out.trim();
-  strategy_trim(out, 2400)
+  strategy_trim(out, 4200)
 }
 
 fn strategy_answer_has_evidence_ref(answer: &str) -> bool {
   answer.contains("[E1]") || answer.contains("[E2]") || answer.contains("[E3]") || answer.contains("[E")
 }
 
-fn finalize_strategy_answer(answer: &str, evidence_packet: &StrategyEvidencePacket) -> String {
+fn finalize_strategy_answer(answer: &str, evidence_packet: &StrategyEvidencePacket, user_message: &str) -> String {
   let mut out = answer.trim().to_string();
   if out.is_empty() {
     return out;
@@ -1994,6 +2840,36 @@ fn finalize_strategy_answer(answer: &str, evidence_packet: &StrategyEvidencePack
     out.push_str(" 정도예요.");
   }
 
+  if !out.contains("[L")
+    && !evidence_packet.legal_references.is_empty()
+    && strategy_question_needs_legal_refs(user_message)
+  {
+    let refs = evidence_packet
+      .legal_references
+      .iter()
+      .take(2)
+      .map(|item| {
+        let law_label = if item.short_name.trim().is_empty() {
+          item.law_name.trim().to_string()
+        } else {
+          item.short_name.trim().to_string()
+        };
+        let article = if item.article_ref.trim().is_empty() {
+          item.article_title.trim().to_string()
+        } else {
+          format!("{} {}", item.article_ref.trim(), item.article_title.trim()).trim().to_string()
+        };
+        format!("[{}] {} {}", item.ref_id, strategy_trim(&law_label, 18), strategy_trim(&article, 28))
+      })
+      .collect::<Vec<_>>()
+      .join(", ");
+    if !refs.trim().is_empty() {
+      out.push_str("\n\n관련 법령으로는 ");
+      out.push_str(&refs);
+      out.push_str(" 정도가 함께 연결돼요.");
+    }
+  }
+
   let normalized = out.replace(' ', "");
   if !evidence_packet.gaps.is_empty()
     && !normalized.contains("확인필요")
@@ -2012,7 +2888,214 @@ fn finalize_strategy_answer(answer: &str, evidence_packet: &StrategyEvidencePack
     out.push_str(" 부분은 아직 확실하지 않아 확인이 더 필요해요.");
   }
 
-  strategy_trim(out.trim(), 3200)
+  strategy_trim(out.trim(), 5600)
+}
+
+fn execute_strategy_model(
+  app: Option<&AppHandle>,
+  requested_model_id: &str,
+  system_prompt_raw: &str,
+  user_prompt_raw: &str,
+  evidence_packet: &StrategyEvidencePacket,
+  n_ctx: u32,
+  max_tokens: u32,
+  threads: u32,
+  stage_label: &str,
+) -> Result<StrategyModelExecution, String> {
+  let model_id = normalize_strategy_model_id(Some(requested_model_id));
+  if model_id == STRATEGY_MODEL_HYBRID_ID {
+    return Err("하이브리드 모델은 직접 실행할 수 없어요.".to_string());
+  }
+  let runtime = strategy_runtime_config(Some(n_ctx), Some(threads));
+
+  let model_path = resolve_strategy_model_path(app, model_id)?;
+  let runner = resolve_strategy_runner_path(app)?;
+  let system_prompt = strategy_sanitize_text(system_prompt_raw.trim());
+  let user_prompt = strategy_fit_prompt_to_budget(
+    &strategy_sanitize_text(user_prompt_raw.trim()),
+    runtime.n_ctx,
+    max_tokens,
+  );
+  let stage = stage_label.trim();
+  let model_label = strategy_model_label_for_id(model_id);
+  let runner_name = runner.file_name().and_then(|x| x.to_str()).unwrap_or("llama-sidecar");
+  let model_name = model_path.file_name().and_then(|x| x.to_str()).unwrap_or(strategy_model_filename_for_id(model_id));
+
+  emit_strategy_progress(
+    app,
+    stage,
+    format!("{} 단계에서 {}({})를 준비했어요.", if stage.is_empty() { "실행" } else { stage }, model_label, model_name),
+  );
+  emit_strategy_progress(
+    app,
+    stage,
+    format!(
+      "{} · 실행기 {} · 프롬프트 {}자 · 컨텍스트 {} · 최대 토큰 {} · 스레드 {} · 장치 {}",
+      model_label,
+      runner_name,
+      system_prompt.chars().count() + user_prompt.chars().count(),
+      runtime.n_ctx,
+      max_tokens,
+      runtime.threads,
+      if runtime.n_gpu_layers > 0 { "metal" } else { "cpu" }
+    ),
+  );
+
+  let system_prompt_file = write_strategy_prompt_file("system_prompt", &system_prompt)?;
+  let user_prompt_file = match write_strategy_prompt_file("user_prompt", &user_prompt) {
+    Ok(path) => path,
+    Err(err) => {
+      cleanup_strategy_prompt_file(&system_prompt_file);
+      return Err(err);
+    }
+  };
+
+  let mut command = Command::new(&runner);
+  command
+    .arg("-m")
+    .arg(&model_path)
+    .arg("-c")
+    .arg(runtime.n_ctx.to_string())
+    .arg("-n")
+    .arg(max_tokens.to_string())
+    .arg("-t")
+    .arg(runtime.threads.to_string())
+    .arg("--threads-batch")
+    .arg(runtime.threads.to_string())
+    .arg("--temp")
+    .arg("0.15")
+    .arg("--top-p")
+    .arg("0.85")
+    .arg("--repeat-penalty")
+    .arg("1.12")
+    .arg("--parallel")
+    .arg("1")
+    .arg("--simple-io")
+    .arg("--no-display-prompt")
+    .arg("--no-show-timings")
+    .arg("--single-turn")
+    .arg("--no-warmup")
+    .arg("--device")
+    .arg(runtime.device)
+    .arg("--n-gpu-layers")
+    .arg(runtime.n_gpu_layers.to_string())
+    .arg("--color")
+    .arg("off")
+    .arg("--log-colors")
+    .arg("off")
+    .arg("--system-prompt-file")
+    .arg(&system_prompt_file)
+    .arg("--file")
+    .arg(&user_prompt_file)
+    .stdin(Stdio::null())
+    .stdout(Stdio::piped())
+    .stderr(Stdio::piped());
+  configure_strategy_child_process(&mut command);
+
+  let mut child = command.spawn().map_err(|e| {
+    cleanup_strategy_prompt_file(&system_prompt_file);
+    cleanup_strategy_prompt_file(&user_prompt_file);
+    format!(
+      "{} 실행에 실패했어요. sidecar 포함 여부와 실행 권한을 확인해주세요. runner={} / 상세: {}",
+      model_label,
+      runner.display(),
+      e
+    )
+  })?;
+  emit_strategy_progress(app, stage, format!("{}로 응답을 생성하고 있어요.", model_label));
+
+  let stdout = child.stdout.take().ok_or_else(|| format!("{} 표준출력을 연결하지 못했어요.", model_label))?;
+  let stderr = child.stderr.take().ok_or_else(|| format!("{} 표준에러를 연결하지 못했어요.", model_label))?;
+
+  let stdout_handle = thread::spawn(move || {
+    let mut reader = BufReader::new(stdout);
+    let mut bytes = Vec::<u8>::new();
+    let _ = reader.read_to_end(&mut bytes);
+    bytes
+  });
+
+  let app_for_stderr = app.cloned();
+  let stderr_handle = thread::spawn(move || {
+    let mut reader = BufReader::new(stderr);
+    let mut collected = String::new();
+    loop {
+      let mut line = String::new();
+      match reader.read_line(&mut line) {
+        Ok(0) => break,
+        Ok(_) => {
+          collected.push_str(&line);
+          let trimmed = line.trim();
+          if !trimmed.is_empty() && should_emit_strategy_runtime_log(trimmed) {
+            emit_strategy_progress(app_for_stderr.as_ref(), "모델로그", strategy_trim(trimmed, 260));
+          }
+        }
+        Err(err) => {
+          let msg = format!("표준에러 읽기 실패: {err}");
+          collected.push_str(&msg);
+          emit_strategy_progress(app_for_stderr.as_ref(), "모델로그", &msg);
+          break;
+        }
+      }
+    }
+    collected
+  });
+
+  let started = Instant::now();
+  let mut timed_out = false;
+  let mut last_heartbeat = 0_u64;
+  let status = loop {
+    if let Some(status) = child.try_wait().map_err(|e| format!("{} 상태 확인에 실패했어요: {e}", model_label))? {
+      break status;
+    }
+
+    let elapsed = started.elapsed().as_secs();
+    if elapsed >= STRATEGY_CHAT_TIMEOUT_SECS {
+      timed_out = true;
+      emit_strategy_progress(app, stage, format!("{}가 {}초 동안 끝나지 않아 실행을 중단할게요.", model_label, STRATEGY_CHAT_TIMEOUT_SECS));
+      let _ = child.kill();
+      let status = child.wait().map_err(|e| format!("중단된 {} 프로세스를 정리하지 못했어요: {e}", model_label))?;
+      break status;
+    }
+    if elapsed >= last_heartbeat + 5 {
+      last_heartbeat = elapsed;
+      emit_strategy_progress(app, stage, format!("{} 응답을 기다리는 중이에요. {}초 경과했어요.", model_label, elapsed));
+    }
+    thread::sleep(Duration::from_millis(200));
+  };
+
+  let stdout = String::from_utf8_lossy(&stdout_handle.join().unwrap_or_default()).to_string();
+  let stderr = stderr_handle.join().unwrap_or_else(|_| "stderr 수집 스레드가 비정상 종료되었어요.".to_string());
+  cleanup_strategy_prompt_file(&system_prompt_file);
+  cleanup_strategy_prompt_file(&user_prompt_file);
+  let answer = finalize_strategy_answer(&cleanup_strategy_output(&stdout), evidence_packet, user_prompt_raw);
+
+  if timed_out {
+    return Err(format!(
+      "{} 응답이 {}초 안에 끝나지 않아 중단했어요. 마지막 로그: {}",
+      model_label,
+      STRATEGY_CHAT_TIMEOUT_SECS,
+      strategy_trim(stderr.trim(), 280)
+    ));
+  }
+  if !status.success() && answer.is_empty() {
+    return Err(format!(
+      "{} 실행이 완료되지 않았어요. runner={} / stderr: {}",
+      model_label,
+      runner.display(),
+      strategy_trim(stderr.trim(), 600)
+    ));
+  }
+  if answer.is_empty() {
+    return Err(format!("{}가 빈 응답을 반환했어요.", model_label));
+  }
+
+  emit_strategy_progress(app, stage, format!("{} 단계 응답을 {}자로 정리했어요.", model_label, answer.chars().count()));
+  Ok(StrategyModelExecution {
+    answer,
+    model_path: model_path.display().to_string(),
+    runner: runner.display().to_string(),
+    prompt_chars: system_prompt.chars().count() + user_prompt.chars().count(),
+  })
 }
 
 pub fn run_strategy_chat(
@@ -2043,173 +3126,195 @@ pub fn run_strategy_chat(
       strategy_trim(retrieval_query.trim(), 120)
     ),
   );
-
-  let model_path = resolve_strategy_model_path(app)?;
-  let runner = resolve_strategy_runner_path(app)?;
-  let system_prompt = strategy_sanitize_text(&build_strategy_system_prompt());
-  let max_tokens = opts.as_ref().and_then(|x| x.max_tokens).unwrap_or(320).clamp(64, 512);
-  let n_ctx = opts.as_ref().and_then(|x| x.n_ctx).unwrap_or(4096).clamp(2048, 4096);
-  let user_prompt = strategy_fit_prompt_to_budget(
-    &build_strategy_user_prompt(&evidence_packet, case_item, safe_message, strategy_note, conversation),
-    n_ctx,
-    max_tokens,
-  );
-  let threads = opts.as_ref().and_then(|x| x.threads).unwrap_or(4).clamp(1, 8);
-  let runner_name = runner.file_name().and_then(|x| x.to_str()).unwrap_or("llama-sidecar");
-  let model_name = model_path.file_name().and_then(|x| x.to_str()).unwrap_or(STRATEGY_MODEL_FILENAME);
-  emit_strategy_progress(app, "준비", format!("실행기 {} 와 모델 {} 를 찾았어요.", runner_name, model_name));
-  emit_strategy_progress(app, "준비", format!("시스템 {}자 + 사용자 {}자, 컨텍스트 {}, 최대 토큰 {}로 실행해요.", system_prompt.chars().count(), user_prompt.chars().count(), n_ctx, max_tokens));
-
-  let system_prompt_file = write_strategy_prompt_file("system_prompt", &system_prompt)?;
-  let user_prompt_file = match write_strategy_prompt_file("user_prompt", &user_prompt) {
-    Ok(path) => path,
-    Err(err) => {
-      cleanup_strategy_prompt_file(&system_prompt_file);
-      return Err(err);
-    }
-  };
-
-  let mut command = Command::new(&runner);
-  command
-    .arg("-m")
-    .arg(&model_path)
-    .arg("-c")
-    .arg(n_ctx.to_string())
-    .arg("-n")
-    .arg(max_tokens.to_string())
-    .arg("-t")
-    .arg(threads.to_string())
-    .arg("--temp")
-    .arg("0.15")
-    .arg("--top-p")
-    .arg("0.85")
-    .arg("--repeat-penalty")
-    .arg("1.12")
-    .arg("--simple-io")
-    .arg("--no-display-prompt")
-    .arg("--no-show-timings")
-    .arg("--single-turn")
-    .arg("--no-warmup")
-    .arg("--device")
-    .arg("none")
-    .arg("--n-gpu-layers")
-    .arg("0")
-    .arg("--color")
-    .arg("off")
-    .arg("--log-colors")
-    .arg("off")
-    .arg("--system-prompt-file")
-    .arg(&system_prompt_file)
-    .arg("--file")
-    .arg(&user_prompt_file)
-    .stdin(Stdio::null())
-    .stdout(Stdio::piped())
-    .stderr(Stdio::piped());
-  configure_strategy_child_process(&mut command);
-
-  let mut child = command
-    .spawn()
-    .map_err(|e| {
-      cleanup_strategy_prompt_file(&system_prompt_file);
-      cleanup_strategy_prompt_file(&user_prompt_file);
+  if !evidence_packet.legal_references.is_empty() {
+    emit_strategy_progress(
+      app,
+      "법령정리",
       format!(
-        "내장 추론기 실행에 실패했어요. sidecar 포함 여부와 실행 권한을 확인해주세요. runner={} / 상세: {}",
-        runner.display(),
-        e
-      )
-    })?;
-  emit_strategy_progress(app, "실행", "전략자문 추론기를 시작했어요. 응답을 생성하고 있어요.");
+        "사건과 연결되는 법령·조문 {}건도 함께 골랐어요.",
+        evidence_packet.legal_references.len()
+      ),
+    );
+  }
 
-  let stdout = child.stdout.take().ok_or_else(|| "전략자문 표준출력을 연결하지 못했어요.".to_string())?;
-  let stderr = child.stderr.take().ok_or_else(|| "전략자문 표준에러를 연결하지 못했어요.".to_string())?;
+  let requested_model_id = normalize_strategy_model_id(opts.as_ref().and_then(|x| x.model.as_deref()));
+  let max_tokens = opts
+    .as_ref()
+    .and_then(|x| x.max_tokens)
+    .unwrap_or(if requested_model_id == STRATEGY_MODEL_HYBRID_ID { 720 } else { 320 })
+    .clamp(64, 768);
+  let runtime = strategy_runtime_config(
+    opts.as_ref().and_then(|x| x.n_ctx),
+    opts.as_ref().and_then(|x| x.threads),
+  );
+  let n_ctx = runtime.n_ctx;
+  let threads = runtime.threads;
+  let system_prompt = build_strategy_system_prompt();
+  let user_prompt = build_strategy_user_prompt(&evidence_packet, case_item, safe_message, strategy_note, conversation);
+  let draft_user_prompt = build_strategy_user_prompt_for_draft(&evidence_packet, case_item, safe_message, strategy_note);
+  let question_route = strategy_question_route(safe_message);
 
-  let stdout_handle = thread::spawn(move || {
-    let mut reader = BufReader::new(stdout);
-    let mut bytes = Vec::<u8>::new();
-    let _ = reader.read_to_end(&mut bytes);
-    bytes
-  });
+  if requested_model_id == STRATEGY_MODEL_HYBRID_ID {
+    if question_route == StrategyQuestionRoute::FastRoosy {
+      emit_strategy_progress(app, "라우팅", "이번 질문은 짧은 확인성 대화라 Roosy-X 단일 경로로 빠르게 정리할게요.");
+      let fast_result = execute_strategy_model(
+        app,
+        STRATEGY_MODEL_ROOSY_ID,
+        &system_prompt,
+        &user_prompt,
+        &evidence_packet,
+        strategy_hybrid_draft_n_ctx(n_ctx),
+        max_tokens.min(640).max(280),
+        threads,
+        "빠른실행",
+      )?;
+      emit_strategy_progress(app, "완료", format!("빠른 경로 응답 생성을 마쳤어요. 본문 길이 {}자예요.", fast_result.answer.chars().count()));
+      return Ok(StrategyChatRunResult {
+        answer: fast_result.answer,
+        model_path: "ROOSY-Hybrid (Roosy fast path)".to_string(),
+        runner: fast_result.runner,
+        prompt_chars: fast_result.prompt_chars,
+        records_used: evidence_packet.evidence_records.len(),
+        retrieval_query,
+        evidence_packet,
+      });
+    }
 
-  let app_for_stderr = app.map(|handle| handle.clone());
-  let stderr_handle = thread::spawn(move || {
-    let mut reader = BufReader::new(stderr);
-    let mut collected = String::new();
-    loop {
-      let mut line = String::new();
-      match reader.read_line(&mut line) {
-        Ok(0) => break,
-        Ok(_) => {
-          collected.push_str(&line);
-          let trimmed = line.trim();
-          if !trimmed.is_empty() && should_emit_strategy_runtime_log(trimmed) {
-            emit_strategy_progress(app_for_stderr.as_ref(), "모델로그", strategy_trim(trimmed, 260));
+    emit_strategy_progress(app, "라우팅", "이번 질문은 비교·민원문구·법령 연결 성격이 있어 하이브리드 전체를 돌릴게요.");
+    emit_strategy_progress(app, "준비", "Roosy-X 1차 초안에 사건 맥락을 충분히 먹이고, HyperCLOVA-X가 균형 검토한 뒤 최종 정리를 붙일게요.");
+    let draft_n_ctx = strategy_hybrid_draft_n_ctx(n_ctx);
+
+    let roosy_draft = match execute_strategy_model(
+      app,
+      STRATEGY_MODEL_ROOSY_ID,
+      &system_prompt,
+      &user_prompt,
+      &evidence_packet,
+      draft_n_ctx,
+      max_tokens.min(640).max(420),
+      threads,
+      "초안1",
+    ) {
+      Ok(result) => Some(result),
+      Err(err) => {
+        emit_strategy_progress(app, "초안1", format!("Roosy-X 초안이 잠시 흔들렸어요. {}", strategy_trim(&err, 220)));
+        None
+      }
+    };
+    if let Some(roosy) = roosy_draft.as_ref() {
+      emit_strategy_progress(
+        app,
+        "초안공유",
+        format!("1차 초안 포인트: {}", strategy_trim(&roosy.answer.replace('\n', " "), 150)),
+      );
+    }
+
+    let hyper_draft = match execute_strategy_model(
+      app,
+      STRATEGY_MODEL_DEFAULT_ID,
+      &system_prompt,
+      &draft_user_prompt,
+      &evidence_packet,
+      draft_n_ctx,
+      max_tokens.min(520).max(320),
+      threads,
+      "초안2",
+    ) {
+      Ok(result) => Some(result),
+      Err(err) => {
+        emit_strategy_progress(app, "초안2", format!("HyperCLOVA-X 검토 초안이 잠시 흔들렸어요. {}", strategy_trim(&err, 220)));
+        None
+      }
+    };
+
+    match (roosy_draft, hyper_draft) {
+      (Some(roosy), Some(hyper)) => {
+        emit_strategy_progress(app, "합성", "Roosy-X 초안을 바탕으로 가되, HyperCLOVA-X의 근거·균형 검토를 반영해 최종 답변으로 묶을게요.");
+        let hybrid_prompt = build_strategy_hybrid_user_prompt(
+          &evidence_packet,
+          case_item,
+          safe_message,
+          strategy_note,
+          &hyper.answer,
+          &roosy.answer,
+        );
+        let synthesis = match execute_strategy_model(
+          app,
+          STRATEGY_MODEL_ROOSY_ID,
+          &build_strategy_hybrid_system_prompt(),
+          &hybrid_prompt,
+          &evidence_packet,
+          n_ctx,
+          (max_tokens + 120).clamp(620, 768),
+          threads,
+          "합성",
+        ) {
+          Ok(result) => result,
+          Err(err) => {
+            emit_strategy_progress(app, "합성", format!("최종 합성 단계가 흔들려서 Roosy-X 초안을 우선 보여드릴게요. {}", strategy_trim(&err, 220)));
+            roosy
           }
-        }
-        Err(err) => {
-          let msg = format!("표준에러 읽기 실패: {err}");
-          collected.push_str(&msg);
-          emit_strategy_progress(app_for_stderr.as_ref(), "모델로그", &msg);
-          break;
-        }
+        };
+
+        emit_strategy_progress(app, "완료", format!("ROOSY-Hybrid 응답 생성을 마쳤어요. 본문 길이 {}자예요.", synthesis.answer.chars().count()));
+        return Ok(StrategyChatRunResult {
+          answer: synthesis.answer,
+          model_path: "ROOSY-Hybrid (Roosy-X + HyperCLOVA-X)".to_string(),
+          runner: synthesis.runner,
+          prompt_chars: synthesis.prompt_chars,
+          records_used: evidence_packet.evidence_records.len(),
+          retrieval_query,
+          evidence_packet,
+        });
+      }
+      (Some(roosy), None) => {
+        emit_strategy_progress(app, "완료", "HyperCLOVA-X 검토 초안이 비어 있어 Roosy-X 기반으로 먼저 정리했어요.");
+        return Ok(StrategyChatRunResult {
+          answer: roosy.answer,
+          model_path: "ROOSY-Hybrid (Roosy-X fallback)".to_string(),
+          runner: roosy.runner,
+          prompt_chars: roosy.prompt_chars,
+          records_used: evidence_packet.evidence_records.len(),
+          retrieval_query,
+          evidence_packet,
+        });
+      }
+      (None, Some(hyper)) => {
+        emit_strategy_progress(app, "완료", "Roosy-X 초안이 비어 있어 HyperCLOVA-X 기반으로 먼저 정리했어요.");
+        return Ok(StrategyChatRunResult {
+          answer: hyper.answer,
+          model_path: "ROOSY-Hybrid (HyperCLOVA-X fallback)".to_string(),
+          runner: hyper.runner,
+          prompt_chars: hyper.prompt_chars,
+          records_used: evidence_packet.evidence_records.len(),
+          retrieval_query,
+          evidence_packet,
+        });
+      }
+      (None, None) => {
+        return Err("ROOSY-Hybrid 초안 두 개를 모두 만들지 못했어요. 번들된 모델 파일과 sidecar 상태를 함께 확인해주세요.".to_string());
       }
     }
-    collected
-  });
-
-  let started = Instant::now();
-  let mut timed_out = false;
-  let mut last_heartbeat = 0_u64;
-  let status = loop {
-    if let Some(status) = child.try_wait().map_err(|e| format!("전략자문 상태 확인에 실패했어요: {e}"))? {
-      break status;
-    }
-
-    let elapsed = started.elapsed().as_secs();
-    if elapsed >= STRATEGY_CHAT_TIMEOUT_SECS {
-      timed_out = true;
-      emit_strategy_progress(app, "오류", format!("{}초 동안 완료되지 않아 실행을 중단할게요.", STRATEGY_CHAT_TIMEOUT_SECS));
-      let _ = child.kill();
-      let status = child.wait().map_err(|e| format!("중단된 전략자문 프로세스를 정리하지 못했어요: {e}"))?;
-      break status;
-    }
-    if elapsed >= last_heartbeat + 5 {
-      last_heartbeat = elapsed;
-      emit_strategy_progress(app, "대기", format!("모델 응답을 기다리는 중이에요. {}초 경과했어요.", elapsed));
-    }
-    thread::sleep(Duration::from_millis(200));
-  };
-
-  let stdout = String::from_utf8_lossy(&stdout_handle.join().unwrap_or_default()).to_string();
-  let stderr = stderr_handle.join().unwrap_or_else(|_| "stderr 수집 스레드가 비정상 종료되었어요.".to_string());
-  cleanup_strategy_prompt_file(&system_prompt_file);
-  cleanup_strategy_prompt_file(&user_prompt_file);
-  let answer = finalize_strategy_answer(&cleanup_strategy_output(&stdout), &evidence_packet);
-
-  if timed_out {
-    return Err(format!(
-      "전략자문 응답이 {}초 안에 끝나지 않아 중단했어요. 콘솔에 찍힌 진행 로그와 마지막 모델 로그를 확인해주세요. 마지막 로그: {}",
-      STRATEGY_CHAT_TIMEOUT_SECS,
-      strategy_trim(stderr.trim(), 280)
-    ));
   }
 
-  if !status.success() && answer.is_empty() {
-    return Err(format!(
-      "모델 실행이 완료되지 않았어요. runner={} / stderr: {}",
-      runner.display(),
-      strategy_trim(stderr.trim(), 600)
-    ));
-  }
-  if answer.is_empty() {
-    return Err("모델이 빈 응답을 반환했어요. 번들된 모델/sidecar 상태를 확인해주세요.".to_string());
-  }
-  emit_strategy_progress(app, "완료", format!("응답 생성을 마쳤어요. 본문 길이 {}자예요.", answer.chars().count()));
+  let result = execute_strategy_model(
+    app,
+    requested_model_id,
+    &system_prompt,
+    &user_prompt,
+    &evidence_packet,
+    n_ctx,
+    max_tokens,
+    threads,
+    "실행",
+  )?;
+  emit_strategy_progress(app, "완료", format!("응답 생성을 마쳤어요. 본문 길이 {}자예요.", result.answer.chars().count()));
 
   Ok(StrategyChatRunResult {
-    answer,
-    model_path: model_path.display().to_string(),
-    runner: runner.display().to_string(),
-    prompt_chars: system_prompt.chars().count() + user_prompt.chars().count(),
+    answer: result.answer,
+    model_path: result.model_path,
+    runner: result.runner,
+    prompt_chars: result.prompt_chars,
     records_used: evidence_packet.evidence_records.len(),
     retrieval_query,
     evidence_packet,

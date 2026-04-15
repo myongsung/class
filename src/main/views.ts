@@ -12,7 +12,10 @@ import {
   getSelectedCase, visibleCases,
   actorEqLite, uniq, tokenizeLite, isWithinRangeISO, daysDiff,
   UI_OTHER_ACTOR_LABEL, STUDENT_NAMES, PARENT_NAMES, ADMIN_NAMES,
-  CLASS_ROSTER_SIZE, getClassRoster, hasScreenPin
+  getClassRoster, hasScreenPin,
+  getRelationshipGroups, getRelationshipMembers,
+  getRecordArchiveMainActors, getRecordArchiveRelatedActors,
+  serializeActorChoice
 } from './state';
 import { renderCasePaperModal } from './paper';
 
@@ -49,6 +52,49 @@ const H = {
     items.length ? `<div class="chips">${items.map((x) => `<span class="chip">${esc(x)}</span>`).join('')}</div>` : `<div class="muted">—</div>`,
   chipsMini: (items: string[]) =>
     items.length ? `<div class="chips mini">${items.map((x) => `<span class="chip">${esc(x)}</span>`).join('')}</div>` : '',
+};
+
+const renderSelectWithPlaceholder = (
+  items: Array<{ value: string; label: string; disabled?: boolean }>,
+  selected: string,
+  placeholder: string
+) => {
+  const selectedValue = String(selected || '');
+  const hasSelected = items.some((item) => item.value === selectedValue && !item.disabled);
+  const effectiveSelected = hasSelected ? selectedValue : '';
+  return [
+    `<option value="" ${!effectiveSelected ? 'selected' : ''} disabled>${esc(placeholder)}</option>`,
+    ...items.map((item) => `
+      <option value="${esc(item.value)}" ${item.value === effectiveSelected ? 'selected' : ''} ${item.disabled ? 'disabled' : ''}>
+        ${esc(item.label)}
+      </option>
+    `),
+  ].join('');
+};
+
+const renderRelationshipGroupPicker = (action: string, field: string, selected: string, placeholder = '그룹 선택') => {
+  const groups = getRelationshipGroups().map((group) => ({
+    value: group.id,
+    label: group.title,
+  }));
+  return `<select data-action="${esc(action)}" data-field="${esc(field)}">${renderSelectWithPlaceholder(groups, selected, placeholder)}</select>`;
+};
+
+const renderRelationshipMemberPicker = (
+  action: string,
+  field: string,
+  groupId: string,
+  selected: string,
+  placeholder = '인물 선택'
+) => {
+  const members = getRelationshipMembers(groupId).map((member) => ({
+    value: member.id,
+    label: member.name,
+  }));
+  if (!members.length) {
+    return `<select data-action="${esc(action)}" data-field="${esc(field)}" disabled><option value="" selected disabled>${esc('먼저 그룹에 인물을 등록하세요')}</option></select>`;
+  }
+  return `<select data-action="${esc(action)}" data-field="${esc(field)}">${renderSelectWithPlaceholder(members, selected, placeholder)}</select>`;
 };
 
 
@@ -286,7 +332,7 @@ function renderAppSidebar(currentTab: string) {
           <span class="sidebarLabel">빠른 캡처</span>
         </button>
 
-        <button class="sidebarIconBtn ${ui.classRosterOpen ? 'active' : ''}" data-action="open-class-roster" type="button" aria-label="관계 템플릿 열기" title="관계 템플릿">
+        <button class="sidebarIconBtn ${ui.classRosterOpen ? 'active' : ''}" data-action="open-class-roster" type="button" aria-label="관계 관리 열기" title="관계 관리">
           <span class="sidebarIcon" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M12 12.25C14.3472 12.25 16.25 10.3472 16.25 8C16.25 5.65279 14.3472 3.75 12 3.75C9.65279 3.75 7.75 5.65279 7.75 8C7.75 10.3472 9.65279 12.25 12 12.25Z" stroke="currentColor" stroke-width="1.8"/>
@@ -381,7 +427,7 @@ function renderUpdateNotesModal() {
         <article class="updatesNoteItem">
           <div class="updatesNoteIndex">3</div>
           <div>
-            <div class="updatesNoteTitle">AI 분석 에이전트</div>
+            <div class="updatesNoteTitle">AI 민원전용 법무팀</div>
             <div class="updatesNoteDesc">컬렉션에 연결된 기록을 바탕으로 답장 초안, 정리 포인트, 다음 행동 순서를 채팅형으로 빠르게 정리할 수 있어요.</div>
           </div>
         </article>
@@ -397,7 +443,7 @@ function renderUpdateNotesModal() {
         <article class="updatesNoteItem">
           <div class="updatesNoteIndex">5</div>
           <div>
-            <div class="updatesNoteTitle">관계 템플릿 저장</div>
+            <div class="updatesNoteTitle">관계 관리 저장</div>
             <div class="updatesNoteDesc">자주 등장하는 사람이나 대상 이름을 템플릿으로 저장하고, 여러 이름을 한 번에 붙여넣어 빠르게 불러올 수 있어요.</div>
           </div>
         </article>
@@ -439,7 +485,7 @@ function renderHomeMain() {
       return {
         label: '정리 단계',
         title: '관련 기록을 묶어 첫 컬렉션을 만들 시점이에요',
-        desc: '비슷한 기록 3~5개만 모아도 타임라인과 AI 분석의 맥락이 훨씬 또렷해집니다.',
+        desc: '비슷한 기록 3~5개만 모아도 타임라인과 AI 민원전용 법무팀의 맥락이 훨씬 또렷해집니다.',
         tone: 'is-active',
       };
     }
@@ -447,14 +493,14 @@ function renderHomeMain() {
       return {
         label: '포커스 필요',
         title: '최근 컬렉션 하나를 열어 흐름을 잡아보세요',
-        desc: '선택된 컬렉션이 있으면 홈과 AI 분석이 지금 무엇을 먼저 해야 하는지 더 선명하게 보여줍니다.',
+        desc: '선택된 컬렉션이 있으면 홈과 AI 민원전용 법무팀이 지금 무엇을 먼저 해야 하는지 더 선명하게 보여줍니다.',
         tone: 'is-calm',
       };
     }
     if (!strategyMessages.length && !strategyResult) {
       return {
         label: '분석 준비',
-        title: '현재 컬렉션은 AI 분석을 시작할 준비가 되어 있어요',
+        title: '현재 컬렉션은 AI 민원전용 법무팀을 시작할 준비가 되어 있어요',
         desc: '질문 한 줄만 보내도 답변 초안과 다음 행동 순서를 정리해주는 흐름으로 넘어갈 수 있습니다.',
         tone: 'is-accent',
       };
@@ -480,7 +526,7 @@ function renderHomeMain() {
     allRecords.length > 0 && !collections.length ? '관련 기록 몇 개를 묶어 첫 컬렉션을 만들어보세요.' : '',
     collections.length > 0 && !selectedCollection ? '최근 컬렉션 하나를 열어 흐름과 타임라인을 점검해보세요.' : '',
     selectedCollection && selectedCollectionRecordCount < 2 ? '현재 컬렉션에 기록을 더 연결해 맥락을 보강해보세요.' : '',
-    selectedCollection && !strategyMessages.length ? 'AI 분석 탭에서 질문 한 줄을 보내 답장 초안과 다음 행동을 받아보세요.' : '',
+    selectedCollection && !strategyMessages.length ? 'AI 민원전용 법무팀 탭에서 질문 한 줄을 보내 답장 초안과 다음 행동을 받아보세요.' : '',
     sharedReadyCount > 0 ? '공유가 필요하면 공유/제출 문서 탭에서 PDF를 저장해두세요.' : '',
   ].filter(Boolean).slice(0, 4);
 
@@ -491,8 +537,8 @@ function renderHomeMain() {
       ].filter(Boolean)
     : [
         riskyRecords.length ? '리스크가 높은 기록부터 시각, 원본, 관련 대화 흐름을 다시 확인해보세요.' : '',
-        collections.length ? '가장 최근 컬렉션을 기준으로 AI 분석을 실행해 다음 행동 순서를 정리해보세요.' : '',
-        allRecords.length ? '비슷한 기록 3~5개를 묶으면 AI 분석과 공유 문서 품질이 훨씬 안정적으로 올라갑니다.' : '첫 기록을 남기면 홈에서 최근 캡처와 AI 추천 행동을 자동으로 보여드려요.',
+        collections.length ? '가장 최근 컬렉션을 기준으로 AI 민원전용 법무팀을 실행해 다음 행동 순서를 정리해보세요.' : '',
+        allRecords.length ? '비슷한 기록 3~5개를 묶으면 AI 민원전용 법무팀과 공유 문서 품질이 훨씬 안정적으로 올라갑니다.' : '첫 기록을 남기면 홈에서 최근 캡처와 AI 추천 행동을 자동으로 보여드려요.',
       ].filter(Boolean).slice(0, 3);
 
   const nextActions = todoItems.length ? todoItems : ['최근 기록을 확인하고 필요한 항목을 컬렉션으로 묶어보세요.'];
@@ -506,9 +552,9 @@ function renderHomeMain() {
       ? `우선 확인할 리스크 항목 ${riskyRecords.length}건이 감지됐어요.`
       : '지금은 눈에 띄는 고위험 신호가 많지 않아요.',
     strategyResult
-      ? cleanStrategyDisplayText(String(strategyResult.recommendedAction || 'AI 분석 결과가 다음 행동을 제안할 준비가 됐어요.'))
+      ? cleanStrategyDisplayText(String(strategyResult.recommendedAction || 'AI 민원전용 법무팀 결과가 다음 행동을 제안할 준비가 됐어요.'))
       : collections.length
-        ? 'AI 분석 탭에서 다음 대응 순서를 바로 정리할 수 있어요.'
+        ? 'AI 민원전용 법무팀 탭에서 다음 대응 순서를 바로 정리할 수 있어요.'
         : '컬렉션을 만들면 분석과 공유 문서 품질이 더 안정적으로 올라가요.',
   ].filter(Boolean).slice(0, 3);
 
@@ -569,7 +615,7 @@ function renderHomeMain() {
       </div>
       <div class="homeFocusActionRow">
         ${H.btnData('컬렉션 열기', 'select-case', { id: String(selectedCollection.id || '') }, 'btn primary')}
-        ${H.btnData('AI 분석', 'switch-legal-tab', { 'legal-tab': 'simulation' }, 'btn ghost')}
+        ${H.btnData('AI 민원전용 법무팀', 'switch-legal-tab', { 'legal-tab': 'simulation' }, 'btn ghost')}
       </div>
     `
     : `
@@ -587,7 +633,7 @@ function renderHomeMain() {
           ? H.btnData('컬렉션 보기', 'switch-case-tab', { 'case-tab': 'list' }, 'btn primary')
           : H.btnData('컬렉션 만들기', 'switch-case-tab', { 'case-tab': 'create' }, 'btn primary')}
         ${allRecords.length
-          ? H.btnData('AI 분석', 'switch-legal-tab', { 'legal-tab': 'simulation' }, 'btn ghost')
+          ? H.btnData('AI 민원전용 법무팀', 'switch-legal-tab', { 'legal-tab': 'simulation' }, 'btn ghost')
           : H.btn('빠른 캡처', 'open-record-composer', '', 'btn ghost')}
       </div>
     `;
@@ -598,11 +644,11 @@ function renderHomeMain() {
         <div class="homeHeroContent">
           <div class="homeHeroEyebrow">Evidence Workspace</div>
           <div class="homeHeroTitle">차분하게 기록하고, 필요한 순간 바로 꺼내 쓰는 모던 워크스페이스</div>
-          <div class="homeHeroText">흩어진 대화, 사진, 파일, 메모를 한곳에 정리하고 컬렉션, AI 분석, 공유 문서 흐름으로 자연스럽게 이어가세요.</div>
+          <div class="homeHeroText">흩어진 대화, 사진, 파일, 메모를 한곳에 정리하고 컬렉션, AI 민원전용 법무팀, 공유 문서 흐름으로 자연스럽게 이어가세요.</div>
           <div class="homeHeroActions" aria-label="빠른 작업">
             ${H.btn('빠른 캡처', 'open-record-composer', '', 'btn primary')}
             ${H.btnData('컬렉션 만들기', 'switch-case-tab', { 'case-tab': 'create' }, 'btn ghost')}
-            ${H.btnData('AI 분석', 'switch-legal-tab', { 'legal-tab': 'simulation' }, 'btn ghost')}
+            ${H.btnData('AI 민원전용 법무팀', 'switch-legal-tab', { 'legal-tab': 'simulation' }, 'btn ghost')}
             ${H.btn('업데이트 노트', 'open-updates-note', ' aria-label="업데이트 노트 보기"', 'btn ghost homeHeroQuietAction')}
           </div>
         </div>
@@ -739,34 +785,28 @@ function renderLegalSimulationPanel() {
   const selectedCaseRecordCount = selectedCase ? recordsForCase(S.records, selectedCase).length : 0;
   const chatMessages = Array.isArray((ui as any).strategyChatMessages) ? ((ui as any).strategyChatMessages as any[]) : [];
   const chatPending = !!(ui as any).strategyChatPending;
+  const chatPendingStartedAt = String((ui as any).strategyChatPendingStartedAt || '').trim();
   const chatInput = String((ui as any).strategyChatInput || '');
   const chatError = String((ui as any).strategyChatError || '').trim();
-  const strategyChatModel = String((ui as any).strategyChatModel || 'hyperclova-x').trim() === 'roosy-x' ? 'roosy-x' : 'hyperclova-x';
-  const strategyChatModelMenuOpen = !!(ui as any).strategyChatModelMenuOpen;
+  const strategyChatModel = 'roosy-hybrid';
   const progressLines = Array.isArray((ui as any).strategyChatProgressLines) ? ((ui as any).strategyChatProgressLines as string[]).slice(-6) : [];
   const progressStage = String((ui as any).strategyChatProgressStage || '').trim();
   const activeThreadPackageId = String((ui as any).strategyThreadPackageId || '').trim();
   const activeThreadPackage = Array.isArray((S as any).strategyThreadPackages)
     ? ((S as any).strategyThreadPackages as any[]).find((item) => String(item?.id || '') === activeThreadPackageId) || null
     : null;
-  const strategyModelLabel = strategyChatModel === 'roosy-x' ? 'Roosy-X' : 'HyperCLOVA-X';
-  const strategyModelPicker = `
-    <div class="strategyModelPicker ${strategyChatModelMenuOpen ? 'open' : ''}">
-      <button class="strategyModelTrigger" data-action="toggle-strategy-model-menu" type="button" aria-haspopup="menu" aria-expanded="${strategyChatModelMenuOpen ? 'true' : 'false'}">
-        <span class="strategyModelTriggerLabel">${esc(strategyModelLabel)}</span>
-        <span class="strategyModelTriggerChevron" aria-hidden="true">▾</span>
-      </button>
-      ${strategyChatModelMenuOpen ? `
-        <div class="strategyModelMenu" role="menu" aria-label="모델 선택">
-          <button class="strategyModelOption ${strategyChatModel === 'hyperclova-x' ? 'active' : ''}" data-action="select-strategy-model" data-model="hyperclova-x" type="button" role="menuitemradio" aria-checked="${strategyChatModel === 'hyperclova-x' ? 'true' : 'false'}">
-            <span class="strategyModelOptionText">HyperCLOVA-X</span>
-            ${strategyChatModel === 'hyperclova-x' ? '<span class="strategyModelOptionCheck">✓</span>' : ''}
-          </button>
-          <button class="strategyModelOption pending" type="button" role="menuitem" disabled aria-disabled="true" tabindex="-1">
-            <span class="strategyModelOptionText">Roosy-X(준비중)</span>
-          </button>
-        </div>
-      ` : ''}
+  const strategyHybridDesk = `
+    <div class="strategyHybridDesk strategyHybridDeskInline" aria-label="ROOSY-Hybrid 민원전용 법무팀">
+      <span class="strategyHybridDeskKicker">민원전용 법무팀</span>
+      <span class="strategyHybridDeskRoleInline">
+        <strong>HyperCLOVA-X</strong>
+        <em>법리·균형</em>
+      </span>
+      <span class="strategyHybridDeskDivider">+</span>
+      <span class="strategyHybridDeskRoleInline">
+        <strong>Roosy-X</strong>
+        <em>실무·행동</em>
+      </span>
     </div>
   `;
 
@@ -829,6 +869,44 @@ function renderLegalSimulationPanel() {
     : selectedRecords.length
       ? `지금은 컬렉션을 고르지 않고 기록 ${selectedRecords.length}개만 붙여 놓은 상태예요. 이 정도면 빠른 1차 분석은 가능해요.`
       : '아직 컬렉션이나 기록이 연결되지 않았어요. 하단의 기록 버튼에서 컬렉션을 고르거나 기록 몇 개만 붙이면 바로 분석을 시작할 수 있어요.';
+  const pendingElapsedSeconds = chatPendingStartedAt
+    ? Math.max(0, Math.floor((Date.now() - new Date(chatPendingStartedAt).getTime()) / 1000))
+    : 0;
+  const pendingElapsedLabel = pendingElapsedSeconds >= 60
+    ? `${Math.floor(pendingElapsedSeconds / 60)}분 ${String(pendingElapsedSeconds % 60).padStart(2, '0')}초째`
+    : `${pendingElapsedSeconds}초째`;
+  const pendingStage = progressStage || '준비';
+  const pendingStageMeta: Record<string, { title: string, desc: string, step: number }> = {
+    '준비': { title: '법무팀이 질문과 사건 묶음을 접수하고 있어요', desc: '현재 질문, 연결 기록, 컬렉션 흐름을 먼저 모아 하이브리드 검토 테이블에 올리는 중이에요.', step: 0 },
+    '근거정리': { title: 'HyperCLOVA-X가 사실관계와 핵심 증거를 읽고 있어요', desc: '이번 질문에 꼭 필요한 장면과 기록만 먼저 골라 균형 있게 흐름을 잡는 중이에요.', step: 1 },
+    '법령정리': { title: 'HyperCLOVA-X가 관련 법령과 사건 맥락을 대조하고 있어요', desc: '증거와 자연스럽게 이어지는 조문만 추려서 과도한 단정 없이 검토하고 있어요.', step: 1 },
+    '초안1': { title: 'HyperCLOVA-X가 신중한 1차 법무 의견을 쓰는 중이에요', desc: '증거 연결과 법리 균형을 중심으로 안전한 답변 뼈대를 먼저 세우고 있어요.', step: 1 },
+    '초안2': { title: 'Roosy-X가 바로 쓸 수 있는 실무 문장으로 다듬고 있어요', desc: '현장에서 바로 전달할 말, 남길 기록, 다음 행동이 더 선명하게 보이도록 초안을 정리하는 중이에요.', step: 2 },
+    '합성': { title: 'ROOSY-Hybrid 법무팀이 하나의 최종 답변으로 합의 중이에요', desc: '두 모델의 장점을 묶어 더 자연스럽고 길이감 있는 최종 답변으로 정리하고 있어요.', step: 3 },
+    '대기': { title: 'ROOSY-Hybrid 법무팀이 답변을 안정적으로 마무리하고 있어요', desc: '출력이 끊기지 않게 모으면서 문장 흐름과 전달 톤을 마지막으로 정리하는 중이에요.', step: 3 },
+    '모델로그': { title: '법무팀 추론 상태를 점검하며 출력 품질을 맞추고 있어요', desc: '생성 흐름이 흔들리지 않게 확인하면서 답변 완성도를 다듬는 중이에요.', step: 3 },
+  };
+  const pendingMeta = pendingStageMeta[pendingStage] || { title: '답변을 다듬고 있어요', desc: '증거와 맥락을 엮어 바로 쓸 수 있는 문장으로 정리하고 있어요.', step: 2 };
+  const pendingTeamSteps = [
+    {
+      label: 'HyperCLOVA-X',
+      desc: '법리·균형 검토',
+      active: pendingMeta.step >= 1,
+      current: ['근거정리', '법령정리', '초안1'].includes(pendingStage),
+    },
+    {
+      label: 'Roosy-X',
+      desc: '실무 문장 초안',
+      active: pendingMeta.step >= 2,
+      current: ['초안2'].includes(pendingStage),
+    },
+    {
+      label: 'Hybrid',
+      desc: '최종 합의 답변',
+      active: pendingMeta.step >= 3,
+      current: ['합성', '대기', '모델로그'].includes(pendingStage),
+    },
+  ];
   const compactProgressHtml = `
     <div class="strategyProgressConsole strategyProgressConsoleMini">
       ${(progressLines.length ? progressLines.slice(-3) : [`${progressStage || '대기'} · 분석이 시작되면 여기에 최근 단계가 보여요.`])
@@ -859,9 +937,33 @@ function renderLegalSimulationPanel() {
       <div class="strategyAvatar">AI</div>
       <div class="strategyBubble soft">
         <div class="strategyInlineMeta">
-          <span>${esc(progressStage || 'AI 분석 생성 중')}</span>
+          <span>${esc(`${pendingStage} · ${pendingElapsedLabel}`)}</span>
         </div>
-        <div class="strategyParagraph">연결된 기록과 컬렉션 맥락을 읽고 답변을 정리하고 있어요…</div>
+        <div class="strategyPendingHero">
+          <div class="strategyPendingPulse" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+          <div class="strategyPendingBody">
+            <div class="strategyPendingTeamLabel">ROOSY-Hybrid 민원전용 법무팀</div>
+            <div class="strategyPendingTitle">${esc(pendingMeta.title)}</div>
+            <div class="strategyPendingDesc">${esc(pendingMeta.desc)}</div>
+            <div class="strategyPendingSteps">
+              ${pendingTeamSteps.map((step) => `
+                <span class="strategyPendingStep ${step.active ? 'isActive' : ''} ${step.current ? 'isCurrent' : ''}">
+                  <strong>${esc(step.label)}</strong>
+                  <em>${esc(step.desc)}</em>
+                </span>
+              `).join('')}
+            </div>
+            <div class="strategyPendingSkeleton" aria-hidden="true">
+              <span class="strategyPendingSkeletonLine isWide"></span>
+              <span class="strategyPendingSkeletonLine"></span>
+              <span class="strategyPendingSkeletonLine isShort"></span>
+            </div>
+          </div>
+        </div>
         ${compactProgressHtml}
       </div>
     </article>
@@ -899,7 +1001,7 @@ function renderLegalSimulationPanel() {
   ` : '';
 
   return `
-    <article class="legalHubPanel strategyChatPage" aria-label="AI 분석">
+    <article class="legalHubPanel strategyChatPage" aria-label="AI 민원전용 법무팀">
       <section class="strategyChatOnlyShell">
         <div class="strategyChatThread strategyChatThreadOnly">
           ${threadPackageBanner}
@@ -917,8 +1019,8 @@ function renderLegalSimulationPanel() {
           <div class="strategyChatOnlyComposerBar">
             <div class="strategyChatOnlyComposerTools">
               ${H.btn(selectedRecords.length ? `기록 ${selectedRecords.length}개` : '기록 붙이기', 'open-simulation-picker', '', 'btn ghost')}
-              ${strategyModelPicker}
-              <div class="strategyChatOnlyComposerHint">${chatPending ? esc(progressStage || '분석 생성 중') : 'Enter 전송 · Shift+Enter 줄바꿈'}</div>
+              <div class="strategyChatOnlyComposerHint">${chatPending ? esc(`${pendingStage} · ${pendingElapsedLabel}`) : 'Enter 전송 · Shift+Enter 줄바꿈'}</div>
+              ${strategyHybridDesk}
             </div>
             <div class="strategyComposerActions">
               ${H.btn(chatPending ? '생성 중…' : '보내기', 'send-strategy-chat', chatPending ? ' disabled aria-disabled="true"' : '', 'btn primary')}
@@ -965,7 +1067,7 @@ function renderSimulationPickerModal() {
     'simulationPickerModal',
     H.modalHead(
       '분석에 넣을 기록 고르기',
-      selectedCase ? `${String(selectedCase.title || '선택한 컬렉션').trim() || '선택한 컬렉션'} 컬렉션에 연결할 기록을 골라주세요.` : 'AI 분석이 읽을 기록을 추가하거나 빼주세요.',
+      selectedCase ? `${String(selectedCase.title || '선택한 컬렉션').trim() || '선택한 컬렉션'} 컬렉션에 연결할 기록을 골라주세요.` : 'AI 민원전용 법무팀이 읽을 기록을 추가하거나 빼주세요.',
       H.btn('닫기', 'close-simulation-picker', '', 'btn ghost')
     ),
     `
@@ -998,7 +1100,7 @@ function renderSimulationPickerModal() {
         <div class="strategyPickerToolbar">
           ${selectedCase ? H.btn('컬렉션 기록 다시 불러오기', 'simulation-reset-to-case', '', 'btn') : ''}
           ${H.btn('비우기', 'simulation-clear-selection', '', 'btn ghost')}
-          <div class="strategyPickerHint">여기서 고른 뒤 적용을 눌러야 AI 분석 화면에 반영돼요.</div>
+          <div class="strategyPickerHint">여기서 고른 뒤 적용을 눌러야 AI 민원전용 법무팀 화면에 반영돼요.</div>
           ${H.btn(`적용하기 (${selectedIds.length})`, 'simulation-apply-picker', '', 'btn primary')}
         </div>
 
@@ -1011,7 +1113,7 @@ function renderSimulationPickerModal() {
 
 function renderLegalConsultMain() {
   return `
-    <section class="legalHub legalPartnerHub legalHubCompact legalHubChatMode" aria-label="AI 분석">
+    <section class="legalHub legalPartnerHub legalHubCompact legalHubChatMode" aria-label="AI 민원전용 법무팀">
       <article class="card legalHubShell legalHubShellFlat">${renderLegalSimulationPanel()}</article>
     </section>
   `;
@@ -1179,7 +1281,12 @@ function normEngineLike(s: string): string {
 }
 
 function actorKey(a: ActorRef) {
-  return `${String((a as any)?.type || '').trim()}::${String((a as any)?.name || '').trim()}`;
+  return [
+    String((a as any)?.type || '').trim(),
+    String((a as any)?.name || '').trim(),
+    String((a as any)?.groupId || '').trim(),
+    String((a as any)?.groupLabel || '').trim(),
+  ].join('::');
 }
 
 
@@ -1266,7 +1373,7 @@ export function render() {
                       <path d="M19 14.5L21 15.75L19 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
                     </svg>
                   </span>
-                  <span class="topNavLabel">AI 분석</span>
+                  <span class="topNavLabel">AI 민원전용 법무팀</span>
                 </button>
               </nav>
             </div>
@@ -2146,11 +2253,12 @@ function renderRecordEntryForm() {
   const showStoreOther = (draftRecord.storeTypeText || '') === '기타';
   const showPlaceOther = (draftRecord.placeText || '') === '기타';
 
-  const actorType = String(draftRecord.actorTypeText || '당사자');
   const placeText = String(draftRecord.placeText || '온라인');
   const storeTypeText = String(draftRecord.storeTypeText || '전화');
   const actorList = (Array.isArray((draftRecord as any).actors) ? ((draftRecord as any).actors as ActorRef[]) : []);
-  const pendingActorName = String(draftRecord.actorNameOther || '').trim();
+  const pendingActorName = String(draftRecord.actorMemberId || '').trim();
+  const actorGroupId = String((draftRecord as any).actorGroupId || getRelationshipGroups()[0]?.id || 'group-1');
+  const relGroupId = String((draftRecord as any).relGroupId || getRelationshipGroups()[0]?.id || 'group-1');
 
   const summaryOverview = String((draftRecord as any).summaryOverview || '').trim();
   const summaryBackground = String((draftRecord as any).summaryBackground || '').trim();
@@ -2183,23 +2291,7 @@ function renderRecordEntryForm() {
   if (!okStore) reqMissing.push('자료 형태');
 
   const canSave = reqMissing.length === 0;
-  const reqLabel = canSave ? '저장 가능' : `미작성 ${reqMissing.length}개`;
-
-  const mainNameField = renderNameFieldForType({
-    typeText: actorType,
-    value: String(draftRecord.actorNameOther || ''),
-    action: 'draft-record',
-    field: 'actorNameOther',
-    placeholder: '이름(예: 상대 A / 담당자 / 김OO)'
-  });
-
-  const relNameField = renderNameFieldForType({
-    typeText: String(draftRecord.relTypeText || ''),
-    value: String(draftRecord.relNameOther || ''),
-    action: 'draft-record',
-    field: 'relNameOther',
-    placeholder: '이름(예: 관계자 / 동행인 / 김OO)'
-  });
+  const reqLabel = canSave ? '저장 준비 완료' : `필수 ${reqMissing.length}개 남음`;
 
   const actorListHtml =
     actorList.length
@@ -2234,48 +2326,48 @@ function renderRecordEntryForm() {
       : `<div class="muted composerEmptyHint gatherMutedHint">추가로 엮인 사람이 있으면 함께 남겨주세요.</div>`;
 
   const missingSummary = reqMissing.length
-    ? `아직 ${esc(reqMissing.slice(0, 4).join(' · '))}${reqMissing.length > 4 ? ` 외 ${esc(String(reqMissing.length - 4))}개` : ''}`
-    : '모든 항목을 작성했어요.';
+    ? `남은 항목 ${esc(reqMissing.slice(0, 4).join(' · '))}${reqMissing.length > 4 ? ` 외 ${esc(String(reqMissing.length - 4))}개` : ''}`
+    : '이제 바로 저장할 수 있어요.';
 
   return `
     <div class="entryForm v2 entryFormGather">
       <div class="recordFormSimple">
         <div class="recordFormStatusBar">
           <div>
-            <div class="recordFormKicker">빠른 캡처</div>
-            <div class="recordFormTitle">무슨 일이 있었는지 먼저 남겨보세요</div>
-            <div class="recordFormSub">핵심 내용을 먼저 적고, 필요한 메타데이터와 관계 정보를 이어서 채우면 저장돼요.</div>
+            <div class="recordFormTitle">기록 추가</div>
+            <div class="recordFormSub">필수 항목을 순서대로 입력해 주세요.</div>
           </div>
           <div class="recordFormTopActions">
-            <span id="recordReqPill" class="recordFormStatusPill ${canSave ? 'ready' : 'warn'}">${esc(reqLabel)}</span>
+            <span id="recordReqPill" class="recordFormStatusText ${canSave ? 'ready' : 'warn'}">${esc(reqLabel)}</span>
             <button class="btn ghost clearDraftBtn recordFormGhostBtn" data-action="clear-record-draft" type="button">비우기</button>
           </div>
         </div>
 
         <section class="recordFormCard">
           <div class="recordFormCardHead">
-            <div class="recordFormCardTitle">상황 요약</div>
-            <div class="recordFormCardDesc">나중에 다시 봐도 맥락이 바로 떠오르도록 짧고 분명하게 적어주세요.</div>
+            <div class="recordFormCardTitle">핵심 사실</div>
+            <div class="recordFormCardDesc">무슨 일이 있었는지 먼저 적어주세요.</div>
           </div>
 
           <div class="field">
             <label>무슨 일이 있었나요? <span class="reqStar">*</span></label>
             <textarea id="recordSummaryOverview" class="entryTa composerTa simpleComposerTextarea ${okSummaryOverview ? '' : 'reqWarn'}" rows="4"
-              placeholder="상황을 한 번에 이해할 수 있게 핵심 사실을 적어주세요"
+              placeholder="무슨 일이 있었는지 핵심만 적어주세요"
               data-action="draft-record" data-field="summaryOverview">${esc((draftRecord as any).summaryOverview || '')}</textarea>
           </div>
           <div id="recordWarnSummary" class="composerInlineWarn simpleWarn" ${okSummaryOverview ? 'hidden' : ''}>핵심 사실은 4글자 이상 작성해 주세요.</div>
+        </section>
 
-          <details class="recordRelatedDetails recordMetaFold" open>
-            <summary>
-              <span>상세 정리와 메타데이터</span>
-              <span class="metaMoreCount">펼쳐서 입력</span>
-            </summary>
-            <div class="recordRelatedPanel recordMetaFoldBody">
+        <section class="recordFormCard recordFormSecondaryCard">
+          <div class="recordFormCardHead">
+            <div class="recordFormCardTitle">추가 내용</div>
+            <div class="recordFormCardDesc">배경, 대응, 쟁점, 자료, 메모를 모두 남겨주세요.</div>
+          </div>
+
           <div class="recordFormGrid">
             <div class="field">
               <label>이전 흐름 · 배경 <span class="reqStar">*</span></label>
-              <textarea class="entryTa composerTa ${okSummaryBackground ? '' : 'reqWarn'}" rows="3" placeholder="이 일 이전의 흐름이나 배경" data-action="draft-record" data-field="summaryBackground">${esc((draftRecord as any).summaryBackground || '')}</textarea>
+              <textarea class="entryTa composerTa ${okSummaryBackground ? '' : 'reqWarn'}" rows="3" placeholder="이전 흐름이나 배경" data-action="draft-record" data-field="summaryBackground">${esc((draftRecord as any).summaryBackground || '')}</textarea>
             </div>
             <div class="field">
               <label>내가 한 대응 / 메모 <span class="reqStar">*</span></label>
@@ -2283,7 +2375,7 @@ function renderRecordEntryForm() {
             </div>
             <div class="field">
               <label>핵심 포인트 <span class="reqStar">*</span></label>
-              <textarea class="entryTa composerTa ${okSummaryIssues ? '' : 'reqWarn'}" rows="3" placeholder="상대가 제기한 핵심 쟁점이나 요청" data-action="draft-record" data-field="summaryIssues">${esc((draftRecord as any).summaryIssues || '')}</textarea>
+              <textarea class="entryTa composerTa ${okSummaryIssues ? '' : 'reqWarn'}" rows="3" placeholder="핵심 쟁점이나 요청" data-action="draft-record" data-field="summaryIssues">${esc((draftRecord as any).summaryIssues || '')}</textarea>
             </div>
             <div class="field">
               <label>관련 자료 목록 <span class="reqStar">*</span></label>
@@ -2295,19 +2387,12 @@ function renderRecordEntryForm() {
             <label>추가 메모 <span class="reqStar">*</span></label>
             <textarea class="entryTa composerTa ${okSummaryOther ? '' : 'reqWarn'}" rows="3" placeholder="추후 확인할 점이나 남겨둘 메모" data-action="draft-record" data-field="summaryOther">${esc((draftRecord as any).summaryOther || '')}</textarea>
           </div>
-            </div>
-          </details>
         </section>
 
-        <details class="recordRelatedDetails recordMetaFold" open>
-          <summary>
-            <span>사람, 위치, 자료 형태</span>
-            <span class="metaMoreCount">저장 전 확인</span>
-          </summary>
-          <section class="recordFormCard recordMetaFoldCard">
+        <section class="recordFormCard recordMetaFoldCard recordFormPrimaryMeta">
           <div class="recordFormCardHead">
             <div class="recordFormCardTitle">기본 정보</div>
-            <div class="recordFormCardDesc">기록 시각, 사람, 위치/채널, 자료 형태를 모두 입력해야 저장돼요.</div>
+            <div class="recordFormCardDesc">기록 시각, 사람, 위치, 자료 형태를 입력해 주세요.</div>
           </div>
 
           <div class="recordFormGrid">
@@ -2335,16 +2420,15 @@ function renderRecordEntryForm() {
             <div class="field compact recordFormFieldCard recordFormActorCard">
               <label>사람 <span class="reqStar">*</span></label>
               <div id="recordActorRow" class="rowInline compactRow gatherActorRow ${okActor ? '' : 'reqWarn'}">
-                <select data-action="draft-record" data-field="actorTypeText">${renderSelectFromList(UI_ACTOR_TYPES as any, actorType)}</select>
-                <div class="grow">${mainNameField}</div>
+                <div class="grow">${renderRelationshipGroupPicker('draft-record', 'actorGroupId', actorGroupId, '대분류 그룹')}</div>
+                <div class="grow">${renderRelationshipMemberPicker('draft-record', 'actorMemberId', actorGroupId, String((draftRecord as any).actorMemberId || ''), '소분류 인물')}</div>
                 ${H.btn('추가', 'add-record-actor', '', 'btn small')}
               </div>
               ${actorListHtml}
               <div id="recordWarnActor" class="miniWarn simpleWarn" ${okActor ? 'hidden' : ''}>사람을 1명 이상 추가해 주세요.</div>
             </div>
           </div>
-          </section>
-        </details>
+        </section>
       </section>
 
         ${dl('dlNameStudent', STUDENT_NAMES as any)}
@@ -2354,14 +2438,14 @@ function renderRecordEntryForm() {
 
         <details id="recordRelatedDetails" class="metaMore recordRelatedDetails" ${ui.recRelatedOpen ? 'open' : ''}>
           <summary>
-            <span>관계 항목 추가</span>
+            <span>관련자 추가</span>
             <span class="metaMoreCount">${esc(String((draftRecord.related || []).length))}명</span>
           </summary>
           <div class="metaMorePanel recordRelatedPanel">
             <div class="field" style="margin-bottom:0">
               <div class="rowInline gatherRelatedRow">
-                <select data-action="draft-record" data-field="relTypeText">${renderSelectFromList(UI_ACTOR_TYPES as any, String(draftRecord.relTypeText || '상대방'))}</select>
-                <div class="grow">${relNameField}</div>
+                <div class="grow">${renderRelationshipGroupPicker('draft-record', 'relGroupId', relGroupId, '대분류 그룹')}</div>
+                <div class="grow">${renderRelationshipMemberPicker('draft-record', 'relMemberId', relGroupId, String((draftRecord as any).relMemberId || ''), '소분류 인물')}</div>
                 ${H.btn('추가', 'add-related', '', 'btn small')}
               </div>
               ${relatedList}
@@ -2396,7 +2480,7 @@ function renderRecordComposerModal() {
     </div>
   `;
 
-  return H.modal('recordComposerModal', H.modalHead('빠른 캡처', '핵심 상황부터 적고 필요한 메타데이터를 이어서 채우세요.', headActions), body, 'modal recordComposerModal');
+  return H.modal('recordComposerModal', H.modalHead('빠른 캡처', '필수 입력을 순서대로 작성한 뒤 저장하세요.', headActions), body, 'modal recordComposerModal');
 }
 
 
@@ -2404,46 +2488,114 @@ function renderRecordComposerModal() {
 function renderStudentRosterModal() {
   if (!ui.classRosterOpen) return '';
 
-  const roster = Array.isArray(ui.classRosterDraft) && ui.classRosterDraft.length === CLASS_ROSTER_SIZE
+  const groups = Array.isArray(ui.classRosterDraft) && ui.classRosterDraft.length
     ? ui.classRosterDraft
-    : getClassRoster();
-  const filled = roster.filter((name) => String(name || '').trim()).length;
+    : getRelationshipGroups();
+  const filled = groups.reduce((acc, group) => (
+    acc + (Array.isArray(group.members) ? group.members.filter((member) => String(member?.name || '').trim()).length : 0)
+  ), 0);
+  const canAddGroup = groups.length < 12;
+  const selectedGroupId = String(
+    groups.some((group) => String(group.id || '') === String((ui as any).classRosterGroupId || ''))
+      ? (ui as any).classRosterGroupId
+      : groups[0]?.id || 'group-1'
+  );
+  const selectedGroupIndex = Math.max(0, groups.findIndex((group) => String(group.id || '') === selectedGroupId));
+  const selectedGroup = groups[selectedGroupIndex] || groups[0];
   const headActions = `
     <div class="rowInline">
       ${H.btn('닫기', 'close-class-roster', '', 'btn ghost')}
       ${H.btn('저장', 'save-class-roster', '', 'btn primary')}
     </div>
   `;
-  const rows = Array.from({ length: CLASS_ROSTER_SIZE }, (_, index) => {
-    const no = index + 1;
+  const folderRows = groups.map((group, groupIndex) => {
+    const memberCount = Array.isArray(group.members)
+      ? group.members.filter((member) => String(member?.name || '').trim()).length
+      : 0;
+    const active = String(group.id || '') === selectedGroupId;
     return `
-      <div class="classRosterRow">
-        <div class="classRosterNo">${esc(String(no))}</div>
-        <input
-          class="classRosterInput"
-          value="${esc(String(roster[index] || ''))}"
-          placeholder="이름 입력 또는 여러 줄 붙여넣기"
-          data-action="draft-class-roster"
-          data-index="${esc(String(index))}"
-        />
-      </div>
+      <button
+        class="relationshipFolderItem ${active ? 'active' : ''}"
+        type="button"
+        data-action="select-relationship-group"
+        data-group-id="${esc(String(group.id || ''))}"
+      >
+        <span class="relationshipFolderGlyph" aria-hidden="true">▸</span>
+        <span class="relationshipFolderText">
+          <span class="relationshipFolderTitle">${esc(String(group.title || `그룹${groupIndex + 1}`))}</span>
+          <span class="relationshipFolderMeta">${esc(String(memberCount))}명</span>
+        </span>
+      </button>
     `;
   }).join('');
+  const members = Array.isArray(selectedGroup?.members) ? selectedGroup.members : [];
+  const memberRows = members.length
+    ? members.map((member, memberIndex) => `
+        <div class="classRosterRow relationshipMemberRow">
+          <div class="classRosterNo">${esc(String(memberIndex + 1))}</div>
+          <input
+            class="classRosterInput"
+            value="${esc(String(member.name || ''))}"
+            placeholder="이름 입력"
+            data-action="draft-relationship-member-name"
+            data-group-index="${esc(String(selectedGroupIndex))}"
+            data-member-index="${esc(String(memberIndex))}"
+          />
+          <button
+            class="btn ghost small relationshipRemoveBtn"
+            type="button"
+            data-action="remove-relationship-member"
+            data-group-index="${esc(String(selectedGroupIndex))}"
+            data-member-index="${esc(String(memberIndex))}"
+          >
+            삭제
+          </button>
+        </div>
+      `).join('')
+    : `<div class="muted relationshipEmptyHint">아직 등록된 인물이 없어요. 오른쪽 상단의 + 버튼으로 이 그룹에 사람을 추가해보세요.</div>`;
 
   return `
     <div class="classRosterLayer" id="classRosterModal" role="presentation">
       <section class="classRosterPanel" role="dialog" aria-modal="true" aria-labelledby="classRosterModalTitle">
-        ${H.modalHead('프로필 템플릿', '자주 등장하는 이름을 저장해두면 캡처와 컬렉션 입력이 훨씬 빨라져요.', headActions).replace('<div class="h2">', '<div class="h2" id="classRosterModalTitle">')}
+        ${H.modalHead('관계 관리', '그룹을 만들고 그 안에 인물을 등록해두면 빠른 캡처에서 그룹 > 인물 순서로 바로 선택할 수 있어요.', headActions).replace('<div class="h2">', '<div class="h2" id="classRosterModalTitle">')}
         <div class="classRosterModalBody">
           <div class="classRosterHero">
             <div>
-              <div class="classRosterTitle">최대 40개까지 자주 쓰는 이름이나 대상을 저장하세요.</div>
-              <div class="muted">아무 칸에나 여러 줄 붙여넣기하면 아래로 자동 배치됩니다. 저장 후 빠른 캡처와 컬렉션 만들기 화면에서 <b>프로필 템플릿</b>으로 바로 선택할 수 있어요.</div>
+              <div class="classRosterTitle">그룹을 폴더처럼 관리하고, 오른쪽에서 사람을 입력하세요.</div>
+              <div class="muted">기존에 저장돼 있던 사람 목록은 자동으로 첫 번째 그룹에 연결됩니다. 그룹 이름을 바꾸면 빠른 캡처의 대분류 이름도 같이 바뀌고, 새 그룹도 계속 추가할 수 있어요.</div>
             </div>
-            <div class="classRosterCount"><span id="classRosterFilledCount">${esc(String(filled))}</span> / ${esc(String(CLASS_ROSTER_SIZE))}</div>
+            <div class="classRosterCount"><span id="classRosterFilledCount">${esc(String(filled))}</span>명</div>
           </div>
-          <div class="classRosterGrid" role="table" aria-label="프로필 템플릿 표">
-            ${rows}
+          <div class="relationshipManagerShell">
+            <aside class="relationshipSidebar" aria-label="관계 그룹 폴더">
+              <div class="relationshipSidebarHead">
+                <div class="relationshipSidebarLabel">폴더</div>
+                <button class="btn small relationshipSidebarAddBtn" type="button" data-action="add-relationship-group" ${canAddGroup ? '' : 'disabled aria-disabled="true"'}>+ 폴더 추가</button>
+              </div>
+              <div class="relationshipFolderList">
+                ${folderRows}
+              </div>
+              <div class="relationshipSidebarHint">최대 12개까지 만들 수 있어요.</div>
+            </aside>
+            <section class="relationshipEditorCard" aria-label="선택한 그룹 사람 목록">
+              <div class="relationshipEditorHead">
+                <div>
+                  <div class="relationshipEditorLabel">선택된 폴더</div>
+                  <input
+                    class="classRosterInput relationshipGroupTitleInput"
+                    value="${esc(String(selectedGroup?.title || ''))}"
+                    placeholder="그룹 이름"
+                    data-action="draft-relationship-group-title"
+                    data-group-index="${esc(String(selectedGroupIndex))}"
+                  />
+                </div>
+                <button class="btn small relationshipAddBtn" type="button" data-action="add-relationship-member" data-group-index="${esc(String(selectedGroupIndex))}">+ 인원 추가</button>
+              </div>
+              <div class="relationshipEditorMeta">이 폴더 안 인물 ${esc(String(members.filter((member) => String(member?.name || '').trim()).length))}명</div>
+              <div class="classRosterGrid relationshipMemberGrid" role="table" aria-label="선택한 그룹 사람 목록">
+                ${memberRows}
+              </div>
+            </section>
           </div>
         </div>
       </section>
@@ -2627,13 +2779,14 @@ function renderCaseSidebar(selected: CaseItem | null) {
 }
 
 function renderCaseCreateContent() {
-  const addNameField = renderNameFieldForType({
-    typeText: String(((draftCase as any).addTypeText || '') as any),
-    value: String(draftCase.addNameOther || ''),
-    action: 'draft-case',
-    field: 'addNameOther',
-    placeholder: '이름(예: 상대 A / 담당자 / 김OO)'
-  });
+  const mainActorOptions = getRecordArchiveMainActors().map((actor) => ({
+    value: serializeActorChoice(actor),
+    label: actorShort(actor),
+  }));
+  const relatedActorOptions = getRecordArchiveRelatedActors().map((actor) => ({
+    value: serializeActorChoice(actor),
+    label: actorShort(actor),
+  }));
 
   const chips =
     (draftCase.actors || []).length
@@ -2657,21 +2810,26 @@ function renderCaseCreateContent() {
   return `
     <div class="caseCreateFlow">
       <div class="helperBox" style="margin-bottom:14px; margin-top:0;">
-        <b>사용법:</b> 사람, 관계, 주제를 정하면 AI가 관련 기록을 우선적으로 모아 컬렉션을 구성해줍니다.
+        <b>사용법:</b> 기록 보관함에 저장된 주체와 관련자 중 필요한 사람을 고르면 AI가 관련 기록을 우선적으로 모아 컬렉션을 구성해줍니다.
       </div>
 
       <div class="field highlight-section">
-        <label style="font-size:13px;">① 누구 또는 어떤 관계를 중심으로 묶을까요? (필수)</label>
+        <label style="font-size:13px;">① 기록 보관함에서 중심 인물을 고르세요 (필수)</label>
         <div class="miniOptionRow">
           <label class="miniToggle" title="체크하면 선택한 인물 중심의 기록만 우선 모아요.">
             <input type="checkbox" data-action="draft-case" data-field="onlyMainActor" ${((draftCase as any).onlyMainActor ? 'checked' : '')} />
             <span>선택한 사람 중심 기록만 우선 모으기</span>
           </label>
         </div>
+        <div class="fieldSubLabel">주체 목록</div>
         <div class="rowInline">
-          <select data-action="draft-case" data-field="addTypeText" style="flex:0 0 100px;">${renderSelectFromList(UI_ACTOR_TYPES as any, String((draftCase as any).addTypeText || '당사자'))}</select>
-          ${addNameField}
-          ${H.btn('추가', 'add-case-actor')}
+          <select data-action="draft-case" data-field="mainActorKey">${renderSelectWithPlaceholder(mainActorOptions, String((draftCase as any).mainActorKey || ''), mainActorOptions.length ? '기록 보관함 주체 선택' : '기록 보관함 주체 없음')}</select>
+          ${H.btn('추가', 'add-case-main-actor')}
+        </div>
+        <div class="fieldSubLabel" style="margin-top:10px">관련자 목록</div>
+        <div class="rowInline">
+          <select data-action="draft-case" data-field="relatedActorKey">${renderSelectWithPlaceholder(relatedActorOptions, String((draftCase as any).relatedActorKey || ''), relatedActorOptions.length ? '기록 보관함 관련자 선택' : '기록 보관함 관련자 없음')}</select>
+          ${H.btn('추가', 'add-case-related-actor')}
         </div>
         ${chips}
       </div>

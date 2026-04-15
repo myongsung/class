@@ -32,6 +32,9 @@ jobs:
           ROOSYCOZY_MODEL_PATH: "${{ vars.ROOSYCOZY_MODEL_PATH }}"
           ROOSYCOZY_MODEL_URL: "${{ secrets.ROOSYCOZY_MODEL_URL || vars.ROOSYCOZY_MODEL_URL || 'https://github.com/myongsung/roosycozy-models/releases/download/model_v1/HyperCLOVAX-SEED-Text-Instruct-0.5B-q4_0.gguf' }}"
           ROOSYCOZY_MODEL_SHA256: "${{ secrets.ROOSYCOZY_MODEL_SHA256 || vars.ROOSYCOZY_MODEL_SHA256 }}"
+          ROOSYCOZY_ROOSY_MODEL_PATH: "${{ vars.ROOSYCOZY_ROOSY_MODEL_PATH }}"
+          ROOSYCOZY_ROOSY_MODEL_URL: "${{ secrets.ROOSYCOZY_ROOSY_MODEL_URL || vars.ROOSYCOZY_ROOSY_MODEL_URL || 'https://github.com/myongsung/roosycozy-models2/releases/download/model/hyperclovax_roosy_Q4_K_M.gguf' }}"
+          ROOSYCOZY_ROOSY_MODEL_SHA256: "${{ secrets.ROOSYCOZY_ROOSY_MODEL_SHA256 || vars.ROOSYCOZY_ROOSY_MODEL_SHA256 }}"
         run: npm run ci:ensure-model
 
       - name: ensure windows runtime bundle

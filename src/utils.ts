@@ -137,13 +137,25 @@ export type StrategyThreadPackage = {
   evidencePacket: StrategyThreadEvidencePacket | null;
 };
 
+export type RelationshipGroupMember = {
+  id: string;
+  name: string;
+};
+
+export type RelationshipGroup = {
+  id: string;
+  title: string;
+  members: RelationshipGroupMember[];
+};
+
 export type AppState = {
-  v: 11;
+  v: 12;
   tab: 'home' | 'records' | 'cases' | 'legal';
   selectedCaseId: string | null;
   records: RecordV8[];
   cases: Record<string, CaseItem>;
   classRoster: string[];
+  relationshipGroups: RelationshipGroup[];
   strategyThreadPackages: StrategyThreadPackage[];
 };
 
@@ -367,7 +379,12 @@ const verifyIntegrityPayload = async (payload: string, signature: string, signer
 
 const actorMain = (a: any): ActorRef => {
   const o = obj(a) ?? {};
-  return { type: (o.type ?? '외부인') as ActorType, name: trim(o.name) };
+  return {
+    type: (o.type ?? '외부인') as ActorType,
+    name: trim(o.name),
+    ...(trim(o.groupId) ? { groupId: trim(o.groupId) } : {}),
+    ...(trim(o.groupLabel) ? { groupLabel: trim(o.groupLabel) } : {}),
+  };
 };
 const actorRel = (a: any): ActorRef | null => {
   const a2 = actorMain(a);
@@ -384,7 +401,68 @@ const actorList = (actorsLike: any, fallback: any): ActorRef[] => {
   push(fallback);
   return out;
 };
-const actorListKey = (list: any) => (Array.isArray(list) ? list : []).map((a: any) => `${String(a?.type || '').trim()}|${String(a?.name || '').trim()}`).filter(Boolean).join('||');
+const actorListKey = (list: any) => (Array.isArray(list) ? list : [])
+  .map((a: any) => `${String(a?.type || '').trim()}|${String(a?.name || '').trim()}|${String(a?.groupId || '').trim()}|${String(a?.groupLabel || '').trim()}`)
+  .filter(Boolean)
+  .join('||');
+
+export const RELATIONSHIP_DEFAULT_GROUPS = [
+  { id: 'group-1', title: '그룹1' },
+  { id: 'group-2', title: '그룹2' },
+  { id: 'group-3', title: '그룹3' },
+] as const;
+
+const emptyRelationshipGroups = (): RelationshipGroup[] =>
+  RELATIONSHIP_DEFAULT_GROUPS.map((group) => ({
+    id: group.id,
+    title: group.title,
+    members: [],
+  }));
+
+const flattenRelationshipGroupNames = (groups: RelationshipGroup[]) =>
+  (Array.isArray(groups) ? groups : [])
+    .flatMap((group) => (Array.isArray(group.members) ? group.members : []).map((member) => trim(member?.name)))
+    .filter(Boolean)
+    .slice(0, 40);
+
+const normRelationshipGroupMember = (raw: any, fallbackId: string): RelationshipGroupMember | null => {
+  const o = obj(raw) ?? {};
+  const name = trim(o.name || raw);
+  if (!name) return null;
+  return {
+    id: trim(o.id) || fallbackId,
+    name,
+  };
+};
+
+const normRelationshipGroups = (raw: any, legacyRosterRaw: string[]): RelationshipGroup[] => {
+  const source = arr(raw);
+  if (!source.length) {
+    const migrated = emptyRelationshipGroups();
+    const legacyMembers = legacyRosterRaw
+      .map((name, index) => normRelationshipGroupMember({ id: `legacy-${index + 1}`, name }, `legacy-${index + 1}`))
+      .filter(Boolean) as RelationshipGroupMember[];
+    if (legacyMembers.length) migrated[0].members = legacyMembers;
+    return migrated;
+  }
+  const normalized = source
+    .slice(0, 12)
+    .map((item: any, index: number) => {
+      const o = obj(item) ?? {};
+      const title = trim(o.title) || RELATIONSHIP_DEFAULT_GROUPS[index]?.title || `그룹${index + 1}`;
+      const id = trim(o.id) || RELATIONSHIP_DEFAULT_GROUPS[index]?.id || `group-${index + 1}`;
+      const members = arr(o.members)
+        .map((member, memberIndex) => normRelationshipGroupMember(member, `${id}-member-${memberIndex + 1}`))
+        .filter(Boolean) as RelationshipGroupMember[];
+      return { id, title, members };
+    });
+  for (const fallback of RELATIONSHIP_DEFAULT_GROUPS) {
+    if (!normalized.some((group) => group.id === fallback.id)) {
+      normalized.push({ id: fallback.id, title: fallback.title, members: [] });
+    }
+  }
+  return normalized.slice(0, Math.max(RELATIONSHIP_DEFAULT_GROUPS.length, normalized.length));
+};
 
 export type RecordSnapshotV8 = {
   id: string;
@@ -1018,12 +1096,13 @@ export const verifyBackupEnvelope = async (raw: any): Promise<{ ok: boolean; sta
 };
 
 export const defaultState = (): AppState => ({
-  v: 11,
+  v: 12,
   tab: 'records',
   selectedCaseId: null,
   records: [],
   cases: {},
   classRoster: Array.from({ length: 40 }, () => ''),
+  relationshipGroups: emptyRelationshipGroups(),
   strategyThreadPackages: [],
 });
 
@@ -1167,7 +1246,9 @@ export const normalizeState = (anyObj: any): AppState => {
   for (const id of Object.keys(cs)) out[id] = normCase((cs as any)[id], id);
   base.cases = out;
   const rosterRaw = arr(o.classRoster).slice(0, 40).map((x: any) => trim(x));
-  base.classRoster = Array.from({ length: 40 }, (_, i) => rosterRaw[i] || '');
+  base.relationshipGroups = normRelationshipGroups(o.relationshipGroups, rosterRaw);
+  const flattenedRoster = flattenRelationshipGroupNames(base.relationshipGroups);
+  base.classRoster = Array.from({ length: 40 }, (_, i) => flattenedRoster[i] || rosterRaw[i] || '');
   base.strategyThreadPackages = arr(o.strategyThreadPackages).map(normStrategyThreadPackage)
     .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')))
     .slice(0, 24);

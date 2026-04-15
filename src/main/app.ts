@@ -5,7 +5,7 @@ import { open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialo
 import { uid, nowISO, toLocalInputValue, fromLocalInputValue, safeParseJSON, defaultState, normalizeState, loadState, saveState, wipeAll, STATUSES, ensureRecordV8, sealNewRecord, amendSignedRecord, verifyRecordIntegrity, buildSignedBackupEnvelope, verifyBackupEnvelope, reverifyStateRecords, refreshDeviceSignerInfo, trunc } from '../utils';
 import type { ActorRef, PlaceType, StoreType, Sensitivity, StepItem, CaseItem, RecordItem } from '../engine';
 import { OTHER, casesContainingRecord, addActorToList, buildRecordFromDraft, createCaseWithAdvisors, regenerateCaseAdvisors, buildCaseTimeline, getCaseUpdateCandidates, addRecordsToCase, recordsForCase, classifyRecordsRisk } from '../engine';
-import { S, setState, ui, toast, runToastAction, log, openConfirm, closeConfirm, openRecordModal, closeRecordModal,  openCaseCreateModal, closeCaseCreateModal, openTimelineModal, closeTimelineModal, openPaperModal, closePaperModal, openPaperPickModal, closePaperPickModal, openCaseUpdateModal, closeCaseUpdateModal, draftRecord, draftRecordEdit, draftCase, draftStep, actorTypeTextFromInternal, actorTypeInternalFromText, getSelectedCase, logs, actorShort, LVS, PLACE_TYPES, STORE_TYPES, UI_OTHER_ACTOR_LABEL, UI_CLASS_ACTOR_LABEL, normalizeActorTypeTextUI, loadRecordEditDraft, resetRecordEditDraft, CLASS_ROSTER_SIZE, getClassRoster, hasScreenPin, readScreenPin, saveScreenPin, clearScreenPin, normalizeScreenPin, isValidScreenPin } from './state';
+import { S, setState, ui, toast, runToastAction, log, openConfirm, closeConfirm, openRecordModal, closeRecordModal,  openCaseCreateModal, closeCaseCreateModal, openTimelineModal, closeTimelineModal, openPaperModal, closePaperModal, openPaperPickModal, closePaperPickModal, openCaseUpdateModal, closeCaseUpdateModal, draftRecord, draftRecordEdit, draftCase, draftStep, actorTypeTextFromInternal, actorTypeInternalFromText, getSelectedCase, logs, actorShort, LVS, PLACE_TYPES, STORE_TYPES, UI_OTHER_ACTOR_LABEL, UI_CLASS_ACTOR_LABEL, normalizeActorTypeTextUI, loadRecordEditDraft, resetRecordEditDraft, hasScreenPin, readScreenPin, saveScreenPin, clearScreenPin, normalizeScreenPin, isValidScreenPin, cloneRelationshipGroups, getRelationshipGroups, makeRelationshipActorRef, parseActorChoice } from './state';
 import { ensurePaperStyles, buildPaperPayload, computeCasePaperHash } from './paper';
 import { render as renderView } from './views';
 
@@ -426,6 +426,19 @@ type StrategyChatInvokeResult = {
       riskLabel?: string;
       reasons?: string[];
     }>;
+    legalReferences?: Array<{
+      refId?: string;
+      lawId?: string;
+      lawName?: string;
+      shortName?: string;
+      articleRef?: string;
+      articleTitle?: string;
+      legalPoint?: string;
+      teacherUseCase?: string;
+      sourceUrl?: string;
+      statusLabel?: string;
+      relevanceReasons?: string[];
+    }>;
   };
 };
 
@@ -632,7 +645,7 @@ const formatStrategyRunnerLabel = (runner: unknown) => {
   return file;
 };
 
-const normalizeStrategyModel = (value: unknown) => String(value || '').trim() === 'roosy-x' ? 'roosy-x' : 'hyperclova-x';
+const normalizeStrategyModel = (_value: unknown) => 'roosy-hybrid' as const;
 
 const getStrategyChatModel = () => {
   const next = normalizeStrategyModel((ui as any).strategyChatModel);
@@ -691,6 +704,7 @@ const clearStrategyChat = () => {
   (ui as any).strategyChatError = '';
   closeStrategyChatModelMenu();
   (ui as any).strategyChatPending = false;
+  (ui as any).strategyChatPendingStartedAt = '';
   (ui as any).strategyChatEvidencePacket = null;
   (ui as any).strategyChatRetrievalQuery = '';
   clearStrategyChatProgress();
@@ -726,10 +740,10 @@ const buildStrategyNote = () => {
 };
 
 const sendStrategyAgentMessage = async (overrideMessage?: string) => {
-  getStrategyChatModel();
+  const selectedModel = getStrategyChatModel();
   const records = getStrategySelectedRecords();
   if (!records.length) {
-    toast('먼저 AI 분석에 연결할 기록을 1개 이상 붙여주세요');
+    toast('먼저 AI 민원전용 법무팀에 연결할 기록을 1개 이상 붙여주세요');
     return;
   }
 
@@ -755,21 +769,22 @@ const sendStrategyAgentMessage = async (overrideMessage?: string) => {
   (ui as any).strategyChatError = '';
   closeStrategyChatModelMenu();
   (ui as any).strategyChatPending = true;
+  (ui as any).strategyChatPendingStartedAt = nowISO();
   clearStrategyChatProgress();
-  appendStrategyChatProgress('준비', 'AI 분석 요청을 접수했어요.', false);
+  appendStrategyChatProgress('준비', 'AI 민원전용 법무팀 요청을 접수했어요.', false);
   render();
 
   try {
+    const maxTokens = 720;
     const result = await invoke('strategy_agent_chat', {
       args: {
         caseItem,
         records: records.map((record) => ensureRecordV8(record) as any),
         message,
+        model: selectedModel,
         strategyNote: buildStrategyNote(),
         conversation: history,
-        maxTokens: 320,
-        nCtx: 4096,
-        threads: 4,
+        maxTokens,
       },
     }) as StrategyChatInvokeResult;
 
@@ -780,18 +795,19 @@ const sendStrategyAgentMessage = async (overrideMessage?: string) => {
     appendStrategyChatMessage(
       'assistant',
       answer,
-      `${formatStrategyRunnerLabel(result.runner)} · 근거 ${String(result.recordsUsed || records.length)}개`
+      `ROOSY-Hybrid · ${formatStrategyRunnerLabel(result.runner)} · 근거 ${String(result.recordsUsed || records.length)}개`
     );
-    toast('AI 분석 답변이 도착했어요');
+    toast('AI 민원전용 법무팀 답변이 도착했어요');
   } catch (err) {
-    const messageText = String((err as any)?.message || err || 'AI 분석 모델 호출에 실패했어요.');
+    const messageText = String((err as any)?.message || err || 'AI 민원전용 법무팀 모델 호출에 실패했어요.');
     (ui as any).strategyChatError = messageText;
     appendStrategyChatProgress('오류', messageText, false);
-    appendStrategyChatMessage('assistant', `AI 분석 에이전트를 실행하지 못했어요.\n${messageText}`, '실행 오류');
-    toast('AI 분석 실행 실패');
+    appendStrategyChatMessage('assistant', `AI 민원전용 법무팀을 실행하지 못했어요.\n${messageText}`, '실행 오류');
+    toast('AI 민원전용 법무팀 실행 실패');
     log('strategy chat failed', err);
   } finally {
     (ui as any).strategyChatPending = false;
+    (ui as any).strategyChatPendingStartedAt = '';
     render();
   }
 };
@@ -846,6 +862,9 @@ const syncStrategyChatDockedComposer = () => {
   const paddingBottom = parseFloat(shellStyles.paddingBottom || '0') || 0;
   const composerHeight = Math.ceil(composer.getBoundingClientRect().height);
   const threadHeight = Math.max(180, hostHeight - paddingTop - paddingBottom - gap - composerHeight);
+  const wasNearBottom = Math.max(0, thread.scrollHeight - thread.clientHeight - thread.scrollTop) <= 48;
+  const fromBottom = Math.max(0, thread.scrollHeight - thread.clientHeight - thread.scrollTop);
+  const prevTop = thread.scrollTop;
 
   thread.style.height = `${threadHeight}px`;
   thread.style.minHeight = `${threadHeight}px`;
@@ -854,6 +873,13 @@ const syncStrategyChatDockedComposer = () => {
   thread.style.overflowX = 'hidden';
   thread.style.paddingBottom = '16px';
   thread.style.scrollPaddingBottom = '24px';
+
+  const nextMaxScrollTop = Math.max(0, thread.scrollHeight - thread.clientHeight);
+  if (wasNearBottom) {
+    thread.scrollTop = nextMaxScrollTop;
+  } else {
+    thread.scrollTop = Math.max(0, nextMaxScrollTop - fromBottom);
+  }
 };
 
 const queueStrategyChatDockedComposerSync = () => {
@@ -920,40 +946,40 @@ const updateContentProofUI = () => {
 
 const ensureClassRosterDraft = () => {
   const raw = Array.isArray(ui.classRosterDraft) ? ui.classRosterDraft : [];
-  ui.classRosterDraft = Array.from({ length: CLASS_ROSTER_SIZE }, (_, i) => String(raw[i] || ''));
+  ui.classRosterDraft = cloneRelationshipGroups(raw.length ? raw as any : getRelationshipGroups());
+  const firstGroupId = String(ui.classRosterDraft[0]?.id || 'group-1');
+  if (!ui.classRosterDraft.some((group: any) => String(group?.id || '') === String(ui.classRosterGroupId || ''))) {
+    ui.classRosterGroupId = firstGroupId;
+  }
   return ui.classRosterDraft;
 };
 
 const updateClassRosterCountUI = () => {
   const countEl = document.getElementById('classRosterFilledCount');
   if (!countEl) return;
-  const filled = ensureClassRosterDraft().filter((name) => String(name || '').trim()).length;
+  const filled = ensureClassRosterDraft().reduce((acc, group: any) => (
+    acc + (Array.isArray(group?.members) ? group.members.filter((member: any) => String(member?.name || '').trim()).length : 0)
+  ), 0);
   countEl.textContent = String(filled);
 };
 
-const fillClassRosterInputsFromDraft = () => {
-  ensureClassRosterDraft().forEach((value, index) => {
-    const input = document.querySelector(`[data-action="draft-class-roster"][data-index="${index}"]`) as HTMLInputElement | null;
-    if (input) input.value = value;
-  });
-  updateClassRosterCountUI();
-};
+const syncClassRosterFieldDefaults = () => {
+  const groups = getRelationshipGroups();
+  const firstGroupId = String(groups[0]?.id || 'group-1');
+  const actorMembers = (groups.find((group) => group.id === draftRecord.actorGroupId)?.members || []);
+  const relatedMembers = (groups.find((group) => group.id === draftRecord.relGroupId)?.members || []);
+  const recordEditActorMembers = (groups.find((group) => group.id === draftRecordEdit.actorGroupId)?.members || []);
+  const recordEditRelatedMembers = (groups.find((group) => group.id === draftRecordEdit.relGroupId)?.members || []);
 
-const applyClassRosterPaste = (startIndex: number, rawText: string) => {
-  const tokens = String(rawText || '')
-    .replace(/\r/g, '\n')
-    .split(/[\n\t]+/)
-    .map((x) => String(x || '').trim())
-    .filter(Boolean);
-  if (!tokens.length) return 0;
-  const draft = ensureClassRosterDraft();
-  let applied = 0;
-  for (let i = 0; i < tokens.length && startIndex + i < CLASS_ROSTER_SIZE; i += 1) {
-    draft[startIndex + i] = tokens[i];
-    applied += 1;
-  }
-  fillClassRosterInputsFromDraft();
-  return applied;
+  if (!groups.some((group) => group.id === draftRecord.actorGroupId)) draftRecord.actorGroupId = firstGroupId;
+  if (!groups.some((group) => group.id === draftRecord.relGroupId)) draftRecord.relGroupId = firstGroupId;
+  if (!groups.some((group) => group.id === draftRecordEdit.actorGroupId)) (draftRecordEdit as any).actorGroupId = firstGroupId;
+  if (!groups.some((group) => group.id === draftRecordEdit.relGroupId)) (draftRecordEdit as any).relGroupId = firstGroupId;
+
+  if (!actorMembers.some((member: any) => member.id === draftRecord.actorMemberId)) draftRecord.actorMemberId = '';
+  if (!relatedMembers.some((member: any) => member.id === draftRecord.relMemberId)) draftRecord.relMemberId = '';
+  if (!recordEditActorMembers.some((member: any) => member.id === (draftRecordEdit as any).actorMemberId)) (draftRecordEdit as any).actorMemberId = '';
+  if (!recordEditRelatedMembers.some((member: any) => member.id === (draftRecordEdit as any).relMemberId)) (draftRecordEdit as any).relMemberId = '';
 };
 
 const SUMMARY_PART_LABELS = [
@@ -1001,6 +1027,8 @@ function buildSummaryFromDraftParts(draft: any) {
 }
 
 function getPendingDraftActor(draft: any): ActorRef | null {
+  const groupedActor = makeRelationshipActorRef(String(draft.actorGroupId || ''), String(draft.actorMemberId || ''));
+  if (groupedActor) return groupedActor;
   const typeText = String(draft.actorTypeText || '').trim();
   const name = String(draft.actorNameOther || '').trim();
   if (!typeText) return null;
@@ -1122,27 +1150,31 @@ function captureTransientUI() {
 type RenderScrollState = {
   winX: number;
   winY: number;
-  containers: { selector: string; top: number; left: number }[];
+  containers: { selector: string; top: number; left: number; fromBottom?: number | null; preserveFromBottom?: boolean }[];
 };
 
 function captureRenderScrollState(): RenderScrollState {
   const selectors = [
-    '#recordComposerModal',
-    '#recordComposerModal .recordComposerModalBody',
-    '#recordModal',
-    '#recordModal .modalBody',
-    '#caseCreateModal',
-    '#caseCreateModal .caseCommandPanelScroll',
-    '#caseUpdateModal',
-    '#timelineDetailModal',
+    { selector: '#recordComposerModal' },
+    { selector: '#recordComposerModal .recordComposerModalBody' },
+    { selector: '#recordModal' },
+    { selector: '#recordModal .modalBody' },
+    { selector: '#caseCreateModal' },
+    { selector: '#caseCreateModal .caseCommandPanelScroll' },
+    { selector: '#caseUpdateModal' },
+    { selector: '#timelineDetailModal' },
+    { selector: '.strategyChatThreadOnly', preserveFromBottom: true },
   ];
   const containers = selectors
-    .map((selector) => {
-      const el = document.querySelector(selector) as HTMLElement | null;
+    .map((item) => {
+      const el = document.querySelector(item.selector) as HTMLElement | null;
       if (!el) return null;
-      return { selector, top: el.scrollTop, left: el.scrollLeft };
+      const fromBottom = item.preserveFromBottom
+        ? Math.max(0, el.scrollHeight - el.clientHeight - el.scrollTop)
+        : null;
+      return { selector: item.selector, top: el.scrollTop, left: el.scrollLeft, fromBottom, preserveFromBottom: !!item.preserveFromBottom };
     })
-    .filter(Boolean) as { selector: string; top: number; left: number }[];
+    .filter(Boolean) as { selector: string; top: number; left: number; fromBottom?: number | null; preserveFromBottom?: boolean }[];
   return {
     winX: window.scrollX || 0,
     winY: window.scrollY || 0,
@@ -1156,7 +1188,13 @@ function restoreRenderScrollState(state: RenderScrollState | null) {
   for (const item of state.containers) {
     const el = document.querySelector(item.selector) as HTMLElement | null;
     if (!el) continue;
-    el.scrollTop = item.top;
+    if (item.preserveFromBottom) {
+      const maxScrollTop = Math.max(0, el.scrollHeight - el.clientHeight);
+      const fromBottom = Math.max(0, Number(item.fromBottom ?? 0));
+      el.scrollTop = Math.max(0, maxScrollTop - fromBottom);
+    } else {
+      el.scrollTop = item.top;
+    }
     el.scrollLeft = item.left;
   }
 }
@@ -1327,7 +1365,9 @@ async function refreshRiskPredictionsOnState(force = true) {
 /* ---------- defaults (draft) ---------- */
 const DEFAULT_RECORD = () => ({
   intake: '상담', actorTypeText: '당사자', actorType: '학생', actorNameChoice: OTHER, actorNameOther: '', actors: [],
+  actorGroupId: 'group-1', actorMemberId: '',
   relTypeText: '상대방', relType: '학부모', relNameChoice: OTHER, relNameOther: '', related: [],
+  relGroupId: 'group-1', relMemberId: '',
   placeText: '온라인', place: '온라인', placeOther: '',
   storeTypeText: '전화', storeType: '전화', storeOther: '',
   lvText: 'LV2', lv: 'LV2', ts: toLocalInputValue(nowISO()), summary: '',
@@ -1338,7 +1378,7 @@ const DEFAULT_CASE = () => ({
   title: '', query: '', timeFrom: '', timeTo: '', maxResults: 80, actors: [],
   onlyMainActor: false,
   sensFilterText: 'any', sensFilter: 'any', statusText: '진행중', status: '진행중',
-  addTypeText: '당사자', addType: '학생', addNameChoice: OTHER, addNameOther: ''
+  mainActorKey: '', relatedActorKey: ''
 });
 
 function prepareRecordDraftForSeal() {
@@ -1746,19 +1786,16 @@ function bindEvents() {
     },
     'select-strategy-model': (btn) => {
       const next = normalizeStrategyModel(btn.dataset.model || '');
-      if (next === 'roosy-x') {
-        toast('Roosy-X는 준비 중이에요');
-        return;
-      }
       (ui as any).strategyChatModel = next;
       closeStrategyChatModelMenu();
       render();
+      toast('ROOSY-Hybrid로 맞춰뒀어요');
       log('strategy model ->', next);
     },
     'clear-strategy-chat': () => {
       clearStrategyChat();
       render();
-      toast('AI 분석 대화를 비웠어요');
+      toast('AI 민원전용 법무팀 대화를 비웠어요');
       log('strategy chat cleared');
     },
     'prime-strategy-chat': async () => {
@@ -1886,16 +1923,90 @@ function bindEvents() {
       toast('PIN 삭제 완료');
       log('screen pin cleared');
     },
-    'open-class-roster': () => { ui.classRosterDraft = getClassRoster().slice(); ui.classRosterOpen = true; render(); log('class roster modal open'); },
-    'close-class-roster': () => { ui.classRosterOpen = false; ui.classRosterDraft = getClassRoster().slice(); closeDlg('classRosterModal'); render(); log('class roster modal close'); },
-    'save-class-roster': async () => {
-      const draft = ensureClassRosterDraft().map((name) => String(name || '').trim());
-      S.classRoster = Array.from({ length: CLASS_ROSTER_SIZE }, (_, i) => draft[i] || '');
-      ui.classRosterDraft = S.classRoster.slice();
+    'open-class-roster': () => {
+      ui.classRosterDraft = cloneRelationshipGroups(getRelationshipGroups());
+      ui.classRosterGroupId = String(ui.classRosterDraft[0]?.id || 'group-1');
+      ui.classRosterOpen = true;
+      render();
+      log('class roster modal open');
+    },
+    'close-class-roster': () => {
       ui.classRosterOpen = false;
+      ui.classRosterDraft = cloneRelationshipGroups(getRelationshipGroups());
+      ui.classRosterGroupId = String(ui.classRosterDraft[0]?.id || 'group-1');
+      closeDlg('classRosterModal');
+      render();
+      log('class roster modal close');
+    },
+    'save-class-roster': async () => {
+      const draft = ensureClassRosterDraft().map((group: any, groupIndex: number) => ({
+        id: String(group?.id || `group-${groupIndex + 1}`),
+        title: String(group?.title || `그룹${groupIndex + 1}`).trim() || `그룹${groupIndex + 1}`,
+        members: (Array.isArray(group?.members) ? group.members : [])
+          .map((member: any, memberIndex: number) => ({
+            id: String(member?.id || `${String(group?.id || `group-${groupIndex + 1}`)}-member-${memberIndex + 1}`),
+            name: String(member?.name || '').trim(),
+          }))
+          .filter((member: any) => member.name),
+      }));
+      S.relationshipGroups = cloneRelationshipGroups(draft as any);
+      const flattenedRoster = draft.flatMap((group: any) => group.members.map((member: any) => member.name)).slice(0, 40);
+      S.classRoster = Array.from({ length: 40 }, (_, i) => String(flattenedRoster[i] || ''));
+      ui.classRosterDraft = cloneRelationshipGroups(S.relationshipGroups);
+      ui.classRosterGroupId = String(ui.classRosterDraft.find((group: any) => String(group?.id || '') === String(ui.classRosterGroupId || ''))?.id || ui.classRosterDraft[0]?.id || 'group-1');
+      ui.classRosterOpen = false;
+      syncClassRosterFieldDefaults();
       await SR();
-      toast(`프로필 템플릿 저장 완료 ✅ ${draft.filter(Boolean).length}개 등록`);
-      log('class roster saved', draft.filter(Boolean).length);
+      const memberCount = draft.reduce((acc: number, group: any) => acc + group.members.length, 0);
+      toast(`관계 관리 저장 완료 ✅ ${memberCount}명 등록`);
+      log('relationship groups saved', memberCount);
+    },
+    'add-relationship-member': (btn) => {
+      const draft = ensureClassRosterDraft() as any[];
+      const groupIndex = Number(btn.dataset.groupIndex ?? '-1');
+      if (Number.isNaN(groupIndex) || groupIndex < 0 || groupIndex >= draft.length) return;
+      const group = draft[groupIndex];
+      ui.classRosterGroupId = String(group?.id || ui.classRosterGroupId || '');
+      group.members = Array.isArray(group.members) ? group.members : [];
+      group.members.push({ id: uid(`rel_${group.id}`), name: '' });
+      render();
+      updateClassRosterCountUI();
+    },
+    'add-relationship-group': () => {
+      const draft = ensureClassRosterDraft() as any[];
+      if (draft.length >= 12) {
+        toast('그룹은 최대 12개까지 만들 수 있어요.');
+        return;
+      }
+      const nextIndex = draft.length + 1;
+      const groupId = uid('group');
+      draft.push({
+        id: groupId,
+        title: `그룹${nextIndex}`,
+        members: [],
+      });
+      ui.classRosterGroupId = groupId;
+      render();
+      updateClassRosterCountUI();
+    },
+    'select-relationship-group': (btn) => {
+      const draft = ensureClassRosterDraft() as any[];
+      const groupId = String(btn.dataset.groupId || '').trim();
+      if (!groupId) return;
+      if (!draft.some((group: any) => String(group?.id || '') === groupId)) return;
+      ui.classRosterGroupId = groupId;
+      render();
+    },
+    'remove-relationship-member': (btn) => {
+      const draft = ensureClassRosterDraft() as any[];
+      const groupIndex = Number(btn.dataset.groupIndex ?? '-1');
+      const memberIndex = Number(btn.dataset.memberIndex ?? '-1');
+      if (Number.isNaN(groupIndex) || groupIndex < 0 || groupIndex >= draft.length) return;
+      if (Number.isNaN(memberIndex) || memberIndex < 0) return;
+      const group = draft[groupIndex];
+      group.members = (Array.isArray(group.members) ? group.members : []).filter((_: any, index: number) => index !== memberIndex);
+      render();
+      updateClassRosterCountUI();
     },
 
     'open-case-create': () => (S.tab = 'cases' as any, ui.caseTab = 'create', ui.caseCreateOpen = false, render(), void saveState(S), log('case create section open')),
@@ -2049,15 +2160,11 @@ function bindEvents() {
     },
 
     'add-record-actor': () => {
-      const typeText = normalizeActorTypeTextUI(String((draftRecord as any).actorTypeText || '').trim());
-      const type = actorTypeInternalFromText(typeText);
-      draftRecord.actorType = type;
-      (draftRecord as any).actorTypeText = preserveActorTypeText(typeText, type);
-      const name = String(draftRecord.actorNameOther || '').trim();
-      if (!typeText || !name) return toast('주체 정보를 입력하세요');
+      const actor = makeRelationshipActorRef(String((draftRecord as any).actorGroupId || ''), String((draftRecord as any).actorMemberId || ''));
+      if (!actor) return toast('주체 인물을 선택하세요');
       draftRecord.actorNameChoice = OTHER;
-      draftRecord.actors = addActorToList((draftRecord as any).actors || [], { type, name });
-      draftRecord.actorNameOther = '';
+      draftRecord.actors = addActorToList((draftRecord as any).actors || [], actor);
+      (draftRecord as any).actorMemberId = '';
       render();
       toast('주체 추가');
     },
@@ -2084,16 +2191,13 @@ function bindEvents() {
     },
 
     'add-related': () => {
-      const typeText = normalizeActorTypeTextUI(String((draftRecord as any).relTypeText || '').trim());
-      const type = actorTypeInternalFromText(typeText);
-      draftRecord.relType = type; (draftRecord as any).relTypeText = preserveActorTypeText(typeText, type);
-      const name = String(draftRecord.relNameOther || '').trim();
-      if (!typeText || !name) return;
+      const actor = makeRelationshipActorRef(String((draftRecord as any).relGroupId || ''), String((draftRecord as any).relMemberId || ''));
+      if (!actor) return toast('관련 인물을 선택하세요');
       draftRecord.relNameChoice = OTHER;
-      draftRecord.related = addActorToList(draftRecord.related || [], { type, name });
-      draftRecord.relNameOther = '';
+      draftRecord.related = addActorToList(draftRecord.related || [], actor);
+      (draftRecord as any).relMemberId = '';
       ui.recRelatedOpen = true;
-      render(); toast('관련자 추가'); log('related added', name);
+      render(); toast('관련자 추가'); log('related added', actor.name);
     },
     'add-related-edit': () => {
       const typeText = normalizeActorTypeTextUI(String((draftRecordEdit as any).relTypeText || '').trim());
@@ -2190,15 +2294,21 @@ function bindEvents() {
       toast('복사'); log('record copied', id);
     },
 
-    'add-case-actor': () => {
-      const typeText = normalizeActorTypeTextUI(String((draftCase as any).addTypeText || '').trim());
-      const type = actorTypeInternalFromText(typeText);
-      (draftCase as any).addType = type; (draftCase as any).addTypeText = preserveActorTypeText(typeText, type);
-      const name = String(draftCase.addNameOther || '').trim();
-      if (!typeText || !name) return toast('대상 정보를 입력하세요');
-      draftCase.addNameChoice = OTHER;
-      draftCase.actors = addActorToList(draftCase.actors || [], { type, name });
-      draftCase.addNameOther = ''; render(); toast('대상 추가');
+    'add-case-main-actor': () => {
+      const actor = parseActorChoice(String((draftCase as any).mainActorKey || ''));
+      if (!actor) return toast('기록 보관함 주체를 선택하세요');
+      draftCase.actors = addActorToList(draftCase.actors || [], actor);
+      (draftCase as any).mainActorKey = '';
+      render();
+      toast('주체 추가');
+    },
+    'add-case-related-actor': () => {
+      const actor = parseActorChoice(String((draftCase as any).relatedActorKey || ''));
+      if (!actor) return toast('기록 보관함 관련자를 선택하세요');
+      draftCase.actors = addActorToList(draftCase.actors || [], actor);
+      (draftCase as any).relatedActorKey = '';
+      render();
+      toast('관련자 추가');
     },
     'remove-case-actor': (btn) => { const idx = Number(btn.dataset.idx ?? '-1'); if (!Number.isNaN(idx) && idx >= 0) (draftCase.actors = (draftCase.actors || []).filter((_, i) => i !== idx), render()); },
     'clear-case-draft': () => (Object.assign(draftCase, DEFAULT_CASE()), render()),
@@ -2419,6 +2529,19 @@ function bindEvents() {
 
   /* ---------- input/change routing ---------- */
   const rec: Record<string, (v: string) => void> = {
+    actorGroupId: (v) => {
+      (draftRecord as any).actorGroupId = v;
+      (draftRecord as any).actorMemberId = '';
+      render();
+    },
+    actorMemberId: (v) => ((draftRecord as any).actorMemberId = v),
+    relGroupId: (v) => {
+      (draftRecord as any).relGroupId = v;
+      (draftRecord as any).relMemberId = '';
+      ui.recRelatedOpen = true;
+      render();
+    },
+    relMemberId: (v) => ((draftRecord as any).relMemberId = v),
     actorTypeText: (v) => {
       const prevText = String((draftRecord as any).actorTypeText || '');
       const uiText = normalizeActorTypeTextUI(v);
@@ -2507,19 +2630,8 @@ function bindEvents() {
     maxResults: (v) => (draftCase.maxResults = Math.max(1, Math.min(400, Number(v) || 80))),
     sensFilterText: (v) => { (draftCase as any).sensFilterText = v; const vv = String(v || '').trim(); if (vv === 'any' || vv === '전체') draftCase.sensFilter = 'any'; else if ((LVS as any).includes(vv as any)) draftCase.sensFilter = vv as any; },
     statusText: (v) => { (draftCase as any).statusText = v; const vv = String(v || '').trim(); (STATUSES as any).includes(vv as any) && (draftCase.status = vv as any); },
-    addTypeText: (v) => {
-      const prevText = String((draftCase as any).addTypeText || '');
-      const uiText = normalizeActorTypeTextUI(v);
-      const t = actorTypeInternalFromText(uiText);
-      draftCase.addType = t;
-      (draftCase as any).addTypeText = preserveActorTypeText(uiText, t);
-      if (didActorTypePickerChange(prevText, uiText)) {
-        draftCase.addNameChoice = OTHER;
-        draftCase.addNameOther = '';
-      }
-      render();
-    },
-    addNameOther: (v) => (draftCase.addNameChoice = OTHER, draftCase.addNameOther = v),
+    mainActorKey: (v) => ((draftCase as any).mainActorKey = v),
+    relatedActorKey: (v) => ((draftCase as any).relatedActorKey = v),
     onlyMainActor: (v) => ((draftCase as any).onlyMainActor = (v === 'true')),
   };
 
@@ -2653,26 +2765,23 @@ function bindEvents() {
   });
 
   document.addEventListener('input', (e) => {
-    const el = (e.target as HTMLElement | null)?.closest<HTMLInputElement>('[data-action="draft-class-roster"]');
+    const el = (e.target as HTMLElement | null)?.closest<HTMLInputElement>('[data-action="draft-relationship-group-title"],[data-action="draft-relationship-member-name"]');
     if (!el) return;
-    const index = Number(el.dataset.index ?? '-1');
-    if (Number.isNaN(index) || index < 0 || index >= CLASS_ROSTER_SIZE) return;
-    const draft = ensureClassRosterDraft();
-    draft[index] = String(el.value || '');
+    const draft = ensureClassRosterDraft() as any[];
+    const groupIndex = Number(el.dataset.groupIndex ?? '-1');
+    if (Number.isNaN(groupIndex) || groupIndex < 0 || groupIndex >= draft.length) return;
+    if (el.dataset.action === 'draft-relationship-group-title') {
+      draft[groupIndex].title = String(el.value || '');
+    } else {
+      const memberIndex = Number(el.dataset.memberIndex ?? '-1');
+      if (Number.isNaN(memberIndex) || memberIndex < 0) return;
+      draft[groupIndex].members = Array.isArray(draft[groupIndex].members) ? draft[groupIndex].members : [];
+      if (!draft[groupIndex].members[memberIndex]) {
+        draft[groupIndex].members[memberIndex] = { id: `${draft[groupIndex].id}-member-${memberIndex + 1}`, name: '' };
+      }
+      draft[groupIndex].members[memberIndex].name = String(el.value || '');
+    }
     updateClassRosterCountUI();
-  });
-
-  document.addEventListener('paste', (e) => {
-    const el = (e.target as HTMLElement | null)?.closest<HTMLInputElement>('[data-action="draft-class-roster"]');
-    if (!el) return;
-    const raw = e.clipboardData?.getData('text/plain') || '';
-    const pieces = String(raw || '').replace(/\r/g, '\n').split(/[\n\t]+/).map((x) => String(x || '').trim()).filter(Boolean);
-    if (pieces.length <= 1) return;
-    const index = Number(el.dataset.index ?? '-1');
-    if (Number.isNaN(index) || index < 0 || index >= CLASS_ROSTER_SIZE) return;
-    e.preventDefault();
-    const applied = applyClassRosterPaste(index, raw);
-    if (applied > 0) toast(`템플릿 ${applied}개 붙여넣기 완료`);
   });
 
   document.addEventListener('cancel', (e) => {
@@ -2693,7 +2802,7 @@ function bindEvents() {
     if ((t as any).id === 'settingsModal') { ui.settingsOpen = false; resetScreenPinSettingsDraft(); }
     if ((t as any).id === 'updateNotesModal') ui.updatesNoteOpen = false;
     if ((t as any).id === 'simulationPickerModal') { (ui as any).simulationPickerOpen = false; (ui as any).simulationPickerQuery = ''; (ui as any).simulationPickerSelectedRecordIds = []; }
-    if ((t as any).id === 'classRosterModal') { ui.classRosterOpen = false; ui.classRosterDraft = getClassRoster().slice(); }
+    if ((t as any).id === 'classRosterModal') { ui.classRosterOpen = false; ui.classRosterDraft = cloneRelationshipGroups(getRelationshipGroups()); ui.classRosterGroupId = String(ui.classRosterDraft[0]?.id || 'group-1'); }
     if ((t as any).id === SIGNATURE_MODAL_ID) ui.signatureModalMode = null;
     if ((t as any).id === SCREEN_PIN_MODAL_ID) {
       if (ui.pinLocked) {
@@ -2750,7 +2859,7 @@ function bindEvents() {
       const st = dlg('settingsModal'); if (isDialogEl(st) && st.open) return void (e.preventDefault(), ui.settingsOpen = false, closeDlg('settingsModal'));
       const un = dlg('updateNotesModal'); if (isDialogEl(un) && un.open) return void (e.preventDefault(), ui.updatesNoteOpen = false, closeDlg('updateNotesModal'), render());
       const picker = dlg('simulationPickerModal'); if (isDialogEl(picker) && picker.open) return void (e.preventDefault(), (ui as any).simulationPickerOpen = false, (ui as any).simulationPickerQuery = '', (ui as any).simulationPickerSelectedRecordIds = [], closeDlg('simulationPickerModal'), render());
-      const roster = dlg('classRosterModal'); if (ui.classRosterOpen || (isDialogEl(roster) && roster.open)) return void (e.preventDefault(), ui.classRosterOpen = false, ui.classRosterDraft = getClassRoster().slice(), closeDlg('classRosterModal'), render());
+      const roster = dlg('classRosterModal'); if (ui.classRosterOpen || (isDialogEl(roster) && roster.open)) return void (e.preventDefault(), ui.classRosterOpen = false, ui.classRosterDraft = cloneRelationshipGroups(getRelationshipGroups()), ui.classRosterGroupId = String(ui.classRosterDraft[0]?.id || 'group-1'), closeDlg('classRosterModal'), render());
       const composer = dlg('recordComposerModal'); if (isDialogEl(composer) && composer.open) return void (e.preventDefault(), ui.recordComposerOpen = false, closeDlg('recordComposerModal'), render());
       const rec = dlg('recordModal'); if (isDialogEl(rec) && rec.open) return void (e.preventDefault(), closeRecordModal(), render());
       const tl = dlg('timelineDetailModal'); if (isDialogEl(tl) && tl.open) return void (e.preventDefault(), closeTimelineModal(), render());
@@ -2760,19 +2869,23 @@ function bindEvents() {
 }
 
 function syncDraftDefaults() {
-  ui.classRosterDraft = getClassRoster().slice();
+  ui.classRosterDraft = cloneRelationshipGroups(getRelationshipGroups());
+  ui.classRosterGroupId = String(ui.classRosterDraft[0]?.id || 'group-1');
   ui.pinLocked = false;
   ui.pinModalOpen = false;
   resetScreenPinModalDraft();
   resetScreenPinSettingsDraft();
-  draftRecord.actorNameChoice = OTHER; draftRecord.relNameChoice = OTHER; draftCase.addNameChoice = OTHER; draftRecordEdit.actorNameChoice = OTHER; draftRecordEdit.relNameChoice = OTHER;
+  draftRecord.actorNameChoice = OTHER; draftRecord.relNameChoice = OTHER; draftRecordEdit.actorNameChoice = OTHER; draftRecordEdit.relNameChoice = OTHER;
   (draftRecord as any).placeText ||= draftRecord.place; (draftRecord as any).storeTypeText ||= draftRecord.storeType; (draftRecord as any).lvText ||= draftRecord.lv;
   (draftRecord as any).actorTypeText ||= actorTypeTextFromInternal(draftRecord.actorType); (draftRecord as any).relTypeText ||= actorTypeTextFromInternal(draftRecord.relType);
+  (draftRecord as any).actorGroupId ||= String(getRelationshipGroups()[0]?.id || 'group-1');
+  (draftRecord as any).relGroupId ||= String(getRelationshipGroups()[0]?.id || 'group-1');
   (draftRecord as any).signerLabel ||= '기기 봉인서명'; (draftRecord as any).sealReason ||= '';
   (draftRecordEdit as any).placeText ||= draftRecordEdit.place; (draftRecordEdit as any).storeTypeText ||= draftRecordEdit.storeType; (draftRecordEdit as any).lvText ||= draftRecordEdit.lv;
   (draftRecordEdit as any).actorTypeText ||= actorTypeTextFromInternal(draftRecordEdit.actorType); (draftRecordEdit as any).relTypeText ||= actorTypeTextFromInternal(draftRecordEdit.relType);
   (draftRecordEdit as any).signerLabel ||= '기기 봉인서명'; (draftRecordEdit as any).sealReason ||= '';
-  (draftCase as any).addTypeText ||= actorTypeTextFromInternal(draftCase.addType); (draftCase as any).sensFilterText ||= String(draftCase.sensFilter); (draftCase as any).statusText ||= draftCase.status;
+  (draftCase as any).sensFilterText ||= String(draftCase.sensFilter); (draftCase as any).statusText ||= draftCase.status;
+  syncClassRosterFieldDefaults();
 }
 
 export function initApp() {

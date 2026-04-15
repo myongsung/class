@@ -42,7 +42,8 @@
       "icons/icon.ico"
     ],
     "resources": {
-      "resources/models/HyperCLOVAX-SEED-Text-Instruct-0.5B-q4_0.gguf": "models/HyperCLOVAX-SEED-Text-Instruct-0.5B-q4_0.gguf"
+      "resources/models/HyperCLOVAX-SEED-Text-Instruct-0.5B-q4_0.gguf": "models/HyperCLOVAX-SEED-Text-Instruct-0.5B-q4_0.gguf",
+      "resources/models/hyperclovax_roosy_Q4_K_M.gguf": "models/hyperclovax_roosy_Q4_K_M.gguf"
     },
     "macOS": {
       "entitlements": "entitlements.macos.plist",
