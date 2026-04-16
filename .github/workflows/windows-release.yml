@@ -1,4 +1,4 @@
-name: "Build Windows EXE"
+name: "Build Windows Portable Release"
 
 on:
   push:
@@ -28,6 +28,22 @@ jobs:
       - name: install frontend dependencies
         run: npm install --legacy-peer-deps
 
+      - name: prepare placeholder models for Windows CI
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path src-tauri/resources/models | Out-Null
+          if (-not (Test-Path src-tauri/resources/models/HyperCLOVAX-SEED-Text-Instruct-0.5B-q4_0.gguf)) {
+            New-Item -ItemType File -Path src-tauri/resources/models/HyperCLOVAX-SEED-Text-Instruct-0.5B-q4_0.gguf | Out-Null
+          }
+          if (-not (Test-Path src-tauri/resources/models/hyperclovax_roosy_Q4_K_M.gguf)) {
+            New-Item -ItemType File -Path src-tauri/resources/models/hyperclovax_roosy_Q4_K_M.gguf | Out-Null
+          }
+
+      - name: ensure windows runtime bundle
+        env:
+          ROOSYCOZY_WINDOWS_RUNTIME_URL: "${{ secrets.ROOSYCOZY_WINDOWS_RUNTIME_URL || vars.ROOSYCOZY_WINDOWS_RUNTIME_URL || 'https://github.com/ggml-org/llama.cpp/releases/download/b8763/llama-b8763-bin-win-cpu-x64.zip' }}"
+        run: npm run ci:ensure-windows-runtime
+
       - name: resolve version
         id: meta
         shell: pwsh
@@ -39,49 +55,44 @@ jobs:
           }
           "version=$version" >> $env:GITHUB_OUTPUT
 
-      - name: build the app (portable exe + release)
-        id: tauri_build
-        uses: tauri-apps/tauri-action@v0
+      - name: build windows portable app
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tagName: v${{ steps.meta.outputs.version }}
-          releaseName: "App Build v${{ steps.meta.outputs.version }}"
-          appVersion: ${{ steps.meta.outputs.version }}
-          releaseBody: "Automated Windows build."
-          releaseDraft: false
-          prerelease: false
-          args: --no-bundle
-          uploadPlainBinary: true
+        run: npm run windows:portable
 
       - name: Compress portable exe for auto-updater
         shell: pwsh
         run: |
-          cd src-tauri/target/release
+          cd src-tauri/target/release/portable/roosycozy-windows-x64
           if (Test-Path roosycozy-x86_64-pc-windows-msvc.zip) {
             Remove-Item roosycozy-x86_64-pc-windows-msvc.zip -Force
           }
           Compress-Archive -Path roosycozy.exe -DestinationPath roosycozy-x86_64-pc-windows-msvc.zip
+
+      - name: Create or update GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          $tag = "v${{ steps.meta.outputs.version }}"
+          $title = "App Build v${{ steps.meta.outputs.version }}"
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag --title $title --notes "Automated Windows portable build." --latest
+          } else {
+            gh release edit $tag --title $title --notes "Automated Windows portable build." --latest
+          }
 
       - name: Upload ZIP to GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: pwsh
         run: |
-          gh release upload v${{ steps.meta.outputs.version }} src-tauri/target/release/roosycozy-x86_64-pc-windows-msvc.zip --clobber
+          gh release upload v${{ steps.meta.outputs.version }} src-tauri/target/release/portable/roosycozy-windows-x64/roosycozy-x86_64-pc-windows-msvc.zip --clobber
 
       - name: upload portable exe artifact
         uses: actions/upload-artifact@v4
         with:
-          name: roosycozy-portable-exe
-          path: src-tauri/target/release/*.exe
+          name: roosycozy-windows-x64-portable
+          path: src-tauri/target/release/portable/roosycozy-windows-x64/
           if-no-files-found: error
-
-      - name: upload installer artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: roosycozy-installers
-          path: |
-            src-tauri/target/release/bundle/nsis/*.exe
-            src-tauri/target/release/bundle/msi/*.msi
-          if-no-files-found: ignore

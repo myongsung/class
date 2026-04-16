@@ -10,7 +10,7 @@
     "tauri": "tauri",
     "ci:ensure-model": "node ./scripts/ensure-bundled-model.mjs",
     "ci:ensure-windows-runtime": "node ./scripts/ensure-windows-runtime.mjs",
-    "windows:portable": "npm run ci:ensure-model && npm run ci:ensure-windows-runtime && tauri build --no-bundle --ci && node ./scripts/stage-windows-portable.mjs",
+    "windows:portable": "npm run ci:ensure-windows-runtime && tauri build --no-bundle --ci && node ./scripts/stage-windows-portable.mjs",
     "appstore:build": "npm run ci:ensure-model && tauri build --bundles app --config src-tauri/tauri.appstore.conf.json --no-sign --ci && zsh ./scripts/prepare-appstore-app.sh",
     "appstore:build:unsigned": "npm run ci:ensure-model && tauri build --bundles app --config src-tauri/tauri.appstore.conf.json --no-sign --ci",
     "appstore:pkg": "zsh ./scripts/build-appstore-pkg.sh"
