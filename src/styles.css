@@ -23454,3 +23454,41 @@ dialog.modal.strategyPickerModal::backdrop{
   gap: 12px;
   flex-wrap: wrap;
 }
+
+.strategyModelSetupProgress {
+  display: grid;
+  gap: 7px;
+}
+
+.strategyModelSetupProgressHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: #5f7187;
+}
+
+.strategyModelSetupProgressHead strong {
+  font-size: 12px;
+  font-weight: 700;
+  color: #2a3c55;
+}
+
+.strategyModelSetupProgressBar {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(155, 174, 202, 0.22);
+}
+
+.strategyModelSetupProgressBar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #7fa2d4 0%, #5e87c6 100%);
+  box-shadow: 0 0 0 1px rgba(87, 122, 177, 0.08) inset;
+  transition: width 180ms ease;
+}

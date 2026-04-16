@@ -792,6 +792,8 @@ function renderLegalSimulationPanel() {
   const strategyModelStatusLoading = !!(ui as any).strategyModelStatusLoading;
   const strategyModelDownloadPending = !!(ui as any).strategyModelDownloadPending;
   const strategyModelDownloadMessage = String((ui as any).strategyModelDownloadMessage || '').trim();
+  const strategyModelDownloadPercent = Math.max(0, Math.min(100, Number((ui as any).strategyModelDownloadPercent || 0)));
+  const strategyModelDownloadLabel = String((ui as any).strategyModelDownloadLabel || '').trim();
   const strategyChatModel = 'roosy-hybrid';
   const progressLines = Array.isArray((ui as any).strategyChatProgressLines) ? ((ui as any).strategyChatProgressLines as string[]).slice(-6) : [];
   const progressStage = String((ui as any).strategyChatProgressStage || '').trim();
@@ -830,6 +832,17 @@ function renderLegalSimulationPanel() {
       <div class="strategyModelSetupTitle">우선 AI모델을 다운로드 받아주세요.</div>
       <div class="strategyModelSetupText">프로그램은 가볍게 내려받고, HyperCLOVA-X와 Roosy-X는 앱 안에서 함께 내려받는 구조예요.</div>
       ${modelAvailabilityItems ? `<div class="strategyModelSetupList">${modelAvailabilityItems}</div>` : ''}
+      ${strategyModelDownloadPending ? `
+        <div class="strategyModelSetupProgress">
+          <div class="strategyModelSetupProgressHead">
+            <span>${esc(strategyModelDownloadLabel || 'ROOSY-Hybrid')}</span>
+            <strong>${esc(String(strategyModelDownloadPercent))}%</strong>
+          </div>
+          <div class="strategyModelSetupProgressBar" aria-hidden="true">
+            <span style="width:${strategyModelDownloadPercent}%;"></span>
+          </div>
+        </div>
+      ` : ''}
       <div class="strategyModelSetupActions">
         ${H.btn(
           strategyModelDownloadPending ? '다운로드 중…' : strategyModelStatusLoading ? '상태 확인 중…' : 'AI 모델 다운로드',

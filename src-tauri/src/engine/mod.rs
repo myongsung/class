@@ -1439,6 +1439,9 @@ struct StrategyModelDownloadProgress {
   message: String,
   completed: usize,
   total: usize,
+  downloaded_bytes: u64,
+  total_bytes: u64,
+  percent: u8,
 }
 
 fn strategy_model_label_for_id(model_id: &str) -> &'static str {
@@ -1582,6 +1585,9 @@ fn emit_strategy_model_download_progress(
   message: impl Into<String>,
   completed: usize,
   total: usize,
+  downloaded_bytes: u64,
+  total_bytes: u64,
+  percent: u8,
 ) {
   let payload = StrategyModelDownloadProgress {
     stage: stage.to_string(),
@@ -1590,6 +1596,9 @@ fn emit_strategy_model_download_progress(
     message: message.into(),
     completed,
     total,
+    downloaded_bytes,
+    total_bytes,
+    percent,
   };
   let _ = app.emit("strategy-model-download-progress", payload);
 }
@@ -1628,7 +1637,10 @@ pub fn strategy_model_status(app: Option<&AppHandle>) -> Result<StrategyModelSta
 }
 
 #[cfg(target_os = "windows")]
-fn download_strategy_model_file(url: &str, target: &Path) -> Result<(), String> {
+fn download_strategy_model_file<F>(url: &str, target: &Path, mut on_progress: F) -> Result<(), String>
+where
+  F: FnMut(u64, u64, u8),
+{
   let client = reqwest::blocking::Client::builder()
     .user_agent("roosycozy/1.0 (windows-model-downloader)")
     .build()
@@ -1640,6 +1652,7 @@ fn download_strategy_model_file(url: &str, target: &Path) -> Result<(), String> 
   if !response.status().is_success() {
     return Err(format!("모델 다운로드 응답이 올바르지 않아요: HTTP {}", response.status()));
   }
+  let total_bytes = response.content_length().unwrap_or(0);
   let tmp_path = target.with_extension("part");
   if tmp_path.exists() {
     let _ = std::fs::remove_file(&tmp_path);
@@ -1648,9 +1661,32 @@ fn download_strategy_model_file(url: &str, target: &Path) -> Result<(), String> 
     std::fs::create_dir_all(parent).map_err(|err| format!("모델 저장 폴더를 만들지 못했어요: {err}"))?;
   }
   let mut file = std::fs::File::create(&tmp_path).map_err(|err| format!("임시 모델 파일을 만들지 못했어요: {err}"))?;
-  response
-    .copy_to(&mut file)
-    .map_err(|err| format!("모델 파일을 저장하지 못했어요: {err}"))?;
+  let mut downloaded_bytes = 0u64;
+  let mut buffer = vec![0u8; 256 * 1024];
+  let mut last_percent = 0u8;
+  on_progress(0, total_bytes, 0);
+  loop {
+    let read = response
+      .read(&mut buffer)
+      .map_err(|err| format!("모델 파일을 내려받는 중 읽기 오류가 발생했어요: {err}"))?;
+    if read == 0 {
+      break;
+    }
+    file
+      .write_all(&buffer[..read])
+      .map_err(|err| format!("모델 파일을 저장하지 못했어요: {err}"))?;
+    downloaded_bytes += read as u64;
+    let percent = if total_bytes > 0 {
+      (((downloaded_bytes as f64 / total_bytes as f64) * 100.0).round() as i64).clamp(0, 100) as u8
+    } else {
+      0
+    };
+    if total_bytes == 0 || percent >= last_percent.saturating_add(2) || downloaded_bytes == total_bytes {
+      last_percent = percent;
+      on_progress(downloaded_bytes, total_bytes, percent);
+    }
+  }
+  on_progress(downloaded_bytes, total_bytes, 100);
   file.flush().map_err(|err| format!("모델 파일 저장을 마무리하지 못했어요: {err}"))?;
   std::fs::rename(&tmp_path, target).map_err(|err| format!("모델 파일 저장을 완료하지 못했어요: {err}"))?;
   Ok(())
@@ -1689,6 +1725,9 @@ pub fn download_strategy_models(app: &AppHandle) -> Result<StrategyModelStatus, 
           format!("{} 모델이 이미 준비되어 있어요.", spec.label),
           completed,
           total,
+          0,
+          0,
+          100,
         );
         continue;
       }
@@ -1706,8 +1745,29 @@ pub fn download_strategy_models(app: &AppHandle) -> Result<StrategyModelStatus, 
           format!("{} 모델을 내려받는 중이에요.", label),
           0,
           total,
+          0,
+          0,
+          0,
         );
-        download_strategy_model_file(&url, &target)?;
+        download_strategy_model_file(&url, &target, |downloaded_bytes, total_bytes, percent| {
+          let detail = if total_bytes > 0 {
+            format!("{} 모델 다운로드 중 · {}%", label, percent)
+          } else {
+            format!("{} 모델 다운로드 중", label)
+          };
+          emit_strategy_model_download_progress(
+            &app_handle,
+            "progress",
+            &model_id,
+            &label,
+            detail,
+            0,
+            total,
+            downloaded_bytes,
+            total_bytes,
+            percent,
+          );
+        })?;
         Ok((model_id, label))
       }));
     }
@@ -1725,6 +1785,9 @@ pub fn download_strategy_models(app: &AppHandle) -> Result<StrategyModelStatus, 
         format!("{} 모델 다운로드가 끝났어요.", label),
         completed,
         total,
+        0,
+        0,
+        100,
       );
     }
 
@@ -1737,6 +1800,9 @@ pub fn download_strategy_models(app: &AppHandle) -> Result<StrategyModelStatus, 
       "두 모델 다운로드가 모두 끝났어요.",
       total,
       total,
+      0,
+      0,
+      100,
     );
     Ok(status)
   }
