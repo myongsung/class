@@ -27,6 +27,8 @@ const WINDOWS_BUNDLE_SUPPORT_DIR_NAME: &str = "RoosyCozy";
 #[cfg(target_os = "windows")]
 const WINDOWS_RUNTIME_URL: &str =
     "https://github.com/myongsung/roosycozy/releases/latest/download/roosycozy-windows-runtime.zip";
+#[cfg(target_os = "windows")]
+const WINDOWS_RUNTIME_MARKER_FILENAME: &str = ".runtime-ready";
 
 #[cfg(target_os = "windows")]
 #[derive(Debug, serde::Deserialize)]
@@ -226,6 +228,11 @@ fn windows_msvc_runtime_files() -> [&'static str; 4] {
 }
 
 #[cfg(target_os = "windows")]
+fn windows_runtime_marker_path(sidecar_dir: &Path) -> PathBuf {
+    sidecar_dir.join(WINDOWS_RUNTIME_MARKER_FILENAME)
+}
+
+#[cfg(target_os = "windows")]
 fn windows_install_needs_repair(app: &AppHandle) -> bool {
     let Ok(sidecar_dir) = windows_sidecar_storage_dir(app) else {
         return true;
@@ -239,6 +246,7 @@ fn windows_install_needs_repair(app: &AppHandle) -> bool {
         .iter()
         .chain(windows_msvc_runtime_files().iter())
         .any(|name| !sidecar_dir.join(name).exists())
+        || !windows_runtime_marker_path(&sidecar_dir).exists()
 }
 
 #[cfg(target_os = "windows")]
@@ -323,6 +331,11 @@ fn download_windows_runtime_to_appdata(sidecar_dir: &Path) -> Result<(), String>
         let target = sidecar_dir.join(name);
         let _ = fs::copy(&dll, &target);
     }
+    fs::write(
+        windows_runtime_marker_path(sidecar_dir),
+        format!("runtime-ready\nsource={}\n", WINDOWS_RUNTIME_URL),
+    )
+    .map_err(|e| format!("AI 런타임 준비 표시를 저장하지 못했어요: {}", e))?;
 
     let _ = fs::remove_dir_all(&temp_root);
     Ok(())

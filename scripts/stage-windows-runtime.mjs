@@ -57,7 +57,12 @@ function resolveRuntimeDlls() {
       const found = files.find((filePath) => filePath.toLowerCase().endsWith(`/${name}`) || filePath.toLowerCase().endsWith(`\\${name}`));
       return found ? { name, source: found } : null;
     });
-    if (picked.every(Boolean)) return picked;
+    if (!picked.every(Boolean)) continue;
+
+    const allDlls = files
+      .filter((filePath) => filePath.toLowerCase().endsWith('.dll'))
+      .map((source) => ({ name: source.split(/[\\/]/).pop(), source }));
+    if (allDlls.length) return allDlls;
   }
   throw new Error(`Windows runtime DLL을 모두 찾지 못했어요. 필수 파일: ${requiredDlls.join(', ')}`);
 }
