@@ -13,8 +13,12 @@ use std::path::{Path, PathBuf};
 #[cfg(target_os = "windows")]
 use std::process::Command;
 #[cfg(target_os = "windows")]
+use std::time::Duration;
+#[cfg(target_os = "windows")]
 use tauri::Manager;
 use tauri::{command, AppHandle};
+#[cfg(target_os = "windows")]
+use base64::Engine;
 
 #[cfg(target_os = "windows")]
 const UPDATE_REPO_OWNER: &str = "myongsung";
@@ -150,45 +154,46 @@ fn copy_dir_recursive(source: &Path, target: &Path) -> Result<(), String> {
 
 #[cfg(target_os = "windows")]
 fn schedule_windows_exe_swap(current_exe: &Path, staged_exe: &Path) -> Result<(), String> {
-    let current_dir = current_exe
-        .parent()
-        .ok_or_else(|| "현재 실행 파일 폴더를 찾지 못했어요.".to_string())?;
-    let current_name = current_exe
-        .file_name()
-        .and_then(|name| name.to_str())
-        .ok_or_else(|| "현재 실행 파일 이름을 읽지 못했어요.".to_string())?;
-    let staged_name = staged_exe
-        .file_name()
-        .and_then(|name| name.to_str())
-        .ok_or_else(|| "새 실행 파일 이름을 읽지 못했어요.".to_string())?;
-    let script_path = current_dir.join("roosycozy-update.cmd");
+    let target = current_exe
+        .to_str()
+        .ok_or_else(|| "현재 실행 파일 경로를 읽지 못했어요.".to_string())?;
+    let staged = staged_exe
+        .to_str()
+        .ok_or_else(|| "새 실행 파일 경로를 읽지 못했어요.".to_string())?;
     let pid = std::process::id();
-    let script = format!(
-        "@echo off\r\n\
-setlocal\r\n\
-set \"TARGET_DIR={target_dir}\"\r\n\
-set \"CURRENT_EXE={current_name}\"\r\n\
-set \"STAGED_EXE={staged_name}\"\r\n\
-set \"PID={pid}\"\r\n\
-:waitloop\r\n\
-tasklist /FI \"PID eq %PID%\" | findstr /R /C:\"\\<%PID%\\>\" >nul\r\n\
-if %ERRORLEVEL%==0 (\r\n\
-  timeout /t 1 /nobreak >nul\r\n\
-  goto waitloop\r\n\
-)\r\n\
-if exist \"%TARGET_DIR%\\%CURRENT_EXE%.old\" del /f /q \"%TARGET_DIR%\\%CURRENT_EXE%.old\"\r\n\
-if exist \"%TARGET_DIR%\\%CURRENT_EXE%\" move /Y \"%TARGET_DIR%\\%CURRENT_EXE%\" \"%TARGET_DIR%\\%CURRENT_EXE%.old\" >nul\r\n\
-if exist \"%TARGET_DIR%\\%STAGED_EXE%\" move /Y \"%TARGET_DIR%\\%STAGED_EXE%\" \"%TARGET_DIR%\\%CURRENT_EXE%\" >nul\r\n\
-del /f /q \"%~f0\"\r\n\
-endlocal\r\n",
-        target_dir = current_dir.display(),
-        current_name = current_name,
-        staged_name = staged_name,
+    let escape_ps = |value: &str| value.replace('\'', "''");
+    let command = format!(
+        "$ErrorActionPreference = 'SilentlyContinue'; \
+$target = '{target}'; \
+$staged = '{staged}'; \
+$pidToWait = {pid}; \
+while (Get-Process -Id $pidToWait -ErrorAction SilentlyContinue) {{ Start-Sleep -Milliseconds 800 }}; \
+$backup = \"$target.old\"; \
+if (Test-Path -LiteralPath $backup) {{ Remove-Item -LiteralPath $backup -Force }}; \
+if (Test-Path -LiteralPath $target) {{ Move-Item -LiteralPath $target -Destination $backup -Force }}; \
+if (Test-Path -LiteralPath $staged) {{ Move-Item -LiteralPath $staged -Destination $target -Force }}; \
+if (Test-Path -LiteralPath $target) {{ Start-Process -FilePath $target }}",
+        target = escape_ps(target),
+        staged = escape_ps(staged),
         pid = pid
     );
-    fs::write(&script_path, script).map_err(|e| format!("업데이트 교체 스크립트를 만들지 못했어요: {}", e))?;
-    Command::new("cmd")
-        .args(["/C", "start", "", "/MIN", script_path.to_string_lossy().as_ref()])
+    let encoded = base64::engine::general_purpose::STANDARD.encode(
+        command
+            .encode_utf16()
+            .flat_map(|unit| unit.to_le_bytes())
+            .collect::<Vec<u8>>(),
+    );
+    Command::new("powershell")
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-WindowStyle",
+            "Hidden",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-EncodedCommand",
+            encoded.as_str(),
+        ])
         .spawn()
         .map_err(|e| format!("업데이트 적용 스크립트를 실행하지 못했어요: {}", e))?;
     Ok(())
@@ -196,16 +201,35 @@ endlocal\r\n",
 
 #[cfg(target_os = "windows")]
 fn windows_sidecar_storage_dir(app: &AppHandle) -> Result<PathBuf, String> {
-    app.path()
-        .resolve("sidecar", tauri::path::BaseDirectory::AppData)
-        .map_err(|e| format!("AI 런타임 폴더를 찾지 못했어요: {}", e))
+    let _ = app;
+    Ok(windows_shared_root().join("sidecar"))
 }
 
 #[cfg(target_os = "windows")]
 fn windows_resources_storage_dir(app: &AppHandle) -> Result<PathBuf, String> {
-    app.path()
-        .resolve("resources", tauri::path::BaseDirectory::AppData)
-        .map_err(|e| format!("AI 리소스 폴더를 찾지 못했어요: {}", e))
+    let _ = app;
+    Ok(windows_shared_root().join("resources"))
+}
+
+#[cfg(target_os = "windows")]
+fn windows_updates_root_dir() -> PathBuf {
+    windows_shared_root().join("updates")
+}
+
+#[cfg(target_os = "windows")]
+fn windows_temp_work_dir(prefix: &str) -> PathBuf {
+    windows_updates_root_dir().join(format!("{}-{}", prefix, std::process::id()))
+}
+
+#[cfg(target_os = "windows")]
+fn windows_shared_root() -> PathBuf {
+    let public_root = std::env::var_os("PUBLIC")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(r"C:\Users\Public"));
+    public_root
+        .join("Documents")
+        .join("RoosyCozy")
+        .join("co.roosycozy.app")
 }
 
 #[cfg(target_os = "windows")]
@@ -293,7 +317,7 @@ fn collect_runtime_dlls(root: &Path) -> Vec<PathBuf> {
 
 #[cfg(target_os = "windows")]
 fn download_windows_runtime_to_appdata(sidecar_dir: &Path) -> Result<(), String> {
-    let temp_root = std::env::temp_dir().join(format!("roosycozy-runtime-{}", std::process::id()));
+    let temp_root = windows_temp_work_dir("runtime");
     if temp_root.exists() {
         let _ = fs::remove_dir_all(&temp_root);
     }
@@ -321,9 +345,9 @@ fn download_windows_runtime_to_appdata(sidecar_dir: &Path) -> Result<(), String>
         }
     }
 
-    fs::create_dir_all(sidecar_dir).map_err(|e| format!("AppData sidecar 폴더를 만들지 못했어요: {}", e))?;
+    fs::create_dir_all(sidecar_dir).map_err(|e| format!("공용 AI 런타임 폴더를 만들지 못했어요: {}", e))?;
     let target_exe = sidecar_dir.join("llama-sidecar-x86_64-pc-windows-msvc.exe");
-    fs::copy(&runtime_exe, &target_exe).map_err(|e| format!("AI 실행 파일을 AppData로 복사하지 못했어요: {}", e))?;
+    fs::copy(&runtime_exe, &target_exe).map_err(|e| format!("AI 실행 파일을 공용 폴더로 복사하지 못했어요: {}", e))?;
     for dll in runtime_dlls {
         let Some(name) = dll.file_name() else {
             continue;
@@ -351,8 +375,8 @@ fn ensure_windows_runtime_cache(app: &AppHandle) -> Result<(), String> {
 
     let sidecar_dir = windows_sidecar_storage_dir(app)?;
     let resources_dir = windows_resources_storage_dir(app)?;
-    fs::create_dir_all(&sidecar_dir).map_err(|e| format!("AppData sidecar 폴더를 만들지 못했어요: {}", e))?;
-    fs::create_dir_all(&resources_dir).map_err(|e| format!("AppData resources 폴더를 만들지 못했어요: {}", e))?;
+    fs::create_dir_all(&sidecar_dir).map_err(|e| format!("공용 AI 런타임 폴더를 만들지 못했어요: {}", e))?;
+    fs::create_dir_all(&resources_dir).map_err(|e| format!("공용 AI 리소스 폴더를 만들지 못했어요: {}", e))?;
 
     if windows_install_needs_repair(app) {
         let bootstrap_candidates = [
@@ -458,7 +482,7 @@ fn apply_portable_release_update(
     current_exe: &Path,
     replace_exe: bool,
 ) -> Result<(), String> {
-    let temp_root = std::env::temp_dir().join(format!("roosycozy-update-{}", std::process::id()));
+    let temp_root = windows_temp_work_dir("release");
     if temp_root.exists() {
         let _ = fs::remove_dir_all(&temp_root);
     }
@@ -471,8 +495,8 @@ fn apply_portable_release_update(
 
     let sidecar_dir = windows_sidecar_storage_dir(app)?;
     let resources_dir = windows_resources_storage_dir(app)?;
-    fs::create_dir_all(&sidecar_dir).map_err(|e| format!("AppData sidecar 폴더를 만들지 못했어요: {}", e))?;
-    fs::create_dir_all(&resources_dir).map_err(|e| format!("AppData resources 폴더를 만들지 못했어요: {}", e))?;
+    fs::create_dir_all(&sidecar_dir).map_err(|e| format!("공용 AI 런타임 폴더를 만들지 못했어요: {}", e))?;
+    fs::create_dir_all(&resources_dir).map_err(|e| format!("공용 AI 리소스 폴더를 만들지 못했어요: {}", e))?;
 
     let (extracted_exe, extracted_sidecar, extracted_resources, _) = validate_extracted_release(&extract_dir)?;
 
@@ -485,10 +509,9 @@ fn apply_portable_release_update(
     }
 
     if replace_exe {
-        let install_dir = current_exe
-            .parent()
-            .ok_or_else(|| "현재 실행 파일 폴더를 찾지 못했어요.".to_string())?;
-        let staged_exe = install_dir.join("roosycozy.exe.new");
+        let staging_dir = windows_updates_root_dir().join("staging");
+        fs::create_dir_all(&staging_dir).map_err(|e| format!("업데이트 staging 폴더를 만들지 못했어요: {}", e))?;
+        let staged_exe = staging_dir.join("roosycozy.exe.new");
         if staged_exe.exists() {
             let _ = fs::remove_file(&staged_exe);
         }
@@ -512,8 +535,6 @@ fn check_and_update(app: AppHandle) -> Result<String, String> {
 
     #[cfg(target_os = "windows")]
     {
-        ensure_windows_runtime_cache(&app)?;
-
         let app_version = app.package_info().version.to_string();
         let current_exe = std::env::current_exe()
             .map_err(|e| format!("현재 실행 파일 경로를 읽지 못했어요: {}", e))?;
@@ -537,14 +558,19 @@ fn check_and_update(app: AppHandle) -> Result<String, String> {
                 &current_exe,
                 replace_exe,
             )?;
-            ensure_windows_runtime_cache(&app)?;
 
             if replace_exe {
+                let app_handle = app.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(Duration::from_millis(900));
+                    app_handle.exit(0);
+                });
                 Ok(format!(
-                    "업데이트 완료: 버전 {}. 앱을 종료하면 새 버전과 sidecar가 함께 적용됩니다.",
+                    "업데이트 완료: 버전 {}. 앱을 자동으로 다시 시작하고 있어요.",
                     latest_version
                 ))
             } else {
+                ensure_windows_runtime_cache(&app)?;
                 Ok("프로그램 파일을 복구했어요. sidecar를 다시 채워 넣었으니 지금 바로 AI 채팅을 다시 시도해보세요.".to_string())
             }
         }

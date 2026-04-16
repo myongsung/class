@@ -1527,13 +1527,20 @@ fn ensure_executable(_path: &Path) -> Result<(), String> {
 }
 
 #[cfg(target_os = "windows")]
+fn strategy_windows_shared_root() -> PathBuf {
+  let public_root = std::env::var_os("PUBLIC")
+    .map(PathBuf::from)
+    .unwrap_or_else(|| PathBuf::from(r"C:\Users\Public"));
+  public_root
+    .join("Documents")
+    .join("RoosyCozy")
+    .join("co.roosycozy.app")
+}
+
+#[cfg(target_os = "windows")]
 fn strategy_sidecar_storage_dir(app: Option<&AppHandle>) -> Option<PathBuf> {
-  if let Some(app) = app {
-    if let Ok(path) = app.path().resolve("sidecar", BaseDirectory::AppData) {
-      return Some(path);
-    }
-  }
-  None
+  let _ = app;
+  Some(strategy_windows_shared_root().join("sidecar"))
 }
 
 #[cfg(not(target_os = "windows"))]
@@ -1640,7 +1647,7 @@ fn resolve_strategy_runner_path(app: Option<&AppHandle>) -> Result<PathBuf, Stri
   #[cfg(target_os = "windows")]
   {
     return Err(format!(
-      "전략자문 추론기 파일을 찾지 못했어요. 먼저 AI 모델 다운로드를 완료했는지 확인해주세요. 실행 파일은 AppData 쪽 sidecar에서 찾고 있어요. 필요한 파일: {}",
+      "전략자문 추론기 파일을 찾지 못했어요. 먼저 AI 모델 다운로드를 완료했는지 확인해주세요. 실행 파일은 공용 RoosyCozy sidecar 폴더에서 찾고 있어요. 필요한 파일: {}",
       strategy_runner_hint_text()
     ));
   }
@@ -2060,12 +2067,21 @@ fn strategy_model_candidates(app: Option<&AppHandle>, model_id: &str) -> Vec<Pat
 }
 
 fn strategy_model_storage_dir(app: Option<&AppHandle>) -> Option<PathBuf> {
-  if let Some(app) = app {
-    if let Ok(path) = app.path().resolve("models", BaseDirectory::AppData) {
-      return Some(path);
-    }
+  #[cfg(target_os = "windows")]
+  {
+    let _ = app;
+    return Some(strategy_windows_shared_root().join("models"));
   }
-  None
+
+  #[cfg(not(target_os = "windows"))]
+  {
+    if let Some(app) = app {
+      if let Ok(path) = app.path().resolve("models", BaseDirectory::AppData) {
+        return Some(path);
+      }
+    }
+    None
+  }
 }
 
 fn strategy_downloaded_model_path(app: Option<&AppHandle>, model_id: &str) -> Option<PathBuf> {
