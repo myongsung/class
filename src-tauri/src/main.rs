@@ -226,17 +226,42 @@ fn windows_install_needs_repair(app: &AppHandle) -> bool {
 }
 
 #[cfg(target_os = "windows")]
-fn validate_extracted_release(extract_dir: &Path) -> Result<(PathBuf, PathBuf, PathBuf, PathBuf), String> {
-    let extracted_exe = extract_dir.join("roosycozy.exe");
-    if !extracted_exe.exists() {
-        return Err("업데이트 압축 파일 안에 roosycozy.exe가 없어요.".to_string());
+fn find_path_recursively(root: &Path, predicate: &dyn Fn(&Path) -> bool) -> Option<PathBuf> {
+    if predicate(root) {
+        return Some(root.to_path_buf());
     }
+    let entries = fs::read_dir(root).ok()?;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if predicate(&path) {
+            return Some(path);
+        }
+        if path.is_dir() {
+            if let Some(found) = find_path_recursively(&path, predicate) {
+                return Some(found);
+            }
+        }
+    }
+    None
+}
 
-    let extracted_support_dir = if extract_dir.join(WINDOWS_BUNDLE_SUPPORT_DIR_NAME).exists() {
-        extract_dir.join(WINDOWS_BUNDLE_SUPPORT_DIR_NAME)
-    } else {
-        extract_dir.to_path_buf()
-    };
+#[cfg(target_os = "windows")]
+fn validate_extracted_release(extract_dir: &Path) -> Result<(PathBuf, PathBuf, PathBuf, PathBuf), String> {
+    let extracted_exe = find_path_recursively(extract_dir, &|path| {
+        path.is_file() && path.file_name().and_then(|x| x.to_str()) == Some("roosycozy.exe")
+    })
+    .ok_or_else(|| "업데이트 압축 파일 안에 roosycozy.exe가 없어요.".to_string())?;
+
+    let extracted_support_dir = find_path_recursively(extract_dir, &|path| {
+        path.is_dir() && path.file_name().and_then(|x| x.to_str()) == Some(WINDOWS_BUNDLE_SUPPORT_DIR_NAME)
+    })
+    .or_else(|| {
+        find_path_recursively(extract_dir, &|path| {
+            path.is_dir() && path.file_name().and_then(|x| x.to_str()) == Some("sidecar")
+        })
+        .and_then(|sidecar| sidecar.parent().map(|parent| parent.to_path_buf()))
+    })
+    .ok_or_else(|| "업데이트 압축 파일 안에 sidecar 폴더가 없어요.".to_string())?;
 
     let extracted_sidecar = extracted_support_dir.join("sidecar");
     if !extracted_sidecar.exists() {
