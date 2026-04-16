@@ -833,14 +833,14 @@ function renderLegalSimulationPanel() {
     <article class="strategyModelSetupBanner">
       <div class="strategyModelSetupKicker">Windows 모델 준비</div>
       <div class="strategyModelSetupTitle">우선 AI모델을 다운로드 받아주세요.</div>
-      <div class="strategyModelSetupText">프로그램은 가볍게 내려받고, HyperCLOVA-X와 Roosy-X는 앱 안에서 함께 내려받는 구조예요.</div>
+      <div class="strategyModelSetupText">프로그램은 가볍게 내려받고, HyperCLOVA-X와 Roosy-X는 앱 안에서 함께 내려받는 구조예요. 이 다운로드는 최초 1회만 필요하고, 한 번 받으면 다음부터는 바로 사용할 수 있어요.</div>
       ${modelAvailabilityItems ? `<div class="strategyModelSetupList">${modelAvailabilityItems}</div>` : ''}
       ${strategyModelDownloadPending ? `
         <div class="strategyModelSetupProgress">
           <div class="strategyModelSetupProgressHead">
             <span>${esc(strategyModelDownloadLabel || 'ROOSY-Hybrid')}</span>
             <strong>${strategyModelDownloadIndeterminate
-              ? esc(`${strategyModelDownloadReceivedMb.toFixed(1)}MB`)
+              ? esc(strategyModelDownloadReceivedMb > 0 ? `${strategyModelDownloadReceivedMb.toFixed(1)}MB` : '연결 중…')
               : esc(`${String(strategyModelDownloadPercent)}%`)}</strong>
           </div>
           <div class="strategyModelSetupProgressBar" aria-hidden="true">
@@ -848,7 +848,7 @@ function renderLegalSimulationPanel() {
           </div>
           <div class="strategyModelSetupProgressMeta">
             ${strategyModelDownloadIndeterminate
-              ? esc(`현재 ${strategyModelDownloadReceivedMb.toFixed(1)}MB 내려받았어요.`)
+              ? esc(strategyModelDownloadReceivedMb > 0 ? `현재 ${strategyModelDownloadReceivedMb.toFixed(1)}MB 내려받았어요.` : '다운로드 연결을 준비하는 중이에요.')
               : esc(`${strategyModelDownloadReceivedMb.toFixed(1)}MB / ${Math.max(strategyModelDownloadTotalMb, 0).toFixed(1)}MB`)}
           </div>
         </div>
@@ -860,7 +860,7 @@ function renderLegalSimulationPanel() {
           strategyModelDownloadPending || strategyModelStatusLoading ? ' disabled aria-disabled="true"' : '',
           'btn primary'
         )}
-        <div class="strategyModelSetupHint">${esc(strategyModelDownloadMessage || '다운로드가 끝나면 바로 채팅을 시작할 수 있어요.')}</div>
+        <div class="strategyModelSetupHint">${esc(strategyModelDownloadMessage || '최초 1회만 다운로드하면, 다음부터는 바로 채팅을 시작할 수 있어요.')}</div>
       </div>
     </article>
   ` : '';

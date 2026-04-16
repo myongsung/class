@@ -1667,6 +1667,7 @@ where
   let mut downloaded_bytes = 0u64;
   let mut buffer = vec![0u8; 256 * 1024];
   let mut last_percent = 0u8;
+  let mut last_reported_bytes = 0u64;
   on_progress(0, total_bytes, 0);
   loop {
     let read = response
@@ -1684,8 +1685,10 @@ where
     } else {
       (((downloaded_bytes / (1024 * 1024)) % 90) as u8).clamp(1, 90)
     };
-    if total_bytes == 0 || percent >= last_percent.saturating_add(1) || downloaded_bytes == total_bytes {
+    let advanced_enough = downloaded_bytes >= last_reported_bytes.saturating_add(512 * 1024);
+    if total_bytes == 0 || advanced_enough || percent >= last_percent.saturating_add(1) || downloaded_bytes == total_bytes {
       last_percent = percent;
+      last_reported_bytes = downloaded_bytes;
       on_progress(downloaded_bytes, total_bytes, percent);
     }
   }

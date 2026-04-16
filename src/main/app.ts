@@ -795,6 +795,7 @@ const refreshStrategyModelStatus = async (opts?: { silent?: boolean }) => {
 
 const downloadStrategyModels = async () => {
   if ((ui as any).strategyModelDownloadPending) return;
+  ensureStrategyModelDownloadListener();
   (ui as any).strategyModelDownloadPending = true;
   (ui as any).strategyModelDownloadMessage = 'HyperCLOVA-X와 Roosy-X를 내려받는 중이에요.';
   (ui as any).strategyModelDownloadLabel = 'ROOSY-Hybrid';
