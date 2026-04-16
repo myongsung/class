@@ -1,6 +1,6 @@
 [package]
 name = "roosycozy"
-version = "1.0.78"
+version = "1.0.79"
 description = "roosycozy - 한 줄 기록 → 케이스 타임라인"
 authors = ["you"]
 edition = "2021"
@@ -24,7 +24,7 @@ rand_core = { version = "0.6", features = ["getrandom"] }
 sha2 = "0.10"
 
 [target.'cfg(target_os = "windows")'.dependencies]
-reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls", "json"] }
 zip = { version = "0.6", default-features = false, features = ["deflate"] }
 
 [features]

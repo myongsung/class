@@ -7,9 +7,9 @@ use std::fs;
 #[cfg(target_os = "windows")]
 use std::fs::File;
 #[cfg(target_os = "windows")]
-use std::io::{self, Write};
+use std::io;
 #[cfg(target_os = "windows")]
-use std::path::{Path, PathBuf};
+use std::path::Path;
 #[cfg(target_os = "windows")]
 use std::process::Command;
 #[cfg(target_os = "windows")]

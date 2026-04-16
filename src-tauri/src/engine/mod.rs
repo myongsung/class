@@ -946,16 +946,20 @@ struct StrategyRuntimeConfig {
   device: &'static str,
 }
 
+#[cfg(all(target_os = "windows", target_arch = "x86_64"))]
 fn strategy_default_threads() -> u32 {
   let logical_cores = thread::available_parallelism()
     .map(|value| value.get() as u32)
     .unwrap_or(4);
-  #[cfg(all(target_os = "windows", target_arch = "x86_64"))]
-  {
-    let tuned = ((logical_cores as f32) * 0.75).round() as u32;
-    return tuned.max(1).clamp(1, 10);
-  }
+  let tuned = ((logical_cores as f32) * 0.75).round() as u32;
+  tuned.max(1).clamp(1, 10)
+}
 
+#[cfg(not(all(target_os = "windows", target_arch = "x86_64")))]
+fn strategy_default_threads() -> u32 {
+  let logical_cores = thread::available_parallelism()
+    .map(|value| value.get() as u32)
+    .unwrap_or(4);
   let reserve = if logical_cores >= 10 { 2 } else { 1 };
   logical_cores.saturating_sub(reserve).max(1).clamp(1, 12)
 }
