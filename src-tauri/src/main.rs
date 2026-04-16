@@ -246,7 +246,7 @@ fn find_path_recursively(root: &Path, predicate: &dyn Fn(&Path) -> bool) -> Opti
 }
 
 #[cfg(target_os = "windows")]
-fn validate_extracted_release(extract_dir: &Path) -> Result<(PathBuf, PathBuf, PathBuf, PathBuf), String> {
+fn validate_extracted_release(extract_dir: &Path) -> Result<(PathBuf, Option<PathBuf>, Option<PathBuf>, Option<PathBuf>), String> {
     let extracted_exe = find_path_recursively(extract_dir, &|path| {
         path.is_file() && path.file_name().and_then(|x| x.to_str()) == Some("roosycozy.exe")
     })
@@ -260,25 +260,35 @@ fn validate_extracted_release(extract_dir: &Path) -> Result<(PathBuf, PathBuf, P
             path.is_dir() && path.file_name().and_then(|x| x.to_str()) == Some("sidecar")
         })
         .and_then(|sidecar| sidecar.parent().map(|parent| parent.to_path_buf()))
-    })
-    .ok_or_else(|| "업데이트 압축 파일 안에 sidecar 폴더가 없어요.".to_string())?;
+    });
+
+    let Some(extracted_support_dir) = extracted_support_dir else {
+        return Ok((extracted_exe, None, None, None));
+    };
 
     let extracted_sidecar = extracted_support_dir.join("sidecar");
-    if !extracted_sidecar.exists() {
-        return Err("업데이트 압축 파일 안에 sidecar 폴더가 없어요.".to_string());
-    }
-
-    for required in windows_sidecar_required_files() {
-        if !extracted_sidecar.join(required).exists() {
-            return Err(format!(
-                "업데이트 압축 파일 안에 필요한 sidecar 파일이 빠져 있어요: {}",
-                required
-            ));
+    let extracted_sidecar = if extracted_sidecar.exists() {
+        for required in windows_sidecar_required_files() {
+            if !extracted_sidecar.join(required).exists() {
+                return Err(format!(
+                    "업데이트 압축 파일 안에 필요한 sidecar 파일이 빠져 있어요: {}",
+                    required
+                ));
+            }
         }
-    }
+        Some(extracted_sidecar)
+    } else {
+        None
+    };
 
     let extracted_resources = extracted_support_dir.join("resources");
-    Ok((extracted_exe, extracted_sidecar, extracted_resources, extracted_support_dir))
+    let extracted_resources = if extracted_resources.exists() {
+        Some(extracted_resources)
+    } else {
+        None
+    };
+
+    Ok((extracted_exe, extracted_sidecar, extracted_resources, Some(extracted_support_dir)))
 }
 
 #[cfg(target_os = "windows")]
@@ -306,9 +316,14 @@ fn apply_portable_release_update(
 
     let (extracted_exe, extracted_sidecar, extracted_resources, _) = validate_extracted_release(&extract_dir)?;
 
-    copy_dir_recursive(&extracted_sidecar, &sidecar_dir)?;
-    if extracted_resources.exists() {
-        copy_dir_recursive(&extracted_resources, &resources_dir)?;
+    if let Some(extracted_sidecar) = extracted_sidecar.as_ref() {
+        copy_dir_recursive(extracted_sidecar, &sidecar_dir)?;
+    } else if windows_install_needs_repair(app) {
+        return Err("업데이트 압축 파일 안에 sidecar 폴더가 없어요. 현재 설치본도 sidecar가 비어 있어 복구를 진행할 수 없어요.".to_string());
+    }
+
+    if let Some(extracted_resources) = extracted_resources.as_ref() {
+        copy_dir_recursive(extracted_resources, &resources_dir)?;
     }
 
     if replace_exe {
