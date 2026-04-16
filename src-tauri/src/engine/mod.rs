@@ -953,6 +953,7 @@ fn strategy_default_threads() -> u32 {
     let tuned = ((logical_cores as f32) * 0.75).round() as u32;
     return tuned.max(1).clamp(1, 10);
   }
+
   let reserve = if logical_cores >= 10 { 2 } else { 1 };
   logical_cores.saturating_sub(reserve).max(1).clamp(1, 12)
 }
@@ -1700,7 +1701,7 @@ where
 }
 
 pub fn start_strategy_model_download(app: &AppHandle) -> Result<StrategyModelStatus, String> {
-  let current_status = strategy_model_status_inner(app);
+  let current_status = strategy_model_status_inner(Some(app));
   if current_status.all_ready {
     return Ok(current_status);
   }
@@ -1716,39 +1717,36 @@ pub fn start_strategy_model_download(app: &AppHandle) -> Result<StrategyModelSta
     *guard = true;
   }
 
-  let app_handle = app.clone();
   emit_strategy_model_download_progress(
     app,
-    StrategyModelDownloadProgress {
-      stage: "starting".to_string(),
-      model_id: "all".to_string(),
-      label: "AI 모델".to_string(),
-      message: "최초 1회 모델 다운로드를 준비하고 있어요.".to_string(),
-      completed: 0,
-      total: 2,
-      downloaded_bytes: 0,
-      total_bytes: 0,
-      percent: Some(0.0),
-      indeterminate: true,
-    },
+    "starting",
+    "all",
+    "AI 모델",
+    "최초 1회 모델 다운로드를 준비하고 있어요.",
+    0,
+    2,
+    0,
+    0,
+    0,
+    true,
   );
+
+  let app_handle = app.clone();
   thread::spawn(move || {
     let result = download_strategy_models(&app_handle);
     if let Err(error) = result {
       emit_strategy_model_download_progress(
         &app_handle,
-        StrategyModelDownloadProgress {
-          stage: "error".to_string(),
-          model_id: "all".to_string(),
-          label: "AI 모델".to_string(),
-          message: error,
-          completed: 0,
-          total: 2,
-          downloaded_bytes: 0,
-          total_bytes: 0,
-          percent: Some(0.0),
-          indeterminate: true,
-        },
+        "error",
+        "all",
+        "AI 모델",
+        error,
+        0,
+        2,
+        0,
+        0,
+        0,
+        true,
       );
     }
 
