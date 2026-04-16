@@ -1552,10 +1552,21 @@ fn resolve_strategy_runner_path(app: Option<&AppHandle>) -> Result<PathBuf, Stri
       return Ok(candidate);
     }
   }
-  Err(format!(
-    "전략자문 추론기 파일을 찾지 못했어요. App Store 배포용 앱 번들의 Contents/MacOS/sidecar 안에 {}이(가) 함께 포함되어야 해요.",
-    strategy_runner_hint_text()
-  ))
+  #[cfg(target_os = "windows")]
+  {
+    return Err(format!(
+      "전략자문 추론기 파일을 찾지 못했어요. 프로그램 폴더의 sidecar 안에 {}이(가) 함께 있어야 해요.",
+      strategy_runner_hint_text()
+    ));
+  }
+
+  #[cfg(not(target_os = "windows"))]
+  {
+    Err(format!(
+      "전략자문 추론기 파일을 찾지 못했어요. 앱 번들의 sidecar 안에 {}이(가) 함께 포함되어야 해요.",
+      strategy_runner_hint_text()
+    ))
+  }
 }
 
 struct StrategyModelDownloadSpec {
