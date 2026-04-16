@@ -794,6 +794,9 @@ function renderLegalSimulationPanel() {
   const strategyModelDownloadMessage = String((ui as any).strategyModelDownloadMessage || '').trim();
   const strategyModelDownloadPercent = Math.max(0, Math.min(100, Number((ui as any).strategyModelDownloadPercent || 0)));
   const strategyModelDownloadLabel = String((ui as any).strategyModelDownloadLabel || '').trim();
+  const strategyModelDownloadIndeterminate = !!(ui as any).strategyModelDownloadIndeterminate;
+  const strategyModelDownloadReceivedMb = Number((ui as any).strategyModelDownloadReceivedMb || 0);
+  const strategyModelDownloadTotalMb = Number((ui as any).strategyModelDownloadTotalMb || 0);
   const strategyChatModel = 'roosy-hybrid';
   const progressLines = Array.isArray((ui as any).strategyChatProgressLines) ? ((ui as any).strategyChatProgressLines as string[]).slice(-6) : [];
   const progressStage = String((ui as any).strategyChatProgressStage || '').trim();
@@ -836,10 +839,17 @@ function renderLegalSimulationPanel() {
         <div class="strategyModelSetupProgress">
           <div class="strategyModelSetupProgressHead">
             <span>${esc(strategyModelDownloadLabel || 'ROOSY-Hybrid')}</span>
-            <strong>${esc(String(strategyModelDownloadPercent))}%</strong>
+            <strong>${strategyModelDownloadIndeterminate
+              ? esc(`${strategyModelDownloadReceivedMb.toFixed(1)}MB`)
+              : esc(`${String(strategyModelDownloadPercent)}%`)}</strong>
           </div>
           <div class="strategyModelSetupProgressBar" aria-hidden="true">
-            <span style="width:${strategyModelDownloadPercent}%;"></span>
+            <span class="${strategyModelDownloadIndeterminate ? 'isIndeterminate' : ''}" style="width:${strategyModelDownloadIndeterminate ? 35 : strategyModelDownloadPercent}%;"></span>
+          </div>
+          <div class="strategyModelSetupProgressMeta">
+            ${strategyModelDownloadIndeterminate
+              ? esc(`현재 ${strategyModelDownloadReceivedMb.toFixed(1)}MB 내려받았어요.`)
+              : esc(`${strategyModelDownloadReceivedMb.toFixed(1)}MB / ${Math.max(strategyModelDownloadTotalMb, 0).toFixed(1)}MB`)}
           </div>
         </div>
       ` : ''}

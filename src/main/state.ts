@@ -74,6 +74,9 @@ export const ui = {
   strategyModelDownloadMessage: '',
   strategyModelDownloadPercent: 0,
   strategyModelDownloadLabel: '',
+  strategyModelDownloadIndeterminate: false,
+  strategyModelDownloadReceivedMb: 0,
+  strategyModelDownloadTotalMb: 0,
   strategyChatProgressLines: [] as string[],
   strategyChatProgressStage: '',
   strategyChatMessages: [] as Array<{

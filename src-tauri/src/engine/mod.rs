@@ -1442,6 +1442,7 @@ struct StrategyModelDownloadProgress {
   downloaded_bytes: u64,
   total_bytes: u64,
   percent: u8,
+  indeterminate: bool,
 }
 
 fn strategy_model_label_for_id(model_id: &str) -> &'static str {
@@ -1588,6 +1589,7 @@ fn emit_strategy_model_download_progress(
   downloaded_bytes: u64,
   total_bytes: u64,
   percent: u8,
+  indeterminate: bool,
 ) {
   let payload = StrategyModelDownloadProgress {
     stage: stage.to_string(),
@@ -1599,6 +1601,7 @@ fn emit_strategy_model_download_progress(
     downloaded_bytes,
     total_bytes,
     percent,
+    indeterminate,
   };
   let _ = app.emit("strategy-model-download-progress", payload);
 }
@@ -1679,9 +1682,9 @@ where
     let percent = if total_bytes > 0 {
       (((downloaded_bytes as f64 / total_bytes as f64) * 100.0).round() as i64).clamp(0, 100) as u8
     } else {
-      0
+      (((downloaded_bytes / (1024 * 1024)) % 90) as u8).clamp(1, 90)
     };
-    if total_bytes == 0 || percent >= last_percent.saturating_add(2) || downloaded_bytes == total_bytes {
+    if total_bytes == 0 || percent >= last_percent.saturating_add(1) || downloaded_bytes == total_bytes {
       last_percent = percent;
       on_progress(downloaded_bytes, total_bytes, percent);
     }
@@ -1728,6 +1731,7 @@ pub fn download_strategy_models(app: &AppHandle) -> Result<StrategyModelStatus, 
           0,
           0,
           100,
+          false,
         );
         continue;
       }
@@ -1748,12 +1752,23 @@ pub fn download_strategy_models(app: &AppHandle) -> Result<StrategyModelStatus, 
           0,
           0,
           0,
+          true,
         );
         download_strategy_model_file(&url, &target, |downloaded_bytes, total_bytes, percent| {
           let detail = if total_bytes > 0 {
-            format!("{} 모델 다운로드 중 · {}%", label, percent)
+            format!(
+              "{} 모델 다운로드 중 · {}% · {:.1}MB / {:.1}MB",
+              label,
+              percent,
+              downloaded_bytes as f64 / (1024.0 * 1024.0),
+              total_bytes as f64 / (1024.0 * 1024.0)
+            )
           } else {
-            format!("{} 모델 다운로드 중", label)
+            format!(
+              "{} 모델 다운로드 중 · {:.1}MB 수신",
+              label,
+              downloaded_bytes as f64 / (1024.0 * 1024.0)
+            )
           };
           emit_strategy_model_download_progress(
             &app_handle,
@@ -1766,6 +1781,7 @@ pub fn download_strategy_models(app: &AppHandle) -> Result<StrategyModelStatus, 
             downloaded_bytes,
             total_bytes,
             percent,
+            total_bytes == 0,
           );
         })?;
         Ok((model_id, label))
@@ -1788,6 +1804,7 @@ pub fn download_strategy_models(app: &AppHandle) -> Result<StrategyModelStatus, 
         0,
         0,
         100,
+        false,
       );
     }
 
@@ -1803,6 +1820,7 @@ pub fn download_strategy_models(app: &AppHandle) -> Result<StrategyModelStatus, 
       0,
       0,
       100,
+      false,
     );
     Ok(status)
   }

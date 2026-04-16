@@ -54,6 +54,7 @@ type StrategyModelDownloadProgress = {
   downloadedBytes: number,
   totalBytes: number,
   percent: number,
+  indeterminate: boolean,
 };
 
 const isWindowsDesktop = () => typeof navigator !== 'undefined' && /Windows/i.test(String(navigator.userAgent || ''));
@@ -758,6 +759,9 @@ const ensureStrategyModelDownloadListener = () => {
     (ui as any).strategyModelDownloadMessage = String(payload.message || '').trim();
     (ui as any).strategyModelDownloadLabel = String(payload.label || '').trim();
     (ui as any).strategyModelDownloadPercent = Number(payload.percent || 0);
+    (ui as any).strategyModelDownloadIndeterminate = !!payload.indeterminate;
+    (ui as any).strategyModelDownloadReceivedMb = Number(payload.downloadedBytes || 0) / (1024 * 1024);
+    (ui as any).strategyModelDownloadTotalMb = Number(payload.totalBytes || 0) / (1024 * 1024);
     const line = `${String(payload.label || '모델')} · ${String(payload.message || '').trim() || '다운로드 진행 중'}`;
     appendStrategyChatProgress('모델다운로드', line, false);
     render();
@@ -795,6 +799,9 @@ const downloadStrategyModels = async () => {
   (ui as any).strategyModelDownloadMessage = 'HyperCLOVA-X와 Roosy-X를 내려받는 중이에요.';
   (ui as any).strategyModelDownloadLabel = 'ROOSY-Hybrid';
   (ui as any).strategyModelDownloadPercent = 0;
+  (ui as any).strategyModelDownloadIndeterminate = true;
+  (ui as any).strategyModelDownloadReceivedMb = 0;
+  (ui as any).strategyModelDownloadTotalMb = 0;
   clearStrategyChatProgress();
   appendStrategyChatProgress('모델다운로드', 'AI 모델 두 개를 내려받는 중이에요.', false);
   render();
@@ -804,6 +811,7 @@ const downloadStrategyModels = async () => {
     (ui as any).strategyModelDownloadMessage = 'AI 모델 다운로드가 끝났어요.';
     (ui as any).strategyModelDownloadLabel = 'ROOSY-Hybrid';
     (ui as any).strategyModelDownloadPercent = 100;
+    (ui as any).strategyModelDownloadIndeterminate = false;
     (ui as any).strategyChatError = '';
     toast('AI 모델 다운로드가 끝났어요');
   } catch (err) {

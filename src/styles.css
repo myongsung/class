@@ -23492,3 +23492,26 @@ dialog.modal.strategyPickerModal::backdrop{
   box-shadow: 0 0 0 1px rgba(87, 122, 177, 0.08) inset;
   transition: width 180ms ease;
 }
+
+.strategyModelSetupProgressBar span.isIndeterminate {
+  width: 35%;
+  animation: strategyModelDownloadSlide 1.2s ease-in-out infinite;
+}
+
+.strategyModelSetupProgressMeta {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #708195;
+}
+
+@keyframes strategyModelDownloadSlide {
+  0% {
+    transform: translateX(-18%);
+  }
+  50% {
+    transform: translateX(85%);
+  }
+  100% {
+    transform: translateX(-18%);
+  }
+}
