@@ -1757,11 +1757,7 @@ pub fn start_strategy_model_download(app: &AppHandle) -> Result<StrategyModelSta
           "all",
           "AI 모델",
           "모델 다운로드가 끝났어요. 이제 바로 채팅할 수 있어요.",
-          status
-            .models
-            .iter()
-            .filter(|model| matches!(model.availability, StrategyModelAvailability::Ready))
-            .count(),
+          status.models.iter().filter(|model| model.available).count(),
           status.models.len(),
           0,
           0,
