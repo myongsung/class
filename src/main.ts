@@ -50,6 +50,11 @@ async function checkAndUpdateApp() {
       return;
     }
 
+    if (result.includes('복구했어요')) {
+      showUpdateToast(`🛠️ ${result}`, false);
+      return;
+    }
+
     showUpdateToast('✨ 현재 최신 버전입니다.', true);
   } catch (error) {
     console.error('업데이트 에러:', error);

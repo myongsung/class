@@ -1073,7 +1073,7 @@ function renderLegalSimulationPanel() {
           <div class="strategyChatOnlyComposerBar">
             <div class="strategyChatOnlyComposerTools">
               ${H.btn(selectedRecords.length ? `기록 ${selectedRecords.length}개` : '기록 붙이기', 'open-simulation-picker', '', 'btn ghost')}
-              <div class="strategyChatOnlyComposerHint">${chatPending ? esc(`${pendingStage} · ${pendingElapsedLabel}`) : modelsReady ? 'Enter 전송 · Shift+Enter 줄바꿈' : '모델 다운로드 후 채팅 가능'}</div>
+              ${chatPending || !modelsReady ? `<div class="strategyChatOnlyComposerHint">${chatPending ? esc(`${pendingStage} · ${pendingElapsedLabel}`) : '모델 다운로드 후 채팅 가능'}</div>` : ''}
               ${strategyHybridDesk}
             </div>
             <div class="strategyComposerActions">

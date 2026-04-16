@@ -9,7 +9,7 @@ use std::fs::File;
 #[cfg(target_os = "windows")]
 use std::io;
 #[cfg(target_os = "windows")]
-use std::path::Path;
+use std::path::{Path, PathBuf};
 #[cfg(target_os = "windows")]
 use std::process::Command;
 #[cfg(target_os = "windows")]
@@ -187,6 +187,92 @@ endlocal\r\n",
     Ok(())
 }
 
+#[cfg(target_os = "windows")]
+fn windows_sidecar_required_files() -> [&'static str; 3] {
+    [
+        "llama-sidecar-x86_64-pc-windows-msvc.exe",
+        "llama.dll",
+        "mtmd.dll",
+    ]
+}
+
+#[cfg(target_os = "windows")]
+fn windows_install_needs_repair(install_dir: &Path) -> bool {
+    let sidecar_dir = install_dir.join("sidecar");
+    if !sidecar_dir.exists() {
+        return true;
+    }
+
+    windows_sidecar_required_files()
+        .iter()
+        .any(|name| !sidecar_dir.join(name).exists())
+}
+
+#[cfg(target_os = "windows")]
+fn validate_extracted_release(extract_dir: &Path) -> Result<(PathBuf, PathBuf, PathBuf), String> {
+    let extracted_exe = extract_dir.join("roosycozy.exe");
+    if !extracted_exe.exists() {
+        return Err("업데이트 압축 파일 안에 roosycozy.exe가 없어요.".to_string());
+    }
+
+    let extracted_sidecar = extract_dir.join("sidecar");
+    if !extracted_sidecar.exists() {
+        return Err("업데이트 압축 파일 안에 sidecar 폴더가 없어요.".to_string());
+    }
+
+    for required in windows_sidecar_required_files() {
+        if !extracted_sidecar.join(required).exists() {
+            return Err(format!(
+                "업데이트 압축 파일 안에 필요한 sidecar 파일이 빠져 있어요: {}",
+                required
+            ));
+        }
+    }
+
+    let extracted_resources = extract_dir.join("resources");
+    Ok((extracted_exe, extracted_sidecar, extracted_resources))
+}
+
+#[cfg(target_os = "windows")]
+fn apply_portable_release_update(
+    asset_url: &str,
+    current_exe: &Path,
+    install_dir: &Path,
+    replace_exe: bool,
+) -> Result<(), String> {
+    let temp_root = std::env::temp_dir().join(format!("roosycozy-update-{}", std::process::id()));
+    if temp_root.exists() {
+        let _ = fs::remove_dir_all(&temp_root);
+    }
+    fs::create_dir_all(&temp_root).map_err(|e| format!("임시 업데이트 폴더를 만들지 못했어요: {}", e))?;
+    let zip_path = temp_root.join("release.zip");
+    let extract_dir = temp_root.join("release");
+
+    download_release_zip(asset_url, &zip_path)?;
+    extract_release_zip(&zip_path, &extract_dir)?;
+
+    let (extracted_exe, extracted_sidecar, extracted_resources) = validate_extracted_release(&extract_dir)?;
+
+    copy_dir_recursive(&extracted_sidecar, &install_dir.join("sidecar"))?;
+    if extracted_resources.exists() {
+        copy_dir_recursive(&extracted_resources, &install_dir.join("resources"))?;
+    }
+
+    if replace_exe {
+        let staged_exe = install_dir.join("roosycozy.exe.new");
+        if staged_exe.exists() {
+            let _ = fs::remove_file(&staged_exe);
+        }
+        fs::copy(&extracted_exe, &staged_exe).map_err(|e| format!("새 실행 파일을 준비하지 못했어요: {}", e))?;
+        let _ = fs::remove_dir_all(&temp_root);
+        schedule_windows_exe_swap(current_exe, &staged_exe)?;
+    } else {
+        let _ = fs::remove_dir_all(&temp_root);
+    }
+
+    Ok(())
+}
+
 #[command]
 fn check_and_update(app: AppHandle) -> Result<String, String> {
     #[cfg(not(target_os = "windows"))]
@@ -198,61 +284,41 @@ fn check_and_update(app: AppHandle) -> Result<String, String> {
     #[cfg(target_os = "windows")]
     {
         let app_version = app.package_info().version.to_string();
+        let current_exe = std::env::current_exe()
+            .map_err(|e| format!("현재 실행 파일 경로를 읽지 못했어요: {}", e))?;
+        let install_dir = current_exe
+            .parent()
+            .ok_or_else(|| "현재 실행 파일 폴더를 찾지 못했어요.".to_string())?
+            .to_path_buf();
+        let needs_repair = windows_install_needs_repair(&install_dir);
+
         let latest = latest_github_release()?;
         let latest_version = normalize_release_version(&latest.tag_name);
-        if parse_version_triplet(&app_version) >= parse_version_triplet(&latest_version) {
+        let asset = latest
+            .assets
+            .iter()
+            .find(|item| item.name == UPDATE_ASSET_NAME)
+            .ok_or_else(|| format!("릴리즈 자산에서 {} 파일을 찾지 못했어요.", UPDATE_ASSET_NAME))?;
+
+        if parse_version_triplet(&app_version) >= parse_version_triplet(&latest_version) && !needs_repair {
             Ok("최신 버전입니다.".to_string())
         } else {
-            let asset = latest
-                .assets
-                .iter()
-                .find(|item| item.name == UPDATE_ASSET_NAME)
-                .ok_or_else(|| format!("릴리즈 자산에서 {} 파일을 찾지 못했어요.", UPDATE_ASSET_NAME))?;
+            let replace_exe = parse_version_triplet(&app_version) < parse_version_triplet(&latest_version);
+            apply_portable_release_update(
+                &asset.browser_download_url,
+                &current_exe,
+                &install_dir,
+                replace_exe,
+            )?;
 
-            let current_exe = std::env::current_exe()
-                .map_err(|e| format!("현재 실행 파일 경로를 읽지 못했어요: {}", e))?;
-            let install_dir = current_exe
-                .parent()
-                .ok_or_else(|| "현재 실행 파일 폴더를 찾지 못했어요.".to_string())?
-                .to_path_buf();
-
-            let temp_root = std::env::temp_dir().join(format!("roosycozy-update-{}", std::process::id()));
-            if temp_root.exists() {
-                let _ = fs::remove_dir_all(&temp_root);
+            if replace_exe {
+                Ok(format!(
+                    "업데이트 완료: 버전 {}. 앱을 종료하면 새 버전과 sidecar가 함께 적용됩니다.",
+                    latest_version
+                ))
+            } else {
+                Ok("프로그램 파일을 복구했어요. sidecar를 다시 채워 넣었으니 지금 바로 AI 채팅을 다시 시도해보세요.".to_string())
             }
-            fs::create_dir_all(&temp_root).map_err(|e| format!("임시 업데이트 폴더를 만들지 못했어요: {}", e))?;
-            let zip_path = temp_root.join("release.zip");
-            let extract_dir = temp_root.join("release");
-
-            download_release_zip(&asset.browser_download_url, &zip_path)?;
-            extract_release_zip(&zip_path, &extract_dir)?;
-
-            let extracted_exe = extract_dir.join("roosycozy.exe");
-            if !extracted_exe.exists() {
-                return Err("업데이트 압축 파일 안에 roosycozy.exe가 없어요.".to_string());
-            }
-
-            let extracted_sidecar = extract_dir.join("sidecar");
-            let extracted_resources = extract_dir.join("resources");
-            if extracted_sidecar.exists() {
-                copy_dir_recursive(&extracted_sidecar, &install_dir.join("sidecar"))?;
-            }
-            if extracted_resources.exists() {
-                copy_dir_recursive(&extracted_resources, &install_dir.join("resources"))?;
-            }
-
-            let staged_exe = install_dir.join("roosycozy.exe.new");
-            if staged_exe.exists() {
-                let _ = fs::remove_file(&staged_exe);
-            }
-            fs::copy(&extracted_exe, &staged_exe).map_err(|e| format!("새 실행 파일을 준비하지 못했어요: {}", e))?;
-            let _ = fs::remove_dir_all(&temp_root);
-            schedule_windows_exe_swap(&current_exe, &staged_exe)?;
-
-            Ok(format!(
-                "업데이트 완료: 버전 {}. 앱을 종료하면 새 버전과 sidecar가 함께 적용됩니다.",
-                latest_version
-            ))
         }
     }
 }
