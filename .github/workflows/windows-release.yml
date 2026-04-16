@@ -1,4 +1,4 @@
-name: Build Windows EXE
+name: "Build Windows EXE"
 
 on:
   push:
@@ -7,16 +7,11 @@ on:
       - master
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
   build:
+    permissions:
+      contents: write
     runs-on: windows-latest
-    env:
-      ROOSYCOZY_MODEL_URL: https://github.com/myongsung/roosycozy-models/releases/download/model_v1/HyperCLOVAX-SEED-Text-Instruct-0.5B-q4_0.gguf
-      ROOSYCOZY_ROOSY_MODEL_URL: https://github.com/myongsung/roosycozy-models2/releases/download/model/hyperclovax_roosy_Q4_K_M.gguf
-      ROOSYCOZY_WINDOWS_RUNTIME_URL: https://github.com/ggml-org/llama.cpp/releases/download/b8763/llama-b8763-bin-win-cpu-x64.zip
 
     steps:
       - uses: actions/checkout@v4
@@ -33,87 +28,60 @@ jobs:
       - name: install frontend dependencies
         run: npm install --legacy-peer-deps
 
-      - name: build the app (portable exe + staged release assets)
-        run: npm run windows:portable
-
-      - name: resolve version metadata
+      - name: resolve version
         id: meta
         shell: pwsh
         run: |
-          $package = Get-Content (Join-Path $PWD "package.json") | ConvertFrom-Json
+          $package = Get-Content package.json | ConvertFrom-Json
           $version = $package.version
           if (-not $version) {
             throw "Could not resolve package.json version."
           }
-
           "version=$version" >> $env:GITHUB_OUTPUT
-          "tag=v$version" >> $env:GITHUB_OUTPUT
-          "name=App Build v$version" >> $env:GITHUB_OUTPUT
 
-      - name: prepare portable release assets
+      - name: build the app (portable exe + release)
+        id: tauri_build
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: v${{ steps.meta.outputs.version }}
+          releaseName: "App Build v${{ steps.meta.outputs.version }}"
+          appVersion: ${{ steps.meta.outputs.version }}
+          releaseBody: "Automated Windows build."
+          releaseDraft: false
+          prerelease: false
+          args: --no-bundle
+          uploadPlainBinary: true
+
+      - name: Compress portable exe for auto-updater
         shell: pwsh
         run: |
-          $assetsDir = Join-Path $PWD "release-assets"
-          New-Item -ItemType Directory -Force -Path $assetsDir | Out-Null
-
-          $appExe = Get-ChildItem -Path (Join-Path $PWD "src-tauri\target\release") -Filter "roosycozy.exe" -Recurse | Select-Object -First 1
-          if (-not $appExe) {
-            throw "Could not find roosycozy.exe in src-tauri\\target\\release."
+          cd src-tauri/target/release
+          if (Test-Path roosycozy-x86_64-pc-windows-msvc.zip) {
+            Remove-Item roosycozy-x86_64-pc-windows-msvc.zip -Force
           }
+          Compress-Archive -Path roosycozy.exe -DestinationPath roosycozy-x86_64-pc-windows-msvc.zip
 
-          Copy-Item $appExe.FullName (Join-Path $assetsDir "roosycozy_windows_x64.exe") -Force
-
-          $portableDir = Get-ChildItem -Path $PWD -Directory -Recurse | Where-Object {
-            (Test-Path (Join-Path $_.FullName "roosycozy.exe")) -and
-            (Test-Path (Join-Path $_.FullName "sidecar")) -and
-            (Test-Path (Join-Path $_.FullName "resources"))
-          } | Sort-Object { $_.FullName.Length } | Select-Object -First 1
-
-          if (-not $portableDir) {
-            throw "Could not find the staged portable directory."
-          }
-
-          $portableZip = Join-Path $assetsDir "roosycozy-x86_64-pc-windows-msvc.zip"
-          if (Test-Path $portableZip) {
-            Remove-Item $portableZip -Force
-          }
-
-          Compress-Archive -Path (Join-Path $portableDir.FullName "*") -DestinationPath $portableZip
-
-      - name: create or update draft release
+      - name: Upload ZIP to GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: pwsh
         run: |
-          $tag = "${{ steps.meta.outputs.tag }}"
-          $name = "${{ steps.meta.outputs.name }}"
-          $body = "Automated Windows build."
-
-          gh release view $tag *> $null
-          if ($LASTEXITCODE -ne 0) {
-            gh release create $tag --title $name --notes $body --draft
-          } else {
-            gh release edit $tag --title $name --notes $body --draft=true
-          }
-
-      - name: upload release assets
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: pwsh
-        run: |
-          gh release upload "${{ steps.meta.outputs.tag }}" release-assets/roosycozy-x86_64-pc-windows-msvc.zip --clobber
-          gh release upload "${{ steps.meta.outputs.tag }}" release-assets/roosycozy_windows_x64.exe --clobber
+          gh release upload v${{ steps.meta.outputs.version }} src-tauri/target/release/roosycozy-x86_64-pc-windows-msvc.zip --clobber
 
       - name: upload portable exe artifact
         uses: actions/upload-artifact@v4
         with:
           name: roosycozy-portable-exe
-          path: release-assets/roosycozy_windows_x64.exe
+          path: src-tauri/target/release/*.exe
           if-no-files-found: error
 
-      - name: upload portable zip artifact
+      - name: upload installer artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: roosycozy-portable-zip
-          path: release-assets/roosycozy-x86_64-pc-windows-msvc.zip
-          if-no-files-found: error
+          name: roosycozy-installers
+          path: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/msi/*.msi
+          if-no-files-found: ignore
