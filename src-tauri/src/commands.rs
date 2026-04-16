@@ -812,7 +812,7 @@ pub fn strategy_model_status(app: tauri::AppHandle) -> Result<crate::engine::Str
 
 #[tauri::command]
 pub fn download_strategy_models(app: tauri::AppHandle) -> Result<crate::engine::StrategyModelStatus, String> {
-  crate::engine::download_strategy_models(&app)
+crate::engine::start_strategy_model_download(&app)
 }
 
 /* -------------------- Backup export (JSON) -------------------- */
@@ -862,4 +862,8 @@ pub fn import_backup_json(args: ImportBackupArgs) -> Result<String, String> {
 
   std::fs::read_to_string(PathBuf::from(file_path))
     .map_err(|e| format!("backup read failed: {e}"))
+}
+#[tauri::command]
+pub fn start_strategy_model_download(app: tauri::AppHandle) -> Result<crate::engine::StrategyModelStatus, String> {
+  crate::engine::start_strategy_model_download(&app)
 }

@@ -31,6 +31,7 @@ static RISK_MODEL: OnceLock<RiskLinearModel> = OnceLock::new();
 static STRATEGY_LEGAL_DATASET: OnceLock<StrategyLegalDataset> = OnceLock::new();
 static STRATEGY_LEGAL_FLAT_CHUNKS: OnceLock<Vec<StrategyLegalFlatChunk>> = OnceLock::new();
 static STRATEGY_MODEL_DOWNLOAD_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+static STRATEGY_MODEL_DOWNLOAD_RUNNING: OnceLock<Mutex<bool>> = OnceLock::new();
 
 fn read_u32_le(bytes: &[u8], pos: &mut usize) -> Result<u32, String> {
   let end = *pos + 4;
@@ -1696,6 +1697,70 @@ where
   file.flush().map_err(|err| format!("모델 파일 저장을 마무리하지 못했어요: {err}"))?;
   std::fs::rename(&tmp_path, target).map_err(|err| format!("모델 파일 저장을 완료하지 못했어요: {err}"))?;
   Ok(())
+}
+
+pub fn start_strategy_model_download(app: &AppHandle) -> Result<StrategyModelStatus, String> {
+  let current_status = strategy_model_status_inner(app);
+  if current_status.all_ready {
+    return Ok(current_status);
+  }
+
+  let running = STRATEGY_MODEL_DOWNLOAD_RUNNING.get_or_init(|| Mutex::new(false));
+  {
+    let mut guard = running
+      .lock()
+      .map_err(|_| "모델 다운로드 상태를 확인하지 못했어요.".to_string())?;
+    if *guard {
+      return Ok(current_status);
+    }
+    *guard = true;
+  }
+
+  let app_handle = app.clone();
+  emit_strategy_model_download_progress(
+    app,
+    StrategyModelDownloadProgress {
+      stage: "starting".to_string(),
+      model_id: "all".to_string(),
+      label: "AI 모델".to_string(),
+      message: "최초 1회 모델 다운로드를 준비하고 있어요.".to_string(),
+      completed: 0,
+      total: 2,
+      downloaded_bytes: 0,
+      total_bytes: 0,
+      percent: Some(0.0),
+      indeterminate: true,
+    },
+  );
+  thread::spawn(move || {
+    let result = download_strategy_models(&app_handle);
+    if let Err(error) = result {
+      emit_strategy_model_download_progress(
+        &app_handle,
+        StrategyModelDownloadProgress {
+          stage: "error".to_string(),
+          model_id: "all".to_string(),
+          label: "AI 모델".to_string(),
+          message: error,
+          completed: 0,
+          total: 2,
+          downloaded_bytes: 0,
+          total_bytes: 0,
+          percent: Some(0.0),
+          indeterminate: true,
+        },
+      );
+    }
+
+    if let Ok(mut guard) = STRATEGY_MODEL_DOWNLOAD_RUNNING
+      .get_or_init(|| Mutex::new(false))
+      .lock()
+    {
+      *guard = false;
+    }
+  });
+
+  Ok(current_status)
 }
 
 pub fn download_strategy_models(app: &AppHandle) -> Result<StrategyModelStatus, String> {

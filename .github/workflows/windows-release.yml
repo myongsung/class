@@ -1,0 +1,107 @@
+name: Build Windows Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows-release:
+    runs-on: windows-latest
+    env:
+      ROOSYCOZY_MODEL_URL: https://github.com/myongsung/roosycozy-models/releases/download/model_v1/HyperCLOVAX-SEED-Text-Instruct-0.5B-q4_0.gguf
+      ROOSYCOZY_ROOSY_MODEL_URL: https://github.com/myongsung/roosycozy-models2/releases/download/model/hyperclovax_roosy_Q4_K_M.gguf
+      ROOSYCOZY_WINDOWS_RUNTIME_URL: https://github.com/ggml-org/llama.cpp/releases/download/b8763/llama-b8763-bin-win-cpu-x64.zip
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install npm dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Build Windows portable package
+        run: npm run windows:portable
+
+      - name: Prepare release assets
+        shell: pwsh
+        run: |
+          $assetsDir = Join-Path $PWD "release-assets"
+          New-Item -ItemType Directory -Force -Path $assetsDir | Out-Null
+
+          $appExe = Get-ChildItem -Path (Join-Path $PWD "src-tauri\target\release") -Filter "roosycozy.exe" -Recurse | Select-Object -First 1
+          if (-not $appExe) {
+            throw "Could not find roosycozy.exe in src-tauri\\target\\release."
+          }
+
+          Copy-Item $appExe.FullName (Join-Path $assetsDir "roosycozy_windows_x64.exe") -Force
+
+          $portableDir = Get-ChildItem -Path $PWD -Directory -Recurse | Where-Object {
+            (Test-Path (Join-Path $_.FullName "roosycozy.exe")) -and
+            (Test-Path (Join-Path $_.FullName "sidecar")) -and
+            (Test-Path (Join-Path $_.FullName "resources"))
+          } | Sort-Object { $_.FullName.Length } | Select-Object -First 1
+
+          if (-not $portableDir) {
+            throw "Could not find the staged portable directory."
+          }
+
+          $portableZip = Join-Path $assetsDir "roosycozy-x86_64-pc-windows-msvc.zip"
+          if (Test-Path $portableZip) {
+            Remove-Item $portableZip -Force
+          }
+
+          Compress-Archive -Path (Join-Path $portableDir.FullName "*") -DestinationPath $portableZip
+
+          Get-ChildItem $assetsDir | ForEach-Object {
+            Write-Host "Prepared asset: $($_.Name)"
+          }
+
+      - name: Resolve release metadata
+        id: meta
+        shell: pwsh
+        run: |
+          if ("${{ github.ref_type }}" -eq "tag") {
+            $tag = "${{ github.ref_name }}"
+            $name = "App Build $tag"
+            $prerelease = "false"
+          } else {
+            $tag = "build-v${{ github.run_number }}"
+            $name = "App Build v${{ github.run_number }}"
+            $prerelease = "true"
+          }
+
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "name=$name" >> $env:GITHUB_OUTPUT
+          "prerelease=$prerelease" >> $env:GITHUB_OUTPUT
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: ${{ steps.meta.outputs.name }}
+          body: Automated Windows build.
+          draft: false
+          prerelease: ${{ steps.meta.outputs.prerelease == 'true' }}
+          files: |
+            release-assets/roosycozy-x86_64-pc-windows-msvc.zip
+            release-assets/roosycozy_windows_x64.exe
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-release-assets
+          path: release-assets/*
