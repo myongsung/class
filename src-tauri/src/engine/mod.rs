@@ -1532,6 +1532,9 @@ fn strategy_runner_candidates(_app: Option<&AppHandle>) -> Vec<PathBuf> {
   if let Ok(exe) = std::env::current_exe() {
     if let Some(dir) = exe.parent() {
       for file_name in strategy_runner_filenames() {
+        push_unique_path(&mut out, dir.join("RoosyCozy").join("sidecar").join(file_name));
+      }
+      for file_name in strategy_runner_filenames() {
         push_unique_path(&mut out, dir.join("sidecar").join(file_name));
       }
     }
@@ -1559,7 +1562,7 @@ fn resolve_strategy_runner_path(app: Option<&AppHandle>) -> Result<PathBuf, Stri
   #[cfg(target_os = "windows")]
   {
     return Err(format!(
-      "전략자문 추론기 파일을 찾지 못했어요. 프로그램 폴더의 sidecar 안에 {}이(가) 함께 있어야 해요.",
+      "전략자문 추론기 파일을 찾지 못했어요. 프로그램 폴더의 RoosyCozy/sidecar 안에 {}이(가) 함께 있어야 해요.",
       strategy_runner_hint_text()
     ));
   }
@@ -1959,6 +1962,7 @@ fn strategy_model_candidates(app: Option<&AppHandle>, model_id: &str) -> Vec<Pat
       if let Some(contents) = dir.parent() {
         push_unique_path(&mut out, contents.join("Resources").join("models").join(filename));
       }
+      push_unique_path(&mut out, dir.join("RoosyCozy").join("resources").join("models").join(filename));
       push_unique_path(&mut out, dir.join("resources").join("models").join(filename));
     }
   }

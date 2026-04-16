@@ -22,6 +22,8 @@ const UPDATE_REPO_OWNER: &str = "myongsung";
 const UPDATE_REPO_NAME: &str = "roosycozy";
 #[cfg(target_os = "windows")]
 const UPDATE_ASSET_NAME: &str = "roosycozy-x86_64-pc-windows-msvc.zip";
+#[cfg(target_os = "windows")]
+const WINDOWS_SUPPORT_DIR_NAME: &str = "RoosyCozy";
 
 #[cfg(target_os = "windows")]
 #[derive(Debug, serde::Deserialize)]
@@ -188,6 +190,11 @@ endlocal\r\n",
 }
 
 #[cfg(target_os = "windows")]
+fn windows_support_dir(install_dir: &Path) -> PathBuf {
+    install_dir.join(WINDOWS_SUPPORT_DIR_NAME)
+}
+
+#[cfg(target_os = "windows")]
 fn windows_sidecar_required_files() -> [&'static str; 3] {
     [
         "llama-sidecar-x86_64-pc-windows-msvc.exe",
@@ -198,7 +205,8 @@ fn windows_sidecar_required_files() -> [&'static str; 3] {
 
 #[cfg(target_os = "windows")]
 fn windows_install_needs_repair(install_dir: &Path) -> bool {
-    let sidecar_dir = install_dir.join("sidecar");
+    let support_dir = windows_support_dir(install_dir);
+    let sidecar_dir = support_dir.join("sidecar");
     if !sidecar_dir.exists() {
         return true;
     }
@@ -209,13 +217,19 @@ fn windows_install_needs_repair(install_dir: &Path) -> bool {
 }
 
 #[cfg(target_os = "windows")]
-fn validate_extracted_release(extract_dir: &Path) -> Result<(PathBuf, PathBuf, PathBuf), String> {
+fn validate_extracted_release(extract_dir: &Path) -> Result<(PathBuf, PathBuf, PathBuf, PathBuf), String> {
     let extracted_exe = extract_dir.join("roosycozy.exe");
     if !extracted_exe.exists() {
         return Err("업데이트 압축 파일 안에 roosycozy.exe가 없어요.".to_string());
     }
 
-    let extracted_sidecar = extract_dir.join("sidecar");
+    let extracted_support_dir = if extract_dir.join(WINDOWS_SUPPORT_DIR_NAME).exists() {
+        extract_dir.join(WINDOWS_SUPPORT_DIR_NAME)
+    } else {
+        extract_dir.to_path_buf()
+    };
+
+    let extracted_sidecar = extracted_support_dir.join("sidecar");
     if !extracted_sidecar.exists() {
         return Err("업데이트 압축 파일 안에 sidecar 폴더가 없어요.".to_string());
     }
@@ -229,8 +243,8 @@ fn validate_extracted_release(extract_dir: &Path) -> Result<(PathBuf, PathBuf, P
         }
     }
 
-    let extracted_resources = extract_dir.join("resources");
-    Ok((extracted_exe, extracted_sidecar, extracted_resources))
+    let extracted_resources = extracted_support_dir.join("resources");
+    Ok((extracted_exe, extracted_sidecar, extracted_resources, extracted_support_dir))
 }
 
 #[cfg(target_os = "windows")]
@@ -251,11 +265,14 @@ fn apply_portable_release_update(
     download_release_zip(asset_url, &zip_path)?;
     extract_release_zip(&zip_path, &extract_dir)?;
 
-    let (extracted_exe, extracted_sidecar, extracted_resources) = validate_extracted_release(&extract_dir)?;
+    let support_dir = windows_support_dir(install_dir);
+    fs::create_dir_all(&support_dir).map_err(|e| format!("RoosyCozy 폴더를 만들지 못했어요: {}", e))?;
 
-    copy_dir_recursive(&extracted_sidecar, &install_dir.join("sidecar"))?;
+    let (extracted_exe, extracted_sidecar, extracted_resources, _) = validate_extracted_release(&extract_dir)?;
+
+    copy_dir_recursive(&extracted_sidecar, &support_dir.join("sidecar"))?;
     if extracted_resources.exists() {
-        copy_dir_recursive(&extracted_resources, &install_dir.join("resources"))?;
+        copy_dir_recursive(&extracted_resources, &support_dir.join("resources"))?;
     }
 
     if replace_exe {
