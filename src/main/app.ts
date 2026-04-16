@@ -30,6 +30,31 @@ const currentDesktopWindow = () => {
   }
 };
 
+type StrategyModelStatus = {
+  windowsDownloadMode: boolean,
+  downloadSupported: boolean,
+  allReady: boolean,
+  storageDir: string,
+  models: Array<{
+    id: string,
+    label: string,
+    filename: string,
+    available: boolean,
+    path: string,
+  }>,
+};
+
+type StrategyModelDownloadProgress = {
+  stage: string,
+  modelId: string,
+  label: string,
+  message: string,
+  completed: number,
+  total: number,
+};
+
+const isWindowsDesktop = () => typeof navigator !== 'undefined' && /Windows/i.test(String(navigator.userAgent || ''));
+
 const resetScreenPinModalDraft = () => {
   ui.pinEntryDraft = '';
   ui.pinConfirmDraft = '';
@@ -43,6 +68,13 @@ const focusScreenPinInput = () => {
     (document.getElementById('screenPinInput') as HTMLInputElement | null)?.focus();
   }, 0);
 };
+
+queueMicrotask(() => {
+  if (!hasTauriWindow() || !isWindowsDesktop()) return;
+  void refreshStrategyModelStatus({ silent: true }).then(() => render()).catch((err) => {
+    log('initial strategy model status failed', err);
+  });
+});
 
 
 const closeSignatureModal = () => {
@@ -710,6 +742,73 @@ const clearStrategyChat = () => {
   clearStrategyChatProgress();
 };
 
+let _strategyModelDownloadListenerBound = false;
+
+const getStrategyModelStatus = () => (((ui as any).strategyModelStatus || null) as StrategyModelStatus | null);
+
+const ensureStrategyModelDownloadListener = () => {
+  if (_strategyModelDownloadListenerBound || !hasTauriWindow() || !isWindowsDesktop()) return;
+  _strategyModelDownloadListenerBound = true;
+  listen<StrategyModelDownloadProgress>('strategy-model-download-progress', (event) => {
+    const payload = event.payload;
+    if (!payload) return;
+    (ui as any).strategyModelDownloadMessage = String(payload.message || '').trim();
+    const line = `${String(payload.label || '모델')} · ${String(payload.message || '').trim() || '다운로드 진행 중'}`;
+    appendStrategyChatProgress('모델다운로드', line, false);
+    render();
+  }).catch((err) => {
+    _strategyModelDownloadListenerBound = false;
+    log('strategy model download listener failed', err);
+  });
+};
+
+const refreshStrategyModelStatus = async (opts?: { silent?: boolean }) => {
+  if (!hasTauriWindow() || !isWindowsDesktop()) {
+    (ui as any).strategyModelStatus = null;
+    (ui as any).strategyModelStatusLoading = false;
+    return null;
+  }
+  ensureStrategyModelDownloadListener();
+  (ui as any).strategyModelStatusLoading = true;
+  if (!opts?.silent) render();
+  try {
+    const status = await invoke('strategy_model_status') as StrategyModelStatus;
+    (ui as any).strategyModelStatus = status;
+    return status;
+  } catch (err) {
+    log('strategy model status failed', err);
+    return null;
+  } finally {
+    (ui as any).strategyModelStatusLoading = false;
+    if (!opts?.silent) render();
+  }
+};
+
+const downloadStrategyModels = async () => {
+  if ((ui as any).strategyModelDownloadPending) return;
+  (ui as any).strategyModelDownloadPending = true;
+  (ui as any).strategyModelDownloadMessage = 'HyperCLOVA-X와 Roosy-X를 내려받는 중이에요.';
+  clearStrategyChatProgress();
+  appendStrategyChatProgress('모델다운로드', 'AI 모델 두 개를 내려받는 중이에요.', false);
+  render();
+  try {
+    const status = await invoke('download_strategy_models') as StrategyModelStatus;
+    (ui as any).strategyModelStatus = status;
+    (ui as any).strategyModelDownloadMessage = 'AI 모델 다운로드가 끝났어요.';
+    (ui as any).strategyChatError = '';
+    toast('AI 모델 다운로드가 끝났어요');
+  } catch (err) {
+    const message = String((err as any)?.message || err || 'AI 모델 다운로드에 실패했어요.');
+    (ui as any).strategyModelDownloadMessage = message;
+    appendStrategyChatProgress('모델다운로드', message, false);
+    toast('AI 모델 다운로드 실패');
+    log('strategy model download failed', err);
+  } finally {
+    (ui as any).strategyModelDownloadPending = false;
+    render();
+  }
+};
+
 const getStrategySelectedRecords = (): RecordItem[] => {
   const selectedIds = reseedSimulationSelection(false);
   const allowed = new Set(selectedIds.map((id) => String(id || '').trim()).filter(Boolean));
@@ -741,6 +840,15 @@ const buildStrategyNote = () => {
 
 const sendStrategyAgentMessage = async (overrideMessage?: string) => {
   const selectedModel = getStrategyChatModel();
+  if (hasTauriWindow() && isWindowsDesktop()) {
+    const status = getStrategyModelStatus() || await refreshStrategyModelStatus({ silent: true });
+    if (!status?.allReady) {
+      (ui as any).strategyChatError = '우선 AI모델을 다운로드 받아주세요.';
+      render();
+      toast('우선 AI모델을 다운로드 받아주세요');
+      return;
+    }
+  }
   const records = getStrategySelectedRecords();
   if (!records.length) {
     toast('먼저 AI 민원전용 법무팀에 연결할 기록을 1개 이상 붙여주세요');
@@ -1778,6 +1886,10 @@ function bindEvents() {
     'send-strategy-chat': async () => {
       if ((ui as any).strategyChatPending) return;
       await sendStrategyAgentMessage();
+    },
+    'download-strategy-models': async () => {
+      if ((ui as any).strategyModelDownloadPending) return;
+      await downloadStrategyModels();
     },
     'toggle-strategy-model-menu': () => {
       (ui as any).strategyChatModelMenuOpen = !(ui as any).strategyChatModelMenuOpen;
@@ -2915,3 +3027,9 @@ export function initApp() {
     syncDraftDefaults(); render();
   })();
 }
+queueMicrotask(() => {
+  if (!hasTauriWindow() || !isWindowsDesktop()) return;
+  void refreshStrategyModelStatus().catch((err) => {
+    log('initial strategy model status failed', err);
+  });
+});

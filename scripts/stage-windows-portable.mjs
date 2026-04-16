@@ -7,16 +7,7 @@ const repoRoot = resolve(__dirname, '..');
 const targetDir = resolve(repoRoot, 'src-tauri', 'target', 'release');
 const portableRoot = resolve(targetDir, 'portable', 'roosycozy-windows-x64');
 const executablePath = resolve(targetDir, 'roosycozy.exe');
-const modelSpecs = [
-  {
-    name: 'HyperCLOVAX-SEED-Text-Instruct-0.5B-q4_0.gguf',
-    required: true,
-  },
-  {
-    name: 'hyperclovax_roosy_Q4_K_M.gguf',
-    required: false,
-  },
-];
+const modelSpecs = [];
 const sidecarPath = resolve(repoRoot, 'src-tauri', 'binaries', 'llama-sidecar-x86_64-pc-windows-msvc.exe');
 const runtimeDirCandidates = [
   resolve(repoRoot, 'src-tauri', 'binaries', 'windows-x64'),

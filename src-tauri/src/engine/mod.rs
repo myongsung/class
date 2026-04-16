@@ -3,13 +3,15 @@ use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::{BufRead, BufReader, Read};
+#[cfg(target_os = "windows")]
+use std::io::Write;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH}; // 시간 처리를 위한 표준 라이브러리 추가
 use tauri::{path::BaseDirectory, AppHandle, Emitter, Manager};
@@ -28,6 +30,7 @@ struct RiskLinearModel {
 static RISK_MODEL: OnceLock<RiskLinearModel> = OnceLock::new();
 static STRATEGY_LEGAL_DATASET: OnceLock<StrategyLegalDataset> = OnceLock::new();
 static STRATEGY_LEGAL_FLAT_CHUNKS: OnceLock<Vec<StrategyLegalFlatChunk>> = OnceLock::new();
+static STRATEGY_MODEL_DOWNLOAD_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
 fn read_u32_le(bytes: &[u8], pos: &mut usize) -> Result<u32, String> {
   let end = *pos + 4;
@@ -858,6 +861,8 @@ const STRATEGY_MODEL_FILENAME: &str = "HyperCLOVAX-SEED-Text-Instruct-0.5B-q4_0.
 const STRATEGY_MODEL_RESOURCE_PATH: &str = "models/HyperCLOVAX-SEED-Text-Instruct-0.5B-q4_0.gguf";
 const STRATEGY_MODEL_ROOSY_FILENAME: &str = "hyperclovax_roosy_Q4_K_M.gguf";
 const STRATEGY_MODEL_ROOSY_RESOURCE_PATH: &str = "models/hyperclovax_roosy_Q4_K_M.gguf";
+const STRATEGY_MODEL_DEFAULT_URL: &str = "https://github.com/myongsung/roosycozy-models/releases/download/model_v1/HyperCLOVAX-SEED-Text-Instruct-0.5B-q4_0.gguf";
+const STRATEGY_MODEL_ROOSY_DEFAULT_URL: &str = "https://github.com/myongsung/roosycozy-models2/releases/download/model/hyperclovax_roosy_Q4_K_M.gguf";
 const STRATEGY_SIDECAR_STEM: &str = "llama-sidecar";
 const STRATEGY_PROGRESS_EVENT: &str = "strategy-chat-progress";
 const STRATEGY_CHAT_TIMEOUT_SECS: u64 = 90;
@@ -1405,6 +1410,37 @@ fn strategy_model_resource_path_for_id(model_id: &str) -> &'static str {
   }
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StrategyModelAvailability {
+  pub id: String,
+  pub label: String,
+  pub filename: String,
+  pub available: bool,
+  pub path: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StrategyModelStatus {
+  pub windows_download_mode: bool,
+  pub download_supported: bool,
+  pub all_ready: bool,
+  pub storage_dir: String,
+  pub models: Vec<StrategyModelAvailability>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct StrategyModelDownloadProgress {
+  stage: String,
+  model_id: String,
+  label: String,
+  message: String,
+  completed: usize,
+  total: usize,
+}
+
 fn strategy_model_label_for_id(model_id: &str) -> &'static str {
   match normalize_strategy_model_id(Some(model_id)) {
     STRATEGY_MODEL_HYBRID_ID => "ROOSY-Hybrid",
@@ -1514,10 +1550,206 @@ fn resolve_strategy_runner_path(app: Option<&AppHandle>) -> Result<PathBuf, Stri
   ))
 }
 
+struct StrategyModelDownloadSpec {
+  model_id: &'static str,
+  label: &'static str,
+  filename: &'static str,
+  default_url: &'static str,
+}
+
+fn strategy_model_download_specs() -> [StrategyModelDownloadSpec; 2] {
+  [
+    StrategyModelDownloadSpec {
+      model_id: STRATEGY_MODEL_DEFAULT_ID,
+      label: strategy_model_label_for_id(STRATEGY_MODEL_DEFAULT_ID),
+      filename: STRATEGY_MODEL_FILENAME,
+      default_url: STRATEGY_MODEL_DEFAULT_URL,
+    },
+    StrategyModelDownloadSpec {
+      model_id: STRATEGY_MODEL_ROOSY_ID,
+      label: strategy_model_label_for_id(STRATEGY_MODEL_ROOSY_ID),
+      filename: STRATEGY_MODEL_ROOSY_FILENAME,
+      default_url: STRATEGY_MODEL_ROOSY_DEFAULT_URL,
+    },
+  ]
+}
+
+fn emit_strategy_model_download_progress(
+  app: &AppHandle,
+  stage: &str,
+  model_id: &str,
+  label: &str,
+  message: impl Into<String>,
+  completed: usize,
+  total: usize,
+) {
+  let payload = StrategyModelDownloadProgress {
+    stage: stage.to_string(),
+    model_id: model_id.to_string(),
+    label: label.to_string(),
+    message: message.into(),
+    completed,
+    total,
+  };
+  let _ = app.emit("strategy-model-download-progress", payload);
+}
+
+fn strategy_model_status_inner(app: Option<&AppHandle>) -> StrategyModelStatus {
+  let specs = strategy_model_download_specs();
+  let storage_dir = strategy_model_storage_dir(app)
+    .unwrap_or_else(|| PathBuf::from("."))
+    .display()
+    .to_string();
+  let models = specs
+    .iter()
+    .map(|spec| {
+      let path = strategy_existing_model_path(app, spec.model_id);
+      StrategyModelAvailability {
+        id: spec.model_id.to_string(),
+        label: spec.label.to_string(),
+        filename: spec.filename.to_string(),
+        available: path.is_some(),
+        path: path.map(|item| item.display().to_string()).unwrap_or_default(),
+      }
+    })
+    .collect::<Vec<_>>();
+  let all_ready = models.iter().all(|item| item.available);
+  StrategyModelStatus {
+    windows_download_mode: cfg!(target_os = "windows"),
+    download_supported: cfg!(target_os = "windows"),
+    all_ready,
+    storage_dir,
+    models,
+  }
+}
+
+pub fn strategy_model_status(app: Option<&AppHandle>) -> Result<StrategyModelStatus, String> {
+  Ok(strategy_model_status_inner(app))
+}
+
+#[cfg(target_os = "windows")]
+fn download_strategy_model_file(url: &str, target: &Path) -> Result<(), String> {
+  let client = reqwest::blocking::Client::builder()
+    .user_agent("roosycozy/1.0 (windows-model-downloader)")
+    .build()
+    .map_err(|err| format!("다운로드 클라이언트를 준비하지 못했어요: {err}"))?;
+  let mut response = client
+    .get(url)
+    .send()
+    .map_err(|err| format!("모델 다운로드를 시작하지 못했어요: {err}"))?;
+  if !response.status().is_success() {
+    return Err(format!("모델 다운로드 응답이 올바르지 않아요: HTTP {}", response.status()));
+  }
+  let tmp_path = target.with_extension("part");
+  if tmp_path.exists() {
+    let _ = std::fs::remove_file(&tmp_path);
+  }
+  if let Some(parent) = tmp_path.parent() {
+    std::fs::create_dir_all(parent).map_err(|err| format!("모델 저장 폴더를 만들지 못했어요: {err}"))?;
+  }
+  let mut file = std::fs::File::create(&tmp_path).map_err(|err| format!("임시 모델 파일을 만들지 못했어요: {err}"))?;
+  response
+    .copy_to(&mut file)
+    .map_err(|err| format!("모델 파일을 저장하지 못했어요: {err}"))?;
+  file.flush().map_err(|err| format!("모델 파일 저장을 마무리하지 못했어요: {err}"))?;
+  std::fs::rename(&tmp_path, target).map_err(|err| format!("모델 파일 저장을 완료하지 못했어요: {err}"))?;
+  Ok(())
+}
+
+pub fn download_strategy_models(app: &AppHandle) -> Result<StrategyModelStatus, String> {
+  #[cfg(not(target_os = "windows"))]
+  {
+    return Ok(strategy_model_status_inner(Some(app)));
+  }
+
+  #[cfg(target_os = "windows")]
+  {
+    let _guard = STRATEGY_MODEL_DOWNLOAD_LOCK
+      .get_or_init(|| Mutex::new(()))
+      .lock()
+      .map_err(|_| "모델 다운로드 잠금을 잡지 못했어요.".to_string())?;
+    let storage_dir = strategy_model_storage_dir(Some(app))
+      .ok_or_else(|| "모델 저장 폴더를 찾지 못했어요.".to_string())?;
+    std::fs::create_dir_all(&storage_dir).map_err(|err| format!("모델 저장 폴더를 준비하지 못했어요: {err}"))?;
+
+    let specs = strategy_model_download_specs();
+    let total = specs.len();
+    let mut completed = 0usize;
+    let mut handles = Vec::new();
+
+    for spec in specs.iter() {
+      let target = storage_dir.join(spec.filename);
+      if target.exists() {
+        completed += 1;
+        emit_strategy_model_download_progress(
+          app,
+          "skip",
+          spec.model_id,
+          spec.label,
+          format!("{} 모델이 이미 준비되어 있어요.", spec.label),
+          completed,
+          total,
+        );
+        continue;
+      }
+
+      let app_handle = app.clone();
+      let model_id = spec.model_id.to_string();
+      let label = spec.label.to_string();
+      let url = spec.default_url.to_string();
+      handles.push(thread::spawn(move || -> Result<(String, String), String> {
+        emit_strategy_model_download_progress(
+          &app_handle,
+          "start",
+          &model_id,
+          &label,
+          format!("{} 모델을 내려받는 중이에요.", label),
+          0,
+          total,
+        );
+        download_strategy_model_file(&url, &target)?;
+        Ok((model_id, label))
+      }));
+    }
+
+    for handle in handles {
+      let (model_id, label) = handle
+        .join()
+        .map_err(|_| "모델 다운로드 스레드가 비정상 종료됐어요.".to_string())??;
+      completed += 1;
+      emit_strategy_model_download_progress(
+        app,
+        "done",
+        &model_id,
+        &label,
+        format!("{} 모델 다운로드가 끝났어요.", label),
+        completed,
+        total,
+      );
+    }
+
+    let status = strategy_model_status_inner(Some(app));
+    emit_strategy_model_download_progress(
+      app,
+      "complete",
+      STRATEGY_MODEL_HYBRID_ID,
+      "ROOSY-Hybrid",
+      "두 모델 다운로드가 모두 끝났어요.",
+      total,
+      total,
+    );
+    Ok(status)
+  }
+}
+
 fn strategy_model_candidates(app: Option<&AppHandle>, model_id: &str) -> Vec<PathBuf> {
   let mut out = Vec::<PathBuf>::new();
   let resource_path = strategy_model_resource_path_for_id(model_id);
   let filename = strategy_model_filename_for_id(model_id);
+
+  if let Some(path) = strategy_downloaded_model_path(app, model_id) {
+    push_unique_path(&mut out, path);
+  }
 
   if let Some(app) = app {
     if let Ok(path) = app.path().resolve(resource_path, BaseDirectory::Resource) {
@@ -1548,18 +1780,46 @@ fn strategy_model_candidates(app: Option<&AppHandle>, model_id: &str) -> Vec<Pat
   out
 }
 
-fn resolve_strategy_model_path(app: Option<&AppHandle>, model_id: &str) -> Result<PathBuf, String> {
-  let filename = strategy_model_filename_for_id(model_id);
-  for candidate in strategy_model_candidates(app, model_id) {
-    if candidate.exists() {
-      return Ok(candidate);
+fn strategy_model_storage_dir(app: Option<&AppHandle>) -> Option<PathBuf> {
+  if let Some(app) = app {
+    if let Ok(path) = app.path().resolve("models", BaseDirectory::AppData) {
+      return Some(path);
     }
   }
-  Err(format!(
+  None
+}
+
+fn strategy_downloaded_model_path(app: Option<&AppHandle>, model_id: &str) -> Option<PathBuf> {
+  strategy_model_storage_dir(app).map(|dir| dir.join(strategy_model_filename_for_id(model_id)))
+}
+
+fn strategy_existing_model_path(app: Option<&AppHandle>, model_id: &str) -> Option<PathBuf> {
+  for candidate in strategy_model_candidates(app, model_id) {
+    if candidate.exists() {
+      return Some(candidate);
+    }
+  }
+  None
+}
+
+fn resolve_strategy_model_path(app: Option<&AppHandle>, model_id: &str) -> Result<PathBuf, String> {
+  let filename = strategy_model_filename_for_id(model_id);
+  if let Some(path) = strategy_existing_model_path(app, model_id) {
+    return Ok(path);
+  }
+  #[cfg(target_os = "windows")]
+  let message = format!(
+    "{} 모델 파일을 찾지 못했어요. 채팅 화면에서 먼저 AI 모델 다운로드를 실행한 뒤 다시 시도해주세요. 필요한 파일: {}",
+    strategy_model_label_for_id(model_id),
+    filename
+  );
+  #[cfg(not(target_os = "windows"))]
+  let message = format!(
     "{} 모델 파일을 찾지 못했어요. App 번들의 Resources/models 안에 {} 파일을 포함해주세요.",
     strategy_model_label_for_id(model_id),
     filename
-  ))
+  );
+  Err(message)
 }
 
 fn format_actor_short(actor: &ActorRef) -> String {
@@ -3292,6 +3552,9 @@ pub fn run_strategy_chat(
         });
       }
       (None, None) => {
+        #[cfg(target_os = "windows")]
+        return Err("ROOSY-Hybrid 초안 두 개를 모두 만들지 못했어요. 먼저 AI 모델 다운로드가 완료됐는지, 그리고 sidecar가 정상인지 함께 확인해주세요.".to_string());
+        #[cfg(not(target_os = "windows"))]
         return Err("ROOSY-Hybrid 초안 두 개를 모두 만들지 못했어요. 번들된 모델 파일과 sidecar 상태를 함께 확인해주세요.".to_string());
       }
     }

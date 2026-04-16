@@ -56,6 +56,22 @@ export const ui = {
   strategyChatPending: false,
   strategyChatPendingStartedAt: '',
   strategyChatError: '',
+  strategyModelStatus: null as null | {
+    windowsDownloadMode: boolean,
+    downloadSupported: boolean,
+    allReady: boolean,
+    storageDir: string,
+    models: Array<{
+      id: string,
+      label: string,
+      filename: string,
+      available: boolean,
+      path: string,
+    }>,
+  },
+  strategyModelStatusLoading: false,
+  strategyModelDownloadPending: false,
+  strategyModelDownloadMessage: '',
   strategyChatProgressLines: [] as string[],
   strategyChatProgressStage: '',
   strategyChatMessages: [] as Array<{

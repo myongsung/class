@@ -805,6 +805,16 @@ pub fn export_case_pdf(args: ExportPdfArgs) -> Result<String, String> {
   Ok(out_path.to_string_lossy().to_string())
 }
 
+#[tauri::command]
+pub fn strategy_model_status(app: tauri::AppHandle) -> Result<crate::engine::StrategyModelStatus, String> {
+  crate::engine::strategy_model_status(Some(&app))
+}
+
+#[tauri::command]
+pub fn download_strategy_models(app: tauri::AppHandle) -> Result<crate::engine::StrategyModelStatus, String> {
+  crate::engine::download_strategy_models(&app)
+}
+
 /* -------------------- Backup export (JSON) -------------------- */
 
 #[derive(Debug, Clone, Deserialize)]

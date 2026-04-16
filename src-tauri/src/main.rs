@@ -21,6 +21,8 @@ fn main() {
             commands::engine_advise,
             commands::engine_classify_risk,
             commands::strategy_agent_chat,
+            commands::strategy_model_status,
+            commands::download_strategy_models,
             commands::get_device_signer_info,
             commands::sign_integrity_payload,
             commands::verify_integrity_payload,

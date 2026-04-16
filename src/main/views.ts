@@ -788,6 +788,10 @@ function renderLegalSimulationPanel() {
   const chatPendingStartedAt = String((ui as any).strategyChatPendingStartedAt || '').trim();
   const chatInput = String((ui as any).strategyChatInput || '');
   const chatError = String((ui as any).strategyChatError || '').trim();
+  const strategyModelStatus = ((ui as any).strategyModelStatus || null) as any;
+  const strategyModelStatusLoading = !!(ui as any).strategyModelStatusLoading;
+  const strategyModelDownloadPending = !!(ui as any).strategyModelDownloadPending;
+  const strategyModelDownloadMessage = String((ui as any).strategyModelDownloadMessage || '').trim();
   const strategyChatModel = 'roosy-hybrid';
   const progressLines = Array.isArray((ui as any).strategyChatProgressLines) ? ((ui as any).strategyChatProgressLines as string[]).slice(-6) : [];
   const progressStage = String((ui as any).strategyChatProgressStage || '').trim();
@@ -809,6 +813,34 @@ function renderLegalSimulationPanel() {
       </span>
     </div>
   `;
+  const windowsClient = typeof navigator !== 'undefined' && /Windows/i.test(String(navigator.userAgent || ''));
+  const windowsModelDownloadMode = windowsClient && (strategyModelStatus ? !!strategyModelStatus.windowsDownloadMode : true);
+  const modelsReady = windowsModelDownloadMode ? !!strategyModelStatus?.allReady : true;
+  const modelAvailabilityItems = Array.isArray(strategyModelStatus?.models)
+    ? strategyModelStatus.models.map((item: any) => `
+        <span class="strategyModelSetupItem ${item?.available ? 'isReady' : ''}">
+          <strong>${esc(String(item?.label || 'AI 모델'))}</strong>
+          <em>${item?.available ? '준비됨' : '다운로드 필요'}</em>
+        </span>
+      `).join('')
+    : '';
+  const modelSetupBanner = windowsModelDownloadMode && !modelsReady ? `
+    <article class="strategyModelSetupBanner">
+      <div class="strategyModelSetupKicker">Windows 모델 준비</div>
+      <div class="strategyModelSetupTitle">우선 AI모델을 다운로드 받아주세요.</div>
+      <div class="strategyModelSetupText">프로그램은 가볍게 내려받고, HyperCLOVA-X와 Roosy-X는 앱 안에서 함께 내려받는 구조예요.</div>
+      ${modelAvailabilityItems ? `<div class="strategyModelSetupList">${modelAvailabilityItems}</div>` : ''}
+      <div class="strategyModelSetupActions">
+        ${H.btn(
+          strategyModelDownloadPending ? '다운로드 중…' : strategyModelStatusLoading ? '상태 확인 중…' : 'AI 모델 다운로드',
+          'download-strategy-models',
+          strategyModelDownloadPending || strategyModelStatusLoading ? ' disabled aria-disabled="true"' : '',
+          'btn primary'
+        )}
+        <div class="strategyModelSetupHint">${esc(strategyModelDownloadMessage || '다운로드가 끝나면 바로 채팅을 시작할 수 있어요.')}</div>
+      </div>
+    </article>
+  ` : '';
 
   const goalLabelMap: Record<string, string> = {
     stabilize: '상황을 더 키우지 않는 정리',
@@ -1004,6 +1036,7 @@ function renderLegalSimulationPanel() {
     <article class="legalHubPanel strategyChatPage" aria-label="AI 민원전용 법무팀">
       <section class="strategyChatOnlyShell">
         <div class="strategyChatThread strategyChatThreadOnly">
+          ${modelSetupBanner}
           ${threadPackageBanner}
           ${starterThread}
           ${result ? briefingBubble : ''}
@@ -1014,16 +1047,16 @@ function renderLegalSimulationPanel() {
 
         <footer class="strategyChatOnlyComposer">
           <label class="strategyComposerTextareaWrap strategyComposerTextareaWrapOnly">
-            <textarea class="strategyComposerTextarea strategyComposerTextareaOnly" rows="1" placeholder="예: 이 상황을 상대방에게 어떻게 정리해 보낼지 3문장으로 써줘" data-action="draft-strategy-chat" data-field="input">${esc(chatInput)}</textarea>
+            <textarea class="strategyComposerTextarea strategyComposerTextareaOnly" rows="1" placeholder="${esc(modelsReady ? '예: 이 상황을 상대방에게 어떻게 정리해 보낼지 3문장으로 써줘' : '우선 AI모델을 다운로드 받아주세요')}" ${modelsReady ? '' : 'disabled aria-disabled="true"'} data-action="draft-strategy-chat" data-field="input">${esc(chatInput)}</textarea>
           </label>
           <div class="strategyChatOnlyComposerBar">
             <div class="strategyChatOnlyComposerTools">
               ${H.btn(selectedRecords.length ? `기록 ${selectedRecords.length}개` : '기록 붙이기', 'open-simulation-picker', '', 'btn ghost')}
-              <div class="strategyChatOnlyComposerHint">${chatPending ? esc(`${pendingStage} · ${pendingElapsedLabel}`) : 'Enter 전송 · Shift+Enter 줄바꿈'}</div>
+              <div class="strategyChatOnlyComposerHint">${chatPending ? esc(`${pendingStage} · ${pendingElapsedLabel}`) : modelsReady ? 'Enter 전송 · Shift+Enter 줄바꿈' : '모델 다운로드 후 채팅 가능'}</div>
               ${strategyHybridDesk}
             </div>
             <div class="strategyComposerActions">
-              ${H.btn(chatPending ? '생성 중…' : '보내기', 'send-strategy-chat', chatPending ? ' disabled aria-disabled="true"' : '', 'btn primary')}
+              ${H.btn(chatPending ? '생성 중…' : '보내기', 'send-strategy-chat', chatPending || !modelsReady ? ' disabled aria-disabled="true"' : '', 'btn primary')}
             </div>
           </div>
         </footer>
