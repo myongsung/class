@@ -1526,8 +1526,86 @@ fn ensure_executable(_path: &Path) -> Result<(), String> {
   Ok(())
 }
 
+#[cfg(target_os = "windows")]
+fn strategy_sidecar_storage_dir(app: Option<&AppHandle>) -> Option<PathBuf> {
+  if let Some(app) = app {
+    if let Ok(path) = app.path().resolve("sidecar", BaseDirectory::AppData) {
+      return Some(path);
+    }
+  }
+  None
+}
+
+#[cfg(not(target_os = "windows"))]
+fn strategy_sidecar_storage_dir(_app: Option<&AppHandle>) -> Option<PathBuf> {
+  None
+}
+
+#[cfg(target_os = "windows")]
+fn copy_strategy_runtime_tree(source: &Path, target: &Path) -> Result<(), String> {
+  if !source.exists() {
+    return Ok(());
+  }
+  fs::create_dir_all(target).map_err(|e| format!("AI 런타임 폴더를 만들지 못했어요: {}", e))?;
+  for entry in fs::read_dir(source).map_err(|e| format!("AI 런타임 폴더를 읽지 못했어요: {}", e))? {
+    let entry = entry.map_err(|e| format!("AI 런타임 폴더 항목을 읽지 못했어요: {}", e))?;
+    let source_path = entry.path();
+    let target_path = target.join(entry.file_name());
+    if source_path.is_dir() {
+      copy_strategy_runtime_tree(&source_path, &target_path)?;
+    } else {
+      if let Some(parent) = target_path.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("AI 런타임 하위 폴더를 만들지 못했어요: {}", e))?;
+      }
+      fs::copy(&source_path, &target_path).map_err(|e| format!("AI 런타임 파일 복사에 실패했어요: {}", e))?;
+    }
+  }
+  Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn hydrate_strategy_runtime_to_appdata(app: Option<&AppHandle>) {
+  let Some(target_dir) = strategy_sidecar_storage_dir(app) else {
+    return;
+  };
+
+  let has_all_required = strategy_runner_filenames()
+    .iter()
+    .any(|name| target_dir.join(name).exists())
+    && target_dir.join("llama.dll").exists()
+    && target_dir.join("mtmd.dll").exists();
+  if has_all_required {
+    return;
+  }
+
+  if let Ok(exe) = std::env::current_exe() {
+    if let Some(dir) = exe.parent() {
+      let bootstrap_candidates = [
+        dir.join("RoosyCozy").join("sidecar"),
+        dir.join("sidecar"),
+      ];
+      for source in bootstrap_candidates {
+        if source.exists() {
+          let _ = copy_strategy_runtime_tree(&source, &target_dir);
+          break;
+        }
+      }
+    }
+  }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn hydrate_strategy_runtime_to_appdata(_app: Option<&AppHandle>) {}
+
 fn strategy_runner_candidates(_app: Option<&AppHandle>) -> Vec<PathBuf> {
   let mut out = Vec::<PathBuf>::new();
+  hydrate_strategy_runtime_to_appdata(_app);
+
+  if let Some(dir) = strategy_sidecar_storage_dir(_app) {
+    for file_name in strategy_runner_filenames() {
+      push_unique_path(&mut out, dir.join(file_name));
+    }
+  }
 
   if let Ok(exe) = std::env::current_exe() {
     if let Some(dir) = exe.parent() {
@@ -1562,7 +1640,7 @@ fn resolve_strategy_runner_path(app: Option<&AppHandle>) -> Result<PathBuf, Stri
   #[cfg(target_os = "windows")]
   {
     return Err(format!(
-      "전략자문 추론기 파일을 찾지 못했어요. 프로그램 폴더의 RoosyCozy/sidecar 안에 {}이(가) 함께 있어야 해요.",
+      "전략자문 추론기 파일을 찾지 못했어요. 먼저 AI 모델 다운로드를 완료했는지 확인해주세요. 실행 파일은 AppData 쪽 sidecar에서 찾고 있어요. 필요한 파일: {}",
       strategy_runner_hint_text()
     ));
   }

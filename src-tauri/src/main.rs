@@ -23,7 +23,7 @@ const UPDATE_REPO_NAME: &str = "roosycozy";
 #[cfg(target_os = "windows")]
 const UPDATE_ASSET_NAME: &str = "roosycozy-x86_64-pc-windows-msvc.zip";
 #[cfg(target_os = "windows")]
-const WINDOWS_SUPPORT_DIR_NAME: &str = "RoosyCozy";
+const WINDOWS_BUNDLE_SUPPORT_DIR_NAME: &str = "RoosyCozy";
 
 #[cfg(target_os = "windows")]
 #[derive(Debug, serde::Deserialize)]
@@ -190,8 +190,17 @@ endlocal\r\n",
 }
 
 #[cfg(target_os = "windows")]
-fn windows_support_dir(install_dir: &Path) -> PathBuf {
-    install_dir.join(WINDOWS_SUPPORT_DIR_NAME)
+fn windows_sidecar_storage_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    app.path()
+        .resolve("sidecar", tauri::path::BaseDirectory::AppData)
+        .map_err(|e| format!("AI 런타임 폴더를 찾지 못했어요: {}", e))
+}
+
+#[cfg(target_os = "windows")]
+fn windows_resources_storage_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    app.path()
+        .resolve("resources", tauri::path::BaseDirectory::AppData)
+        .map_err(|e| format!("AI 리소스 폴더를 찾지 못했어요: {}", e))
 }
 
 #[cfg(target_os = "windows")]
@@ -204,16 +213,16 @@ fn windows_sidecar_required_files() -> [&'static str; 3] {
 }
 
 #[cfg(target_os = "windows")]
-fn windows_install_needs_repair(install_dir: &Path) -> bool {
-    let support_dir = windows_support_dir(install_dir);
-    let sidecar_dir = support_dir.join("sidecar");
+fn windows_install_needs_repair(app: &AppHandle) -> bool {
+    let Ok(sidecar_dir) = windows_sidecar_storage_dir(app) else {
+        return true;
+    };
+
     if !sidecar_dir.exists() {
         return true;
     }
 
-    windows_sidecar_required_files()
-        .iter()
-        .any(|name| !sidecar_dir.join(name).exists())
+    windows_sidecar_required_files().iter().any(|name| !sidecar_dir.join(name).exists())
 }
 
 #[cfg(target_os = "windows")]
@@ -223,8 +232,8 @@ fn validate_extracted_release(extract_dir: &Path) -> Result<(PathBuf, PathBuf, P
         return Err("업데이트 압축 파일 안에 roosycozy.exe가 없어요.".to_string());
     }
 
-    let extracted_support_dir = if extract_dir.join(WINDOWS_SUPPORT_DIR_NAME).exists() {
-        extract_dir.join(WINDOWS_SUPPORT_DIR_NAME)
+    let extracted_support_dir = if extract_dir.join(WINDOWS_BUNDLE_SUPPORT_DIR_NAME).exists() {
+        extract_dir.join(WINDOWS_BUNDLE_SUPPORT_DIR_NAME)
     } else {
         extract_dir.to_path_buf()
     };
@@ -249,9 +258,9 @@ fn validate_extracted_release(extract_dir: &Path) -> Result<(PathBuf, PathBuf, P
 
 #[cfg(target_os = "windows")]
 fn apply_portable_release_update(
+    app: &AppHandle,
     asset_url: &str,
     current_exe: &Path,
-    install_dir: &Path,
     replace_exe: bool,
 ) -> Result<(), String> {
     let temp_root = std::env::temp_dir().join(format!("roosycozy-update-{}", std::process::id()));
@@ -265,17 +274,22 @@ fn apply_portable_release_update(
     download_release_zip(asset_url, &zip_path)?;
     extract_release_zip(&zip_path, &extract_dir)?;
 
-    let support_dir = windows_support_dir(install_dir);
-    fs::create_dir_all(&support_dir).map_err(|e| format!("RoosyCozy 폴더를 만들지 못했어요: {}", e))?;
+    let sidecar_dir = windows_sidecar_storage_dir(app)?;
+    let resources_dir = windows_resources_storage_dir(app)?;
+    fs::create_dir_all(&sidecar_dir).map_err(|e| format!("AppData sidecar 폴더를 만들지 못했어요: {}", e))?;
+    fs::create_dir_all(&resources_dir).map_err(|e| format!("AppData resources 폴더를 만들지 못했어요: {}", e))?;
 
     let (extracted_exe, extracted_sidecar, extracted_resources, _) = validate_extracted_release(&extract_dir)?;
 
-    copy_dir_recursive(&extracted_sidecar, &support_dir.join("sidecar"))?;
+    copy_dir_recursive(&extracted_sidecar, &sidecar_dir)?;
     if extracted_resources.exists() {
-        copy_dir_recursive(&extracted_resources, &support_dir.join("resources"))?;
+        copy_dir_recursive(&extracted_resources, &resources_dir)?;
     }
 
     if replace_exe {
+        let install_dir = current_exe
+            .parent()
+            .ok_or_else(|| "현재 실행 파일 폴더를 찾지 못했어요.".to_string())?;
         let staged_exe = install_dir.join("roosycozy.exe.new");
         if staged_exe.exists() {
             let _ = fs::remove_file(&staged_exe);
@@ -303,11 +317,7 @@ fn check_and_update(app: AppHandle) -> Result<String, String> {
         let app_version = app.package_info().version.to_string();
         let current_exe = std::env::current_exe()
             .map_err(|e| format!("현재 실행 파일 경로를 읽지 못했어요: {}", e))?;
-        let install_dir = current_exe
-            .parent()
-            .ok_or_else(|| "현재 실행 파일 폴더를 찾지 못했어요.".to_string())?
-            .to_path_buf();
-        let needs_repair = windows_install_needs_repair(&install_dir);
+        let needs_repair = windows_install_needs_repair(&app);
 
         let latest = latest_github_release()?;
         let latest_version = normalize_release_version(&latest.tag_name);
@@ -322,9 +332,9 @@ fn check_and_update(app: AppHandle) -> Result<String, String> {
         } else {
             let replace_exe = parse_version_triplet(&app_version) < parse_version_triplet(&latest_version);
             apply_portable_release_update(
+                &app,
                 &asset.browser_download_url,
                 &current_exe,
-                &install_dir,
                 replace_exe,
             )?;
 
