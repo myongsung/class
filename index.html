@@ -4,8 +4,104 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>roosycozy</title>
+    <style>
+      html, body { margin: 0; background: #f6f8fb; }
+      #boot-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 99999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background:
+          radial-gradient(circle at top, rgba(149, 174, 206, 0.18), transparent 34%),
+          linear-gradient(180deg, #f8fbff 0%, #f3f6fb 100%);
+        font-family: "Pretendard", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+        color: #415065;
+        transition: opacity .28s ease, visibility .28s ease;
+      }
+      #boot-splash.is-hidden {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+      .bootSplashCard {
+        width: min(460px, calc(100vw - 40px));
+        padding: 28px 28px 24px;
+        border-radius: 28px;
+        background: rgba(255,255,255,0.92);
+        border: 1px solid rgba(115, 138, 168, 0.14);
+        box-shadow: 0 24px 60px rgba(52, 72, 104, 0.10);
+        backdrop-filter: blur(16px);
+      }
+      .bootSplashEyebrow {
+        font-size: 11px;
+        letter-spacing: .22em;
+        font-weight: 700;
+        color: #8191a9;
+        text-transform: uppercase;
+      }
+      .bootSplashTitle {
+        margin-top: 14px;
+        font-size: 28px;
+        line-height: 1.12;
+        letter-spacing: -.04em;
+        font-weight: 800;
+        color: #233247;
+      }
+      .bootSplashDesc {
+        margin-top: 10px;
+        font-size: 14px;
+        line-height: 1.7;
+        color: #65758d;
+      }
+      .bootSplashStatus {
+        margin-top: 20px;
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 14px;
+        border-radius: 999px;
+        background: rgba(117, 146, 189, 0.10);
+        border: 1px solid rgba(117, 146, 189, 0.13);
+        color: #53647c;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .bootSplashDot {
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        background: linear-gradient(180deg, #86a4d1 0%, #5d7da7 100%);
+        box-shadow: 0 0 0 0 rgba(102, 130, 173, 0.26);
+        animation: bootPulse 1.4s ease-in-out infinite;
+      }
+      .bootSplashHint {
+        margin-top: 14px;
+        font-size: 12px;
+        line-height: 1.6;
+        color: #8d9aae;
+      }
+      @keyframes bootPulse {
+        0% { transform: scale(.92); box-shadow: 0 0 0 0 rgba(102,130,173,.28); }
+        70% { transform: scale(1); box-shadow: 0 0 0 12px rgba(102,130,173,0); }
+        100% { transform: scale(.92); box-shadow: 0 0 0 0 rgba(102,130,173,0); }
+      }
+    </style>
   </head>
   <body>
+    <div id="boot-splash" aria-live="polite">
+      <div class="bootSplashCard">
+        <div class="bootSplashEyebrow">RoosyCozy</div>
+        <div class="bootSplashTitle">AI 민원 법무팀 에이전트를 준비하고 있어요</div>
+        <div class="bootSplashDesc">업데이트 확인과 AI 런타임 점검을 진행 중입니다. 첫 실행이나 복구 상황에서는 잠시 더 걸릴 수 있어요.</div>
+        <div class="bootSplashStatus">
+          <span class="bootSplashDot" aria-hidden="true"></span>
+          <span id="boot-splash-status">프로그램을 불러오는 중이에요…</span>
+        </div>
+        <div class="bootSplashHint" id="boot-splash-hint">흰 화면 대신 준비 상태를 보여드릴게요. 조금만 기다려주세요.</div>
+      </div>
+    </div>
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
