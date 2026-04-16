@@ -869,7 +869,7 @@ const sendStrategyAgentMessage = async (overrideMessage?: string) => {
   }
   const records = getStrategySelectedRecords();
   if (!records.length) {
-    toast('먼저 AI 민원전용 법무팀에 연결할 기록을 1개 이상 붙여주세요');
+    toast('먼저 AI 민원 법무팀 에이전트에 연결할 기록을 1개 이상 붙여주세요');
     return;
   }
 
@@ -897,7 +897,7 @@ const sendStrategyAgentMessage = async (overrideMessage?: string) => {
   (ui as any).strategyChatPending = true;
   (ui as any).strategyChatPendingStartedAt = nowISO();
   clearStrategyChatProgress();
-  appendStrategyChatProgress('준비', 'AI 민원전용 법무팀 요청을 접수했어요.', false);
+  appendStrategyChatProgress('준비', 'AI 민원 법무팀 에이전트 요청을 접수했어요.', false);
   render();
 
   try {
@@ -923,13 +923,13 @@ const sendStrategyAgentMessage = async (overrideMessage?: string) => {
       answer,
       `ROOSY-Hybrid · ${formatStrategyRunnerLabel(result.runner)} · 근거 ${String(result.recordsUsed || records.length)}개`
     );
-    toast('AI 민원전용 법무팀 답변이 도착했어요');
+    toast('AI 민원 법무팀 에이전트 답변이 도착했어요');
   } catch (err) {
-    const messageText = String((err as any)?.message || err || 'AI 민원전용 법무팀 모델 호출에 실패했어요.');
+    const messageText = String((err as any)?.message || err || 'AI 민원 법무팀 에이전트 모델 호출에 실패했어요.');
     (ui as any).strategyChatError = messageText;
     appendStrategyChatProgress('오류', messageText, false);
-    appendStrategyChatMessage('assistant', `AI 민원전용 법무팀을 실행하지 못했어요.\n${messageText}`, '실행 오류');
-    toast('AI 민원전용 법무팀 실행 실패');
+    appendStrategyChatMessage('assistant', `AI 민원 법무팀 에이전트를 실행하지 못했어요.\n${messageText}`, '실행 오류');
+    toast('AI 민원 법무팀 에이전트 실행 실패');
     log('strategy chat failed', err);
   } finally {
     (ui as any).strategyChatPending = false;
@@ -1925,7 +1925,7 @@ function bindEvents() {
     'clear-strategy-chat': () => {
       clearStrategyChat();
       render();
-      toast('AI 민원전용 법무팀 대화를 비웠어요');
+      toast('AI 민원 법무팀 에이전트 대화를 비웠어요');
       log('strategy chat cleared');
     },
     'prime-strategy-chat': async () => {

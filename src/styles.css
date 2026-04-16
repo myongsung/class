@@ -23448,6 +23448,40 @@ dialog.modal.strategyPickerModal::backdrop{
   background: rgba(238, 249, 245, 0.9);
 }
 
+.topNav button,
+.topNav a,
+.topNav [role="tab"] {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+}
+
+.topNavLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  vertical-align: middle;
+}
+
+.legalExperimentalBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 0;
+  align-self: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(97, 124, 166, 0.1);
+  border: 1px solid rgba(97, 124, 166, 0.16);
+  color: #5c7291;
+  font-size: 11px;
+  line-height: 1.35;
+  font-weight: 600;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
 .strategyModelSetupActions {
   display: flex;
   align-items: center;
@@ -23455,63 +23489,95 @@ dialog.modal.strategyPickerModal::backdrop{
   flex-wrap: wrap;
 }
 
-.strategyModelSetupProgress {
+.strategyModelSetupActivity {
   display: grid;
-  gap: 7px;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.76);
+  border: 1px solid rgba(129, 151, 184, 0.14);
 }
 
-.strategyModelSetupProgressHead {
+.strategyModelSetupActivityHead {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  font-size: 12px;
-  color: #5f7187;
+  flex-wrap: wrap;
 }
 
-.strategyModelSetupProgressHead strong {
+.strategyModelSetupActivityBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #58708d;
+}
+
+.strategyModelSetupActivityBadge strong {
   font-size: 12px;
   font-weight: 700;
   color: #2a3c55;
 }
 
-.strategyModelSetupProgressBar {
+.strategyModelSetupActivityPulse {
   position: relative;
-  overflow: hidden;
-  width: 100%;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   border-radius: 999px;
-  background: rgba(155, 174, 202, 0.22);
+  background: #6d93cc;
+  box-shadow: 0 0 0 0 rgba(109, 147, 204, 0.34);
+  animation: strategyModelPulse 1.6s ease-out infinite;
 }
 
-.strategyModelSetupProgressBar span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, #7fa2d4 0%, #5e87c6 100%);
-  box-shadow: 0 0 0 1px rgba(87, 122, 177, 0.08) inset;
-  transition: width 180ms ease;
-}
-
-.strategyModelSetupProgressBar span.isIndeterminate {
-  width: 35%;
-  animation: strategyModelDownloadSlide 1.2s ease-in-out infinite;
-}
-
-.strategyModelSetupProgressMeta {
+.strategyModelSetupEta {
   font-size: 12px;
-  line-height: 1.5;
-  color: #708195;
+  line-height: 1.4;
+  color: #73849a;
 }
 
-@keyframes strategyModelDownloadSlide {
+.strategyModelSetupActivityTitle {
+  font-size: 14px;
+  line-height: 1.45;
+  font-weight: 600;
+  color: #243246;
+}
+
+.strategyModelSetupActivityText {
+  font-size: 13px;
+  line-height: 1.6;
+  color: #64758a;
+}
+
+.strategyModelSetupActivityNote {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.strategyModelSetupActivityNote span {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: rgba(244, 248, 253, 0.92);
+  border: 1px solid rgba(129, 151, 184, 0.16);
+  font-size: 11px;
+  line-height: 1.35;
+  color: #6f8097;
+}
+
+@keyframes strategyModelPulse {
   0% {
-    transform: translateX(-18%);
+    box-shadow: 0 0 0 0 rgba(109, 147, 204, 0.34);
+    transform: scale(0.96);
   }
-  50% {
-    transform: translateX(85%);
+  70% {
+    box-shadow: 0 0 0 10px rgba(109, 147, 204, 0);
+    transform: scale(1);
   }
   100% {
-    transform: translateX(-18%);
+    box-shadow: 0 0 0 0 rgba(109, 147, 204, 0);
+    transform: scale(0.96);
   }
 }

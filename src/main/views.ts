@@ -427,7 +427,7 @@ function renderUpdateNotesModal() {
         <article class="updatesNoteItem">
           <div class="updatesNoteIndex">3</div>
           <div>
-            <div class="updatesNoteTitle">AI 민원전용 법무팀</div>
+            <div class="updatesNoteTitle">AI 민원 법무팀 에이전트 <span class="legalExperimentalBadge">현재 실험기능입니다</span></div>
             <div class="updatesNoteDesc">컬렉션에 연결된 기록을 바탕으로 답장 초안, 정리 포인트, 다음 행동 순서를 채팅형으로 빠르게 정리할 수 있어요.</div>
           </div>
         </article>
@@ -485,7 +485,7 @@ function renderHomeMain() {
       return {
         label: '정리 단계',
         title: '관련 기록을 묶어 첫 컬렉션을 만들 시점이에요',
-        desc: '비슷한 기록 3~5개만 모아도 타임라인과 AI 민원전용 법무팀의 맥락이 훨씬 또렷해집니다.',
+        desc: '비슷한 기록 3~5개만 모아도 타임라인과 AI 민원 법무팀 에이전트의 맥락이 훨씬 또렷해집니다.',
         tone: 'is-active',
       };
     }
@@ -493,14 +493,14 @@ function renderHomeMain() {
       return {
         label: '포커스 필요',
         title: '최근 컬렉션 하나를 열어 흐름을 잡아보세요',
-        desc: '선택된 컬렉션이 있으면 홈과 AI 민원전용 법무팀이 지금 무엇을 먼저 해야 하는지 더 선명하게 보여줍니다.',
+        desc: '선택된 컬렉션이 있으면 홈과 AI 민원 법무팀 에이전트가 지금 무엇을 먼저 해야 하는지 더 선명하게 보여줍니다.',
         tone: 'is-calm',
       };
     }
     if (!strategyMessages.length && !strategyResult) {
       return {
         label: '분석 준비',
-        title: '현재 컬렉션은 AI 민원전용 법무팀을 시작할 준비가 되어 있어요',
+        title: '현재 컬렉션은 AI 민원 법무팀 에이전트를 시작할 준비가 되어 있어요',
         desc: '질문 한 줄만 보내도 답변 초안과 다음 행동 순서를 정리해주는 흐름으로 넘어갈 수 있습니다.',
         tone: 'is-accent',
       };
@@ -526,7 +526,7 @@ function renderHomeMain() {
     allRecords.length > 0 && !collections.length ? '관련 기록 몇 개를 묶어 첫 컬렉션을 만들어보세요.' : '',
     collections.length > 0 && !selectedCollection ? '최근 컬렉션 하나를 열어 흐름과 타임라인을 점검해보세요.' : '',
     selectedCollection && selectedCollectionRecordCount < 2 ? '현재 컬렉션에 기록을 더 연결해 맥락을 보강해보세요.' : '',
-    selectedCollection && !strategyMessages.length ? 'AI 민원전용 법무팀 탭에서 질문 한 줄을 보내 답장 초안과 다음 행동을 받아보세요.' : '',
+    selectedCollection && !strategyMessages.length ? 'AI 민원 법무팀 에이전트 탭에서 질문 한 줄을 보내 답장 초안과 다음 행동을 받아보세요.' : '',
     sharedReadyCount > 0 ? '공유가 필요하면 공유/제출 문서 탭에서 PDF를 저장해두세요.' : '',
   ].filter(Boolean).slice(0, 4);
 
@@ -537,8 +537,8 @@ function renderHomeMain() {
       ].filter(Boolean)
     : [
         riskyRecords.length ? '리스크가 높은 기록부터 시각, 원본, 관련 대화 흐름을 다시 확인해보세요.' : '',
-        collections.length ? '가장 최근 컬렉션을 기준으로 AI 민원전용 법무팀을 실행해 다음 행동 순서를 정리해보세요.' : '',
-        allRecords.length ? '비슷한 기록 3~5개를 묶으면 AI 민원전용 법무팀과 공유 문서 품질이 훨씬 안정적으로 올라갑니다.' : '첫 기록을 남기면 홈에서 최근 캡처와 AI 추천 행동을 자동으로 보여드려요.',
+        collections.length ? '가장 최근 컬렉션을 기준으로 AI 민원 법무팀 에이전트를 실행해 다음 행동 순서를 정리해보세요.' : '',
+        allRecords.length ? '비슷한 기록 3~5개를 묶으면 AI 민원 법무팀 에이전트와 공유 문서 품질이 훨씬 안정적으로 올라갑니다.' : '첫 기록을 남기면 홈에서 최근 캡처와 AI 추천 행동을 자동으로 보여드려요.',
       ].filter(Boolean).slice(0, 3);
 
   const nextActions = todoItems.length ? todoItems : ['최근 기록을 확인하고 필요한 항목을 컬렉션으로 묶어보세요.'];
@@ -554,7 +554,7 @@ function renderHomeMain() {
     strategyResult
       ? cleanStrategyDisplayText(String(strategyResult.recommendedAction || 'AI 민원전용 법무팀 결과가 다음 행동을 제안할 준비가 됐어요.'))
       : collections.length
-        ? 'AI 민원전용 법무팀 탭에서 다음 대응 순서를 바로 정리할 수 있어요.'
+        ? 'AI 민원 법무팀 에이전트 탭에서 다음 대응 순서를 바로 정리할 수 있어요.'
         : '컬렉션을 만들면 분석과 공유 문서 품질이 더 안정적으로 올라가요.',
   ].filter(Boolean).slice(0, 3);
 
@@ -615,7 +615,7 @@ function renderHomeMain() {
       </div>
       <div class="homeFocusActionRow">
         ${H.btnData('컬렉션 열기', 'select-case', { id: String(selectedCollection.id || '') }, 'btn primary')}
-        ${H.btnData('AI 민원전용 법무팀', 'switch-legal-tab', { 'legal-tab': 'simulation' }, 'btn ghost')}
+        ${H.btnData('AI 민원 법무팀 에이전트', 'switch-legal-tab', { 'legal-tab': 'simulation' }, 'btn ghost')}
       </div>
     `
     : `
@@ -633,7 +633,7 @@ function renderHomeMain() {
           ? H.btnData('컬렉션 보기', 'switch-case-tab', { 'case-tab': 'list' }, 'btn primary')
           : H.btnData('컬렉션 만들기', 'switch-case-tab', { 'case-tab': 'create' }, 'btn primary')}
         ${allRecords.length
-          ? H.btnData('AI 민원전용 법무팀', 'switch-legal-tab', { 'legal-tab': 'simulation' }, 'btn ghost')
+          ? H.btnData('AI 민원 법무팀 에이전트', 'switch-legal-tab', { 'legal-tab': 'simulation' }, 'btn ghost')
           : H.btn('빠른 캡처', 'open-record-composer', '', 'btn ghost')}
       </div>
     `;
@@ -644,11 +644,11 @@ function renderHomeMain() {
         <div class="homeHeroContent">
           <div class="homeHeroEyebrow">Evidence Workspace</div>
           <div class="homeHeroTitle">차분하게 기록하고, 필요한 순간 바로 꺼내 쓰는 모던 워크스페이스</div>
-          <div class="homeHeroText">흩어진 대화, 사진, 파일, 메모를 한곳에 정리하고 컬렉션, AI 민원전용 법무팀, 공유 문서 흐름으로 자연스럽게 이어가세요.</div>
+          <div class="homeHeroText">흩어진 대화, 사진, 파일, 메모를 한곳에 정리하고 컬렉션, AI 민원 법무팀 에이전트, 공유 문서 흐름으로 자연스럽게 이어가세요.</div>
           <div class="homeHeroActions" aria-label="빠른 작업">
             ${H.btn('빠른 캡처', 'open-record-composer', '', 'btn primary')}
             ${H.btnData('컬렉션 만들기', 'switch-case-tab', { 'case-tab': 'create' }, 'btn ghost')}
-            ${H.btnData('AI 민원전용 법무팀', 'switch-legal-tab', { 'legal-tab': 'simulation' }, 'btn ghost')}
+            ${H.btnData('AI 민원 법무팀 에이전트', 'switch-legal-tab', { 'legal-tab': 'simulation' }, 'btn ghost')}
             ${H.btn('업데이트 노트', 'open-updates-note', ' aria-label="업데이트 노트 보기"', 'btn ghost homeHeroQuietAction')}
           </div>
         </div>
@@ -792,11 +792,7 @@ function renderLegalSimulationPanel() {
   const strategyModelStatusLoading = !!(ui as any).strategyModelStatusLoading;
   const strategyModelDownloadPending = !!(ui as any).strategyModelDownloadPending;
   const strategyModelDownloadMessage = String((ui as any).strategyModelDownloadMessage || '').trim();
-  const strategyModelDownloadPercent = Math.max(0, Math.min(100, Number((ui as any).strategyModelDownloadPercent || 0)));
   const strategyModelDownloadLabel = String((ui as any).strategyModelDownloadLabel || '').trim();
-  const strategyModelDownloadIndeterminate = !!(ui as any).strategyModelDownloadIndeterminate;
-  const strategyModelDownloadReceivedMb = Number((ui as any).strategyModelDownloadReceivedMb || 0);
-  const strategyModelDownloadTotalMb = Number((ui as any).strategyModelDownloadTotalMb || 0);
   const strategyChatModel = 'roosy-hybrid';
   const progressLines = Array.isArray((ui as any).strategyChatProgressLines) ? ((ui as any).strategyChatProgressLines as string[]).slice(-6) : [];
   const progressStage = String((ui as any).strategyChatProgressStage || '').trim();
@@ -805,8 +801,8 @@ function renderLegalSimulationPanel() {
     ? ((S as any).strategyThreadPackages as any[]).find((item) => String(item?.id || '') === activeThreadPackageId) || null
     : null;
   const strategyHybridDesk = `
-    <div class="strategyHybridDesk strategyHybridDeskInline" aria-label="ROOSY-Hybrid 민원전용 법무팀">
-      <span class="strategyHybridDeskKicker">민원전용 법무팀</span>
+    <div class="strategyHybridDesk strategyHybridDeskInline" aria-label="ROOSY-Hybrid 민원 법무팀 에이전트">
+      <span class="strategyHybridDeskKicker">민원 법무팀 에이전트</span>
       <span class="strategyHybridDeskRoleInline">
         <strong>HyperCLOVA-X</strong>
         <em>법리·균형</em>
@@ -836,20 +832,19 @@ function renderLegalSimulationPanel() {
       <div class="strategyModelSetupText">프로그램은 가볍게 내려받고, HyperCLOVA-X와 Roosy-X는 앱 안에서 함께 내려받는 구조예요. 이 다운로드는 최초 1회만 필요하고, 한 번 받으면 다음부터는 바로 사용할 수 있어요.</div>
       ${modelAvailabilityItems ? `<div class="strategyModelSetupList">${modelAvailabilityItems}</div>` : ''}
       ${strategyModelDownloadPending ? `
-        <div class="strategyModelSetupProgress">
-          <div class="strategyModelSetupProgressHead">
-            <span>${esc(strategyModelDownloadLabel || 'ROOSY-Hybrid')}</span>
-            <strong>${strategyModelDownloadIndeterminate
-              ? esc(strategyModelDownloadReceivedMb > 0 ? `${strategyModelDownloadReceivedMb.toFixed(1)}MB` : '연결 중…')
-              : esc(`${String(strategyModelDownloadPercent)}%`)}</strong>
+        <div class="strategyModelSetupActivity">
+          <div class="strategyModelSetupActivityHead">
+            <div class="strategyModelSetupActivityBadge">
+              <span class="strategyModelSetupActivityPulse" aria-hidden="true"></span>
+              <strong>${esc(strategyModelDownloadLabel || 'ROOSY-Hybrid')}</strong>
+            </div>
+            <span class="strategyModelSetupEta">예상 소요 시간 약 10분</span>
           </div>
-          <div class="strategyModelSetupProgressBar" aria-hidden="true">
-            <span class="${strategyModelDownloadIndeterminate ? 'isIndeterminate' : ''}" style="width:${strategyModelDownloadIndeterminate ? 35 : strategyModelDownloadPercent}%;"></span>
-          </div>
-          <div class="strategyModelSetupProgressMeta">
-            ${strategyModelDownloadIndeterminate
-              ? esc(strategyModelDownloadReceivedMb > 0 ? `현재 ${strategyModelDownloadReceivedMb.toFixed(1)}MB 내려받았어요.` : '다운로드 연결을 준비하는 중이에요.')
-              : esc(`${strategyModelDownloadReceivedMb.toFixed(1)}MB / ${Math.max(strategyModelDownloadTotalMb, 0).toFixed(1)}MB`)}
+          <div class="strategyModelSetupActivityTitle">최초 1회만 AI 모델을 내려받고 있어요.</div>
+          <div class="strategyModelSetupActivityText">${esc(strategyModelDownloadMessage || '모델 준비가 끝나면 다음부터는 바로 채팅을 시작할 수 있어요.')}</div>
+          <div class="strategyModelSetupActivityNote">
+            <span>이 작업은 최초 1회만 진행돼요.</span>
+            <span>완료 후에는 다시 받지 않고 바로 실행돼요.</span>
           </div>
         </div>
       ` : ''}
@@ -860,7 +855,7 @@ function renderLegalSimulationPanel() {
           strategyModelDownloadPending || strategyModelStatusLoading ? ' disabled aria-disabled="true"' : '',
           'btn primary'
         )}
-        <div class="strategyModelSetupHint">${esc(strategyModelDownloadMessage || '최초 1회만 다운로드하면, 다음부터는 바로 채팅을 시작할 수 있어요.')}</div>
+        <div class="strategyModelSetupHint">${esc(strategyModelDownloadPending ? '최초 1회만 다운로드하면 이후에는 바로 사용할 수 있어요.' : (strategyModelDownloadMessage || '최초 1회만 다운로드하면, 다음부터는 바로 채팅을 시작할 수 있어요.'))}</div>
       </div>
     </article>
   ` : '';
@@ -1001,7 +996,7 @@ function renderLegalSimulationPanel() {
             <span></span>
           </div>
           <div class="strategyPendingBody">
-            <div class="strategyPendingTeamLabel">ROOSY-Hybrid 민원전용 법무팀</div>
+            <div class="strategyPendingTeamLabel">ROOSY-Hybrid 민원 법무팀 에이전트</div>
             <div class="strategyPendingTitle">${esc(pendingMeta.title)}</div>
             <div class="strategyPendingDesc">${esc(pendingMeta.desc)}</div>
             <div class="strategyPendingSteps">
@@ -1056,7 +1051,7 @@ function renderLegalSimulationPanel() {
   ` : '';
 
   return `
-    <article class="legalHubPanel strategyChatPage" aria-label="AI 민원전용 법무팀">
+    <article class="legalHubPanel strategyChatPage" aria-label="AI 민원 법무팀 에이전트">
       <section class="strategyChatOnlyShell">
         <div class="strategyChatThread strategyChatThreadOnly">
           ${modelSetupBanner}
@@ -1123,7 +1118,7 @@ function renderSimulationPickerModal() {
     'simulationPickerModal',
     H.modalHead(
       '분석에 넣을 기록 고르기',
-      selectedCase ? `${String(selectedCase.title || '선택한 컬렉션').trim() || '선택한 컬렉션'} 컬렉션에 연결할 기록을 골라주세요.` : 'AI 민원전용 법무팀이 읽을 기록을 추가하거나 빼주세요.',
+      selectedCase ? `${String(selectedCase.title || '선택한 컬렉션').trim() || '선택한 컬렉션'} 컬렉션에 연결할 기록을 골라주세요.` : 'AI 민원 법무팀 에이전트가 읽을 기록을 추가하거나 빼주세요.',
       H.btn('닫기', 'close-simulation-picker', '', 'btn ghost')
     ),
     `
@@ -1156,7 +1151,7 @@ function renderSimulationPickerModal() {
         <div class="strategyPickerToolbar">
           ${selectedCase ? H.btn('컬렉션 기록 다시 불러오기', 'simulation-reset-to-case', '', 'btn') : ''}
           ${H.btn('비우기', 'simulation-clear-selection', '', 'btn ghost')}
-          <div class="strategyPickerHint">여기서 고른 뒤 적용을 눌러야 AI 민원전용 법무팀 화면에 반영돼요.</div>
+          <div class="strategyPickerHint">여기서 고른 뒤 적용을 눌러야 AI 민원 법무팀 에이전트 화면에 반영돼요.</div>
           ${H.btn(`적용하기 (${selectedIds.length})`, 'simulation-apply-picker', '', 'btn primary')}
         </div>
 
@@ -1169,7 +1164,7 @@ function renderSimulationPickerModal() {
 
 function renderLegalConsultMain() {
   return `
-    <section class="legalHub legalPartnerHub legalHubCompact legalHubChatMode" aria-label="AI 민원전용 법무팀">
+    <section class="legalHub legalPartnerHub legalHubCompact legalHubChatMode" aria-label="AI 민원 법무팀 에이전트">
       <article class="card legalHubShell legalHubShellFlat">${renderLegalSimulationPanel()}</article>
     </section>
   `;
@@ -1429,7 +1424,7 @@ export function render() {
                       <path d="M19 14.5L21 15.75L19 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
                     </svg>
                   </span>
-                  <span class="topNavLabel">AI 민원전용 법무팀</span>
+                  <span class="topNavLabel">AI 민원 법무팀 에이전트 <span class="legalExperimentalBadge">현재 실험기능입니다</span></span>
                 </button>
               </nav>
             </div>
