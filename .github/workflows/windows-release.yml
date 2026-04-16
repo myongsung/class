@@ -1,4 +1,4 @@
-name: Build Windows Release
+name: Build Windows EXE
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 jobs:
-  windows-release:
+  build:
     runs-on: windows-latest
     env:
       ROOSYCOZY_MODEL_URL: https://github.com/myongsung/roosycozy-models/releases/download/model_v1/HyperCLOVAX-SEED-Text-Instruct-0.5B-q4_0.gguf
@@ -19,25 +19,38 @@ jobs:
       ROOSYCOZY_WINDOWS_RUNTIME_URL: https://github.com/ggml-org/llama.cpp/releases/download/b8763/llama-b8763-bin-win-cpu-x64.zip
 
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v5
+      - name: setup node
+        uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
 
-      - name: Set up Rust
+      - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install npm dependencies
-        run: npm ci --legacy-peer-deps
+      - name: install frontend dependencies
+        run: npm install --legacy-peer-deps
 
-      - name: Build Windows portable package
+      - name: build the app (portable exe + staged release assets)
         run: npm run windows:portable
 
-      - name: Prepare release assets
+      - name: resolve version metadata
+        id: meta
+        shell: pwsh
+        run: |
+          $package = Get-Content (Join-Path $PWD "package.json") | ConvertFrom-Json
+          $version = $package.version
+          if (-not $version) {
+            throw "Could not resolve package.json version."
+          }
+
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=v$version" >> $env:GITHUB_OUTPUT
+          "name=App Build v$version" >> $env:GITHUB_OUTPUT
+
+      - name: prepare portable release assets
         shell: pwsh
         run: |
           $assetsDir = Join-Path $PWD "release-assets"
@@ -67,40 +80,40 @@ jobs:
 
           Compress-Archive -Path (Join-Path $portableDir.FullName "*") -DestinationPath $portableZip
 
-          Get-ChildItem $assetsDir | ForEach-Object {
-            Write-Host "Prepared asset: $($_.Name)"
-          }
-
-      - name: Resolve release metadata
-        id: meta
+      - name: create or update draft release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: pwsh
         run: |
-          $package = Get-Content (Join-Path $PWD "package.json") | ConvertFrom-Json
-          $version = $package.version
-          if (-not $version) {
-            throw "Could not resolve package.json version."
+          $tag = "${{ steps.meta.outputs.tag }}"
+          $name = "${{ steps.meta.outputs.name }}"
+          $body = "Automated Windows build."
+
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag --title $name --notes $body --draft
+          } else {
+            gh release edit $tag --title $name --notes $body --draft=true
           }
 
-          $tag = "v$version"
-          $name = "App Build v$version"
-          "tag=$tag" >> $env:GITHUB_OUTPUT
-          "name=$name" >> $env:GITHUB_OUTPUT
+      - name: upload release assets
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          gh release upload "${{ steps.meta.outputs.tag }}" release-assets/roosycozy-x86_64-pc-windows-msvc.zip --clobber
+          gh release upload "${{ steps.meta.outputs.tag }}" release-assets/roosycozy_windows_x64.exe --clobber
 
-      - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.meta.outputs.tag }}
-          name: ${{ steps.meta.outputs.name }}
-          body: Automated Windows build.
-          draft: false
-          prerelease: false
-          overwrite_files: true
-          files: |
-            release-assets/roosycozy-x86_64-pc-windows-msvc.zip
-            release-assets/roosycozy_windows_x64.exe
-
-      - name: Upload build artifacts
+      - name: upload portable exe artifact
         uses: actions/upload-artifact@v4
         with:
-          name: windows-release-assets
-          path: release-assets/*
+          name: roosycozy-portable-exe
+          path: release-assets/roosycozy_windows_x64.exe
+          if-no-files-found: error
+
+      - name: upload portable zip artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: roosycozy-portable-zip
+          path: release-assets/roosycozy-x86_64-pc-windows-msvc.zip
+          if-no-files-found: error
