@@ -26,7 +26,7 @@ const UPDATE_ASSET_NAME: &str = "roosycozy-x86_64-pc-windows-msvc.zip";
 const WINDOWS_BUNDLE_SUPPORT_DIR_NAME: &str = "RoosyCozy";
 #[cfg(target_os = "windows")]
 const WINDOWS_RUNTIME_URL: &str =
-    "https://github.com/ggml-org/llama.cpp/releases/download/b8763/llama-b8763-bin-win-cpu-x64.zip";
+    "https://github.com/myongsung/roosycozy/releases/latest/download/roosycozy-windows-runtime.zip";
 
 #[cfg(target_os = "windows")]
 #[derive(Debug, serde::Deserialize)]
@@ -216,6 +216,16 @@ fn windows_sidecar_required_files() -> [&'static str; 3] {
 }
 
 #[cfg(target_os = "windows")]
+fn windows_msvc_runtime_files() -> [&'static str; 4] {
+    [
+        "msvcp140.dll",
+        "vcruntime140.dll",
+        "vcruntime140_1.dll",
+        "concrt140.dll",
+    ]
+}
+
+#[cfg(target_os = "windows")]
 fn windows_install_needs_repair(app: &AppHandle) -> bool {
     let Ok(sidecar_dir) = windows_sidecar_storage_dir(app) else {
         return true;
@@ -225,7 +235,10 @@ fn windows_install_needs_repair(app: &AppHandle) -> bool {
         return true;
     }
 
-    windows_sidecar_required_files().iter().any(|name| !sidecar_dir.join(name).exists())
+    windows_sidecar_required_files()
+        .iter()
+        .chain(windows_msvc_runtime_files().iter())
+        .any(|name| !sidecar_dir.join(name).exists())
 }
 
 #[cfg(target_os = "windows")]
@@ -287,7 +300,11 @@ fn download_windows_runtime_to_appdata(sidecar_dir: &Path) -> Result<(), String>
         .ok_or_else(|| "다운로드한 AI 런타임 안에서 실행 파일을 찾지 못했어요.".to_string())?;
     let runtime_dlls = collect_runtime_dlls(&extract_dir);
 
-    for required in ["llama.dll", "mtmd.dll"] {
+    for required in windows_sidecar_required_files()
+        .iter()
+        .skip(1)
+        .chain(windows_msvc_runtime_files().iter())
+    {
         if !runtime_dlls.iter().any(|path| path.file_name().and_then(|x| x.to_str()) == Some(required)) {
             return Err(format!(
                 "다운로드한 AI 런타임 안에 필요한 DLL이 빠져 있어요: {}",

@@ -55,6 +55,14 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run windows:portable
 
+      - name: ensure windows runtime bundle
+        env:
+          ROOSYCOZY_WINDOWS_RUNTIME_URL: "${{ secrets.ROOSYCOZY_WINDOWS_RUNTIME_URL || vars.ROOSYCOZY_WINDOWS_RUNTIME_URL || 'https://github.com/ggml-org/llama.cpp/releases/download/b8763/llama-b8763-bin-win-cpu-x64.zip' }}"
+        run: npm run ci:ensure-windows-runtime
+
+      - name: stage windows runtime asset
+        run: node ./scripts/stage-windows-runtime.mjs
+
       - name: Compress portable exe for auto-updater
         shell: pwsh
         run: |
@@ -63,6 +71,15 @@ jobs:
             Remove-Item roosycozy-x86_64-pc-windows-msvc.zip -Force
           }
           Compress-Archive -Path roosycozy.exe -DestinationPath roosycozy-x86_64-pc-windows-msvc.zip
+
+      - name: Compress windows runtime asset
+        shell: pwsh
+        run: |
+          cd src-tauri/target/release/runtime/roosycozy-windows-runtime
+          if (Test-Path roosycozy-windows-runtime.zip) {
+            Remove-Item roosycozy-windows-runtime.zip -Force
+          }
+          Compress-Archive -Path * -DestinationPath roosycozy-windows-runtime.zip
 
       - name: Create or update GitHub Release
         env:
@@ -84,6 +101,7 @@ jobs:
         shell: pwsh
         run: |
           gh release upload v${{ steps.meta.outputs.version }} src-tauri/target/release/portable/roosycozy-windows-x64/roosycozy-x86_64-pc-windows-msvc.zip --clobber
+          gh release upload v${{ steps.meta.outputs.version }} src-tauri/target/release/runtime/roosycozy-windows-runtime/roosycozy-windows-runtime.zip --clobber
 
       - name: upload portable exe artifact
         uses: actions/upload-artifact@v4

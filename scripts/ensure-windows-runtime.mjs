@@ -1,4 +1,4 @@
-import { createWriteStream, existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
+import { copyFileSync, createWriteStream, existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -12,7 +12,14 @@ const runtimeUrl =
   process.env.ROOSYCOZY_WINDOWS_RUNTIME_URL?.trim() ||
   'https://github.com/ggml-org/llama.cpp/releases/download/b8763/llama-b8763-bin-win-cpu-x64.zip';
 
-const requiredDlls = ['llama.dll', 'mtmd.dll'];
+const requiredDlls = [
+  'llama.dll',
+  'mtmd.dll',
+  'msvcp140.dll',
+  'vcruntime140.dll',
+  'vcruntime140_1.dll',
+  'concrt140.dll'
+];
 function walk(dir) {
   const out = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -30,6 +37,18 @@ function hasRuntimeBundle() {
   if (!existsSync(runtimeDir)) return false;
   const files = walk(runtimeDir).map((filePath) => filePath.toLowerCase());
   return requiredDlls.every((name) => files.some((filePath) => filePath.endsWith(`/${name}`) || filePath.endsWith(`\\${name}`)));
+}
+
+function copyWindowsSystemDlls() {
+  if (process.platform !== 'win32') return;
+  const systemRoot = process.env.SystemRoot || 'C:\\Windows';
+  const system32 = resolve(systemRoot, 'System32');
+  for (const name of ['msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll', 'concrt140.dll']) {
+    const source = resolve(system32, name);
+    if (existsSync(source)) {
+      copyFileSync(source, resolve(runtimeDir, name));
+    }
+  }
 }
 
 function runOrThrow(command, args) {
@@ -72,6 +91,7 @@ async function main() {
   console.log(`Windows runtime zip을 내려받을게요: ${runtimeUrl}`);
   await downloadArchive();
   extractArchive();
+  copyWindowsSystemDlls();
 
   if (!hasRuntimeBundle()) {
     throw new Error(
