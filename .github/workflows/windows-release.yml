@@ -39,11 +39,6 @@ jobs:
             New-Item -ItemType File -Path src-tauri/resources/models/hyperclovax_roosy_Q4_K_M.gguf | Out-Null
           }
 
-      - name: ensure windows runtime bundle
-        env:
-          ROOSYCOZY_WINDOWS_RUNTIME_URL: "${{ secrets.ROOSYCOZY_WINDOWS_RUNTIME_URL || vars.ROOSYCOZY_WINDOWS_RUNTIME_URL || 'https://github.com/ggml-org/llama.cpp/releases/download/b8763/llama-b8763-bin-win-cpu-x64.zip' }}"
-        run: npm run ci:ensure-windows-runtime
-
       - name: resolve version
         id: meta
         shell: pwsh
@@ -67,7 +62,7 @@ jobs:
           if (Test-Path roosycozy-x86_64-pc-windows-msvc.zip) {
             Remove-Item roosycozy-x86_64-pc-windows-msvc.zip -Force
           }
-          Compress-Archive -Path roosycozy.exe, sidecar, resources, RoosyCozy -DestinationPath roosycozy-x86_64-pc-windows-msvc.zip
+          Compress-Archive -Path roosycozy.exe -DestinationPath roosycozy-x86_64-pc-windows-msvc.zip
 
       - name: Create or update GitHub Release
         env:
