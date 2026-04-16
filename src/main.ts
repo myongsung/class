@@ -60,8 +60,8 @@ function showUpdateToast(message: string, autoHide: boolean = false) {
 async function checkAndUpdateApp() {
   try {
     setBootSplash(
-      '최신 버전과 AI 런타임 상태를 확인하는 중이에요…',
-      '첫 실행이거나 복구가 필요한 경우에는 1~2분 정도 더 걸릴 수 있어요.',
+      '업데이트를 마무리하는 중이에요…',
+      '절대 화면을 중간에 닫지 마세요. 예상 소요 시간은 3분 내외입니다.',
       'loading'
     );
     showUpdateToast('🔄 새 버전을 확인하고 있습니다...');
@@ -69,7 +69,7 @@ async function checkAndUpdateApp() {
 
     if (result.includes('업데이트 완료')) {
       setBootSplash(
-        '업데이트 파일을 준비했어요.',
+        '업데이트 파일 준비를 마쳤어요.',
         '앱을 다시 시작하면 새 버전과 AI 런타임이 함께 적용됩니다.',
         'updating'
       );
@@ -82,7 +82,7 @@ async function checkAndUpdateApp() {
 
     if (result.includes('복구했어요')) {
       setBootSplash(
-        'AI 런타임 복구를 마쳤어요.',
+        '업데이트 마무리를 마쳤어요.',
         '이제 바로 채팅을 시작할 수 있어요.',
         'repairing'
       );
@@ -124,10 +124,10 @@ async function checkAndUpdateApp() {
   }
 }
 
-initApp();
 setBootSplash(
-  '프로그램 화면을 여는 중이에요…',
-  '기본 화면을 먼저 준비하고, 이어서 업데이트와 AI 런타임을 확인할게요.',
+  '업데이트를 준비하고 있어요…',
+  '절대 화면을 중간에 닫지 마세요. 예상 소요 시간은 3분 내외입니다.',
   'loading'
 );
+initApp();
 void checkAndUpdateApp();

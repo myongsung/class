@@ -537,11 +537,6 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .setup(|_app| {
             #[cfg(target_os = "windows")]
-            {
-                let handle = _app.handle().clone();
-                let _ = ensure_windows_runtime_cache(&handle);
-            }
-            #[cfg(target_os = "windows")]
             if let Some(window) = _app.get_webview_window("main") {
                 let _ = window.set_decorations(false);
             }
