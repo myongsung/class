@@ -73,6 +73,17 @@ const focusScreenPinInput = () => {
   }, 0);
 };
 
+const focusStrategyChatComposer = () => {
+  window.setTimeout(() => {
+    const input = document.querySelector('.strategyComposerTextareaOnly') as HTMLTextAreaElement | null;
+    input?.focus();
+    if (input) {
+      const end = input.value.length;
+      input.setSelectionRange(end, end);
+    }
+  }, 0);
+};
+
 queueMicrotask(() => {
   if (!hasTauriWindow() || !isWindowsDesktop()) return;
   void refreshStrategyModelStatus({ silent: true }).then(() => render()).catch((err) => {
@@ -810,10 +821,10 @@ const startStrategyModelStatusPolling = () => {
       if (!status) return;
       if (status.allReady) {
         stopStrategyModelStatusPolling();
-        state.ui.strategyModelDownloadPending = false;
-        state.ui.strategyModelDownloadMessage = '모델 다운로드가 끝났어요. 이제 바로 채팅할 수 있어요.';
-        state.ui.strategyModelDownloadLabel = 'AI 모델';
-        state.ui.strategyModelDownloadIndeterminate = false;
+        (ui as any).strategyModelDownloadPending = false;
+        (ui as any).strategyModelDownloadMessage = '모델 다운로드가 끝났어요. 이제 바로 채팅할 수 있어요.';
+        (ui as any).strategyModelDownloadLabel = 'AI 모델';
+        (ui as any).strategyModelDownloadIndeterminate = false;
         render();
       }
     } catch (_error) {
@@ -1938,6 +1949,11 @@ function bindEvents() {
     'download-strategy-models': async () => {
       if ((ui as any).strategyModelDownloadPending) return;
       await downloadStrategyModels();
+    },
+    'focus-strategy-chat': () => {
+      (ui as any).strategyModelDownloadMessage = '';
+      render();
+      focusStrategyChatComposer();
     },
     'toggle-strategy-model-menu': () => {
       (ui as any).strategyChatModelMenuOpen = !(ui as any).strategyChatModelMenuOpen;
