@@ -7,6 +7,8 @@ const repoRoot = resolve(__dirname, '..');
 const targetDir = resolve(repoRoot, 'src-tauri', 'target', 'release');
 const portableRoot = resolve(targetDir, 'portable', 'roosycozy-windows-x64');
 const supportRoot = resolve(portableRoot, 'RoosyCozy');
+const legacyResourcesRoot = resolve(portableRoot, 'resources');
+const legacySidecarRoot = resolve(portableRoot, 'sidecar');
 const executablePath = resolve(targetDir, 'roosycozy.exe');
 const modelSpecs = [];
 const sidecarPath = resolve(repoRoot, 'src-tauri', 'binaries', 'llama-sidecar-x86_64-pc-windows-msvc.exe');
@@ -121,14 +123,19 @@ function main() {
   rmSync(portableRoot, { recursive: true, force: true });
   mkdirSync(resolve(supportRoot, 'resources', 'models'), { recursive: true });
   mkdirSync(resolve(supportRoot, 'sidecar'), { recursive: true });
+  mkdirSync(resolve(legacyResourcesRoot, 'models'), { recursive: true });
+  mkdirSync(legacySidecarRoot, { recursive: true });
 
   copyFileSync(executablePath, resolve(portableRoot, 'roosycozy.exe'));
   for (const model of modelFiles) {
     copyFileSync(model.source, resolve(supportRoot, 'resources', 'models', model.name));
+    copyFileSync(model.source, resolve(legacyResourcesRoot, 'models', model.name));
   }
   copyFileSync(resolvedSidecarPath, resolve(supportRoot, 'sidecar', 'llama-sidecar-x86_64-pc-windows-msvc.exe'));
+  copyFileSync(resolvedSidecarPath, resolve(legacySidecarRoot, 'llama-sidecar-x86_64-pc-windows-msvc.exe'));
   for (const dll of runtimeDlls) {
     copyFileSync(dll.source, resolve(supportRoot, 'sidecar', dll.name));
+    copyFileSync(dll.source, resolve(legacySidecarRoot, dll.name));
   }
 
   console.log(`Windows portable 번들을 준비했어요: ${portableRoot}`);

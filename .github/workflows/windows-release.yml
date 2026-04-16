@@ -67,7 +67,7 @@ jobs:
           if (Test-Path roosycozy-x86_64-pc-windows-msvc.zip) {
             Remove-Item roosycozy-x86_64-pc-windows-msvc.zip -Force
           }
-          Compress-Archive -Path roosycozy.exe, RoosyCozy -DestinationPath roosycozy-x86_64-pc-windows-msvc.zip
+          Compress-Archive -Path roosycozy.exe, sidecar, resources, RoosyCozy -DestinationPath roosycozy-x86_64-pc-windows-msvc.zip
 
       - name: Create or update GitHub Release
         env:

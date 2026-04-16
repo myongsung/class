@@ -24,6 +24,9 @@ const UPDATE_REPO_NAME: &str = "roosycozy";
 const UPDATE_ASSET_NAME: &str = "roosycozy-x86_64-pc-windows-msvc.zip";
 #[cfg(target_os = "windows")]
 const WINDOWS_BUNDLE_SUPPORT_DIR_NAME: &str = "RoosyCozy";
+#[cfg(target_os = "windows")]
+const WINDOWS_RUNTIME_URL: &str =
+    "https://github.com/ggml-org/llama.cpp/releases/download/b8763/llama-b8763-bin-win-cpu-x64.zip";
 
 #[cfg(target_os = "windows")]
 #[derive(Debug, serde::Deserialize)]
@@ -226,6 +229,89 @@ fn windows_install_needs_repair(app: &AppHandle) -> bool {
 }
 
 #[cfg(target_os = "windows")]
+fn find_runtime_sidecar_candidate(root: &Path) -> Option<PathBuf> {
+    for candidate in [
+        "llama-sidecar-x86_64-pc-windows-msvc.exe",
+        "llama-sidecar.exe",
+        "llama-cli.exe",
+    ] {
+        if let Some(path) = find_path_recursively(root, &|path| {
+            path.is_file() && path.file_name().and_then(|x| x.to_str()) == Some(candidate)
+        }) {
+            return Some(path);
+        }
+    }
+    None
+}
+
+#[cfg(target_os = "windows")]
+fn collect_runtime_dlls(root: &Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    if !root.exists() {
+        return out;
+    }
+    if root.is_file() {
+        if root.extension().and_then(|x| x.to_str()).map(|x| x.eq_ignore_ascii_case("dll")) == Some(true) {
+            out.push(root.to_path_buf());
+        }
+        return out;
+    }
+    let Ok(entries) = fs::read_dir(root) else {
+        return out;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            out.extend(collect_runtime_dlls(&path));
+        } else if path.extension().and_then(|x| x.to_str()).map(|x| x.eq_ignore_ascii_case("dll")) == Some(true) {
+            out.push(path);
+        }
+    }
+    out
+}
+
+#[cfg(target_os = "windows")]
+fn download_windows_runtime_to_appdata(sidecar_dir: &Path) -> Result<(), String> {
+    let temp_root = std::env::temp_dir().join(format!("roosycozy-runtime-{}", std::process::id()));
+    if temp_root.exists() {
+        let _ = fs::remove_dir_all(&temp_root);
+    }
+    fs::create_dir_all(&temp_root).map_err(|e| format!("임시 AI 런타임 폴더를 만들지 못했어요: {}", e))?;
+    let zip_path = temp_root.join("runtime.zip");
+    let extract_dir = temp_root.join("runtime");
+
+    download_release_zip(WINDOWS_RUNTIME_URL, &zip_path)?;
+    extract_release_zip(&zip_path, &extract_dir)?;
+
+    let runtime_exe = find_runtime_sidecar_candidate(&extract_dir)
+        .ok_or_else(|| "다운로드한 AI 런타임 안에서 실행 파일을 찾지 못했어요.".to_string())?;
+    let runtime_dlls = collect_runtime_dlls(&extract_dir);
+
+    for required in ["llama.dll", "mtmd.dll"] {
+        if !runtime_dlls.iter().any(|path| path.file_name().and_then(|x| x.to_str()) == Some(required)) {
+            return Err(format!(
+                "다운로드한 AI 런타임 안에 필요한 DLL이 빠져 있어요: {}",
+                required
+            ));
+        }
+    }
+
+    fs::create_dir_all(sidecar_dir).map_err(|e| format!("AppData sidecar 폴더를 만들지 못했어요: {}", e))?;
+    let target_exe = sidecar_dir.join("llama-sidecar-x86_64-pc-windows-msvc.exe");
+    fs::copy(&runtime_exe, &target_exe).map_err(|e| format!("AI 실행 파일을 AppData로 복사하지 못했어요: {}", e))?;
+    for dll in runtime_dlls {
+        let Some(name) = dll.file_name() else {
+            continue;
+        };
+        let target = sidecar_dir.join(name);
+        let _ = fs::copy(&dll, &target);
+    }
+
+    let _ = fs::remove_dir_all(&temp_root);
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
 fn ensure_windows_runtime_cache(app: &AppHandle) -> Result<(), String> {
     let current_exe = std::env::current_exe()
         .map_err(|e| format!("현재 실행 파일 경로를 읽지 못했어요: {}", e))?;
@@ -249,6 +335,10 @@ fn ensure_windows_runtime_cache(app: &AppHandle) -> Result<(), String> {
                 break;
             }
         }
+    }
+
+    if windows_install_needs_repair(app) {
+        download_windows_runtime_to_appdata(&sidecar_dir)?;
     }
 
     let resource_candidates = [
@@ -358,8 +448,6 @@ fn apply_portable_release_update(
 
     if let Some(extracted_sidecar) = extracted_sidecar.as_ref() {
         copy_dir_recursive(extracted_sidecar, &sidecar_dir)?;
-    } else if windows_install_needs_repair(app) {
-        return Err("업데이트 압축 파일 안에 sidecar 폴더가 없어요. 현재 설치본도 sidecar가 비어 있어 복구를 진행할 수 없어요.".to_string());
     }
 
     if let Some(extracted_resources) = extracted_resources.as_ref() {
