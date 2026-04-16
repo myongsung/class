@@ -226,6 +226,46 @@ fn windows_install_needs_repair(app: &AppHandle) -> bool {
 }
 
 #[cfg(target_os = "windows")]
+fn ensure_windows_runtime_cache(app: &AppHandle) -> Result<(), String> {
+    let current_exe = std::env::current_exe()
+        .map_err(|e| format!("현재 실행 파일 경로를 읽지 못했어요: {}", e))?;
+    let install_dir = current_exe
+        .parent()
+        .ok_or_else(|| "현재 실행 파일 폴더를 찾지 못했어요.".to_string())?;
+
+    let sidecar_dir = windows_sidecar_storage_dir(app)?;
+    let resources_dir = windows_resources_storage_dir(app)?;
+    fs::create_dir_all(&sidecar_dir).map_err(|e| format!("AppData sidecar 폴더를 만들지 못했어요: {}", e))?;
+    fs::create_dir_all(&resources_dir).map_err(|e| format!("AppData resources 폴더를 만들지 못했어요: {}", e))?;
+
+    if windows_install_needs_repair(app) {
+        let bootstrap_candidates = [
+            install_dir.join(WINDOWS_BUNDLE_SUPPORT_DIR_NAME).join("sidecar"),
+            install_dir.join("sidecar"),
+        ];
+        for source in bootstrap_candidates {
+            if source.exists() {
+                copy_dir_recursive(&source, &sidecar_dir)?;
+                break;
+            }
+        }
+    }
+
+    let resource_candidates = [
+        install_dir.join(WINDOWS_BUNDLE_SUPPORT_DIR_NAME).join("resources"),
+        install_dir.join("resources"),
+    ];
+    for source in resource_candidates {
+        if source.exists() {
+            copy_dir_recursive(&source, &resources_dir)?;
+            break;
+        }
+    }
+
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
 fn find_path_recursively(root: &Path, predicate: &dyn Fn(&Path) -> bool) -> Option<PathBuf> {
     if predicate(root) {
         return Some(root.to_path_buf());
@@ -354,6 +394,8 @@ fn check_and_update(app: AppHandle) -> Result<String, String> {
 
     #[cfg(target_os = "windows")]
     {
+        ensure_windows_runtime_cache(&app)?;
+
         let app_version = app.package_info().version.to_string();
         let current_exe = std::env::current_exe()
             .map_err(|e| format!("현재 실행 파일 경로를 읽지 못했어요: {}", e))?;
@@ -377,6 +419,7 @@ fn check_and_update(app: AppHandle) -> Result<String, String> {
                 &current_exe,
                 replace_exe,
             )?;
+            ensure_windows_runtime_cache(&app)?;
 
             if replace_exe {
                 Ok(format!(
@@ -405,6 +448,11 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .setup(|_app| {
+            #[cfg(target_os = "windows")]
+            {
+                let handle = _app.handle().clone();
+                let _ = ensure_windows_runtime_cache(&handle);
+            }
             #[cfg(target_os = "windows")]
             if let Some(window) = _app.get_webview_window("main") {
                 let _ = window.set_decorations(false);
