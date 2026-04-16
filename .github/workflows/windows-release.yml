@@ -2,8 +2,9 @@ name: Build Windows Release
 
 on:
   push:
-    tags:
-      - "v*"
+    branches:
+      - main
+      - master
   workflow_dispatch:
 
 permissions:
@@ -74,19 +75,16 @@ jobs:
         id: meta
         shell: pwsh
         run: |
-          if ("${{ github.ref_type }}" -eq "tag") {
-            $tag = "${{ github.ref_name }}"
-            $name = "App Build $tag"
-            $prerelease = "false"
-          } else {
-            $tag = "build-v${{ github.run_number }}"
-            $name = "App Build v${{ github.run_number }}"
-            $prerelease = "true"
+          $package = Get-Content (Join-Path $PWD "package.json") | ConvertFrom-Json
+          $version = $package.version
+          if (-not $version) {
+            throw "Could not resolve package.json version."
           }
 
+          $tag = "v$version"
+          $name = "App Build v$version"
           "tag=$tag" >> $env:GITHUB_OUTPUT
           "name=$name" >> $env:GITHUB_OUTPUT
-          "prerelease=$prerelease" >> $env:GITHUB_OUTPUT
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
@@ -95,7 +93,8 @@ jobs:
           name: ${{ steps.meta.outputs.name }}
           body: Automated Windows build.
           draft: false
-          prerelease: ${{ steps.meta.outputs.prerelease == 'true' }}
+          prerelease: false
+          overwrite_files: true
           files: |
             release-assets/roosycozy-x86_64-pc-windows-msvc.zip
             release-assets/roosycozy_windows_x64.exe

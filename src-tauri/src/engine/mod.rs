@@ -32,6 +32,8 @@ static STRATEGY_LEGAL_DATASET: OnceLock<StrategyLegalDataset> = OnceLock::new();
 static STRATEGY_LEGAL_FLAT_CHUNKS: OnceLock<Vec<StrategyLegalFlatChunk>> = OnceLock::new();
 static STRATEGY_MODEL_DOWNLOAD_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 static STRATEGY_MODEL_DOWNLOAD_RUNNING: OnceLock<Mutex<bool>> = OnceLock::new();
+static STRATEGY_MODEL_DOWNLOAD_LAST_EVENT: OnceLock<Mutex<Option<(String, String, usize, usize)>>> =
+  OnceLock::new();
 
 fn read_u32_le(bytes: &[u8], pos: &mut usize) -> Result<u32, String> {
   let end = *pos + 4;
@@ -1593,6 +1595,19 @@ fn emit_strategy_model_download_progress(
   percent: u8,
   indeterminate: bool,
 ) {
+  let event_key = (stage.to_string(), model_id.to_string(), completed, total);
+  let last_event = STRATEGY_MODEL_DOWNLOAD_LAST_EVENT.get_or_init(|| Mutex::new(None));
+  if let Ok(mut guard) = last_event.lock() {
+    if stage == "downloading" {
+      if let Some(previous) = guard.as_ref() {
+        if previous == &event_key {
+          return;
+        }
+      }
+    }
+    *guard = Some(event_key);
+  }
+
   let payload = StrategyModelDownloadProgress {
     stage: stage.to_string(),
     model_id: model_id.to_string(),
@@ -1734,20 +1749,41 @@ pub fn start_strategy_model_download(app: &AppHandle) -> Result<StrategyModelSta
   let app_handle = app.clone();
   thread::spawn(move || {
     let result = download_strategy_models(&app_handle);
-    if let Err(error) = result {
-      emit_strategy_model_download_progress(
-        &app_handle,
-        "error",
-        "all",
-        "AI 모델",
-        error,
-        0,
-        2,
-        0,
-        0,
-        0,
-        true,
-      );
+    match result {
+      Ok(status) => {
+        emit_strategy_model_download_progress(
+          &app_handle,
+          "done",
+          "all",
+          "AI 모델",
+          "모델 다운로드가 끝났어요. 이제 바로 채팅할 수 있어요.",
+          status
+            .models
+            .iter()
+            .filter(|model| matches!(model.availability, StrategyModelAvailability::Ready))
+            .count(),
+          status.models.len(),
+          0,
+          0,
+          100,
+          false,
+        );
+      }
+      Err(error) => {
+        emit_strategy_model_download_progress(
+          &app_handle,
+          "error",
+          "all",
+          "AI 모델",
+          error,
+          0,
+          2,
+          0,
+          0,
+          0,
+          true,
+        );
+      }
     }
 
     if let Ok(mut guard) = STRATEGY_MODEL_DOWNLOAD_RUNNING

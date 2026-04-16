@@ -793,7 +793,37 @@ const refreshStrategyModelStatus = async (opts?: { silent?: boolean }) => {
   }
 };
 
+let strategyModelStatusPollTimer: number | null = null;
+
+const stopStrategyModelStatusPolling = () => {
+  if (strategyModelStatusPollTimer != null) {
+    window.clearInterval(strategyModelStatusPollTimer);
+    strategyModelStatusPollTimer = null;
+  }
+};
+
+const startStrategyModelStatusPolling = () => {
+  stopStrategyModelStatusPolling();
+  strategyModelStatusPollTimer = window.setInterval(async () => {
+    try {
+      const status = await refreshStrategyModelStatus({ silent: true });
+      if (!status) return;
+      if (status.allReady) {
+        stopStrategyModelStatusPolling();
+        state.ui.strategyModelDownloadPending = false;
+        state.ui.strategyModelDownloadMessage = '모델 다운로드가 끝났어요. 이제 바로 채팅할 수 있어요.';
+        state.ui.strategyModelDownloadLabel = 'AI 모델';
+        state.ui.strategyModelDownloadIndeterminate = false;
+        render();
+      }
+    } catch (_error) {
+      // Keep polling quietly while the background download continues.
+    }
+  }, 2500);
+};
+
 const downloadStrategyModels = async () => {
+  startStrategyModelStatusPolling();
   if ((ui as any).strategyModelDownloadPending) return;
   ensureStrategyModelDownloadListener();
   (ui as any).strategyModelDownloadPending = true;
