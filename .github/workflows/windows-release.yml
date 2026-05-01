@@ -70,7 +70,7 @@ jobs:
           if (Test-Path roosycozy-x86_64-pc-windows-msvc.zip) {
             Remove-Item roosycozy-x86_64-pc-windows-msvc.zip -Force
           }
-          Compress-Archive -Path roosycozy.exe,RoosyCozy -DestinationPath roosycozy-x86_64-pc-windows-msvc.zip
+          Compress-Archive -Path roosycozy.exe -DestinationPath roosycozy-x86_64-pc-windows-msvc.zip
 
       - name: Compress windows runtime asset
         shell: pwsh
@@ -109,5 +109,4 @@ jobs:
           name: roosycozy-windows-x64-portable
           path: |
             src-tauri/target/release/portable/roosycozy-windows-x64/roosycozy.exe
-            src-tauri/target/release/portable/roosycozy-windows-x64/RoosyCozy/
           if-no-files-found: error

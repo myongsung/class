@@ -399,7 +399,9 @@ fn ensure_windows_runtime_cache(app: &AppHandle) -> Result<(), String> {
 
     if windows_install_needs_repair(app) {
         let bootstrap_candidates = [
+            install_dir.join(WINDOWS_BUNDLE_SUPPORT_DIR_NAME).join("runtime"),
             install_dir.join(WINDOWS_BUNDLE_SUPPORT_DIR_NAME).join("sidecar"),
+            install_dir.join("runtime"),
             install_dir.join("sidecar"),
         ];
         for source in bootstrap_candidates {
@@ -462,19 +464,27 @@ fn validate_extracted_release(extract_dir: &Path) -> Result<(PathBuf, Option<Pat
     })
     .or_else(|| {
         find_path_recursively(extract_dir, &|path| {
-            path.is_dir() && path.file_name().and_then(|x| x.to_str()) == Some("sidecar")
+            path.is_dir()
+                && matches!(
+                    path.file_name().and_then(|x| x.to_str()),
+                    Some("runtime") | Some("sidecar")
+                )
         })
-        .and_then(|sidecar| sidecar.parent().map(|parent| parent.to_path_buf()))
+        .and_then(|runtime| runtime.parent().map(|parent| parent.to_path_buf()))
     });
 
     let Some(extracted_support_dir) = extracted_support_dir else {
         return Ok((extracted_exe, None, None, None));
     };
 
-    let extracted_sidecar = extracted_support_dir.join("sidecar");
-    let extracted_sidecar = if extracted_sidecar.exists() {
+    let extracted_runtime = if extracted_support_dir.join("runtime").exists() {
+        extracted_support_dir.join("runtime")
+    } else {
+        extracted_support_dir.join("sidecar")
+    };
+    let extracted_runtime = if extracted_runtime.exists() {
         for required in windows_sidecar_required_files() {
-            if !extracted_sidecar.join(required).exists() {
+            if !extracted_runtime.join(required).exists() {
                 return Err(format!(
                     "업데이트 압축 파일 안에 필요한 resident runtime 파일이 빠져 있어요: {}",
                     required
@@ -482,14 +492,14 @@ fn validate_extracted_release(extract_dir: &Path) -> Result<(PathBuf, Option<Pat
             }
         }
         for required in windows_resident_server_required_files() {
-            if !extracted_sidecar.join(required).exists() {
+            if !extracted_runtime.join(required).exists() {
                 return Err(format!(
                     "업데이트 압축 파일 안에 resident 서버 파일이 빠져 있어요: {}",
                     required
                 ));
             }
         }
-        Some(extracted_sidecar)
+        Some(extracted_runtime)
     } else {
         None
     };
@@ -509,7 +519,7 @@ fn validate_extracted_release(extract_dir: &Path) -> Result<(PathBuf, Option<Pat
         }
     };
 
-    Ok((extracted_exe, extracted_sidecar, extracted_resources, Some(extracted_support_dir)))
+    Ok((extracted_exe, extracted_runtime, extracted_resources, Some(extracted_support_dir)))
 }
 
 #[cfg(target_os = "windows")]
@@ -535,10 +545,10 @@ fn apply_portable_release_update(
     fs::create_dir_all(&sidecar_dir).map_err(|e| format!("공용 AI 런타임 폴더를 만들지 못했어요: {}", e))?;
     fs::create_dir_all(&resources_dir).map_err(|e| format!("공용 AI 모델 폴더를 만들지 못했어요: {}", e))?;
 
-    let (extracted_exe, extracted_sidecar, extracted_resources, _) = validate_extracted_release(&extract_dir)?;
+    let (extracted_exe, extracted_runtime, extracted_resources, _) = validate_extracted_release(&extract_dir)?;
 
-    if let Some(extracted_sidecar) = extracted_sidecar.as_ref() {
-        copy_dir_recursive(extracted_sidecar, &sidecar_dir)?;
+    if let Some(extracted_runtime) = extracted_runtime.as_ref() {
+        copy_dir_recursive(extracted_runtime, &sidecar_dir)?;
     }
 
     if let Some(extracted_resources) = extracted_resources.as_ref() {

@@ -47,7 +47,7 @@ Tauri(AppDataDir)에 아래 파일로 저장됩니다.
 
 - `main` 브랜치 push 또는 수동 실행 시 동작합니다.
 - 결과물은 GitHub Release와 Actions artifact로 함께 올라갑니다.
-- Windows portable은 resident `llama-server`와 관련 DLL이 함께 있어야 실행됩니다. CI는 먼저 Windows runtime zip을 받아 `llama.dll`, `mtmd.dll`, `llama-server.exe`와 관련 DLL을 준비한 뒤 패키징합니다. portable auto-update zip에도 `RoosyCozy/sidecar`, `RoosyCozy/resources`가 함께 들어가도록 맞춰두었습니다. 기본값은 2026년 4월 11일 기준 공식 llama.cpp Windows x64 CPU asset입니다.
+- Windows portable 배포 zip은 이제 `roosycozy.exe`만 담습니다. resident `llama-server`와 관련 DLL은 첫 실행 시 `%APPDATA%/.../sidecar` 아래로 자동 확보되고, 모델은 필요할 때 `Public/Documents/.../models` 아래로 자동 다운로드됩니다. 기본 Windows runtime 소스는 2026년 4월 11일 기준 공식 llama.cpp Windows x64 CPU asset입니다.
 
 ```text
 https://github.com/ggml-org/llama.cpp/releases/download/b8763/llama-b8763-bin-win-cpu-x64.zip
