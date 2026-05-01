@@ -10,7 +10,8 @@
     "tauri": "tauri",
     "ci:ensure-model": "node ./scripts/ensure-bundled-model.mjs",
     "ci:ensure-windows-runtime": "node ./scripts/ensure-windows-runtime.mjs",
-    "windows:portable": "tauri build --no-bundle --ci && node ./scripts/stage-windows-portable.mjs"
+    "windows:portable": "tauri build --no-bundle --ci && node ./scripts/stage-windows-portable.mjs",
+    "windows:installer": "tauri build --ci && node ./scripts/stage-windows-portable.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.10.1",

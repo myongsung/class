@@ -1,4 +1,4 @@
-name: "Build Windows Portable Release"
+name: "Build Windows Installer Release"
 
 on:
   push:
@@ -52,15 +52,24 @@ jobs:
           ROOSYCOZY_WINDOWS_RUNTIME_URL: "${{ secrets.ROOSYCOZY_WINDOWS_RUNTIME_URL || vars.ROOSYCOZY_WINDOWS_RUNTIME_URL || 'https://github.com/ggml-org/llama.cpp/releases/download/b8763/llama-b8763-bin-win-cpu-x64.zip' }}"
         run: npm run ci:ensure-windows-runtime
 
-      - name: build windows portable app
+      - name: build windows installer app
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npm run windows:portable
+        run: npm run windows:installer
 
       - name: stage windows runtime asset
         run: node ./scripts/stage-windows-runtime.mjs
 
-      - name: Compress portable exe for auto-updater
+      - name: verify installer assets
+        shell: pwsh
+        run: |
+          $nsis = Get-ChildItem -Path src-tauri/target/release/bundle/nsis -Filter *.exe -ErrorAction SilentlyContinue
+          $msi = Get-ChildItem -Path src-tauri/target/release/bundle/msi -Filter *.msi -ErrorAction SilentlyContinue
+          if (-not $nsis -and -not $msi) {
+            throw "No Windows installer assets were generated."
+          }
+
+      - name: Compress updater ZIP asset
         shell: pwsh
         run: |
           cd src-tauri/target/release/portable/roosycozy-windows-x64
@@ -87,9 +96,9 @@ jobs:
           $title = "App Build v${{ steps.meta.outputs.version }}"
           gh release view $tag *> $null
           if ($LASTEXITCODE -ne 0) {
-            gh release create $tag --title $title --notes "Automated Windows portable build." --latest
+            gh release create $tag --title $title --notes "Automated Windows installer build with separate updater assets." --latest
           } else {
-            gh release edit $tag --title $title --notes "Automated Windows portable build." --latest
+            gh release edit $tag --title $title --notes "Automated Windows installer build with separate updater assets." --latest
           }
 
       - name: Upload ZIP to GitHub Release
@@ -99,11 +108,19 @@ jobs:
         run: |
           gh release upload v${{ steps.meta.outputs.version }} src-tauri/target/release/portable/roosycozy-windows-x64/roosycozy-x86_64-pc-windows-msvc.zip --clobber
           gh release upload v${{ steps.meta.outputs.version }} src-tauri/target/release/runtime/roosycozy-windows-runtime/roosycozy-windows-runtime.zip --clobber
+          $installers = @()
+          $installers += Get-ChildItem -Path src-tauri/target/release/bundle/nsis -Filter *.exe -ErrorAction SilentlyContinue
+          $installers += Get-ChildItem -Path src-tauri/target/release/bundle/msi -Filter *.msi -ErrorAction SilentlyContinue
+          foreach ($installer in $installers) {
+            gh release upload v${{ steps.meta.outputs.version }} $installer.FullName --clobber
+          }
 
-      - name: upload portable exe artifact
+      - name: upload installer artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: roosycozy-windows-x64-portable
+          name: roosycozy-windows-x64-installers
           path: |
             src-tauri/target/release/portable/roosycozy-windows-x64/roosycozy.exe
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/msi/*.msi
           if-no-files-found: error

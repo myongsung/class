@@ -36,8 +36,10 @@ Tauri(AppDataDir)에 아래 파일로 저장됩니다.
 
 ## 빌드 전략
 
-- `Windows 배포용`은 GitHub Actions에서 **portable zip**을 만들고 GitHub Release에 자동 업로드합니다.
-- 현재 배포 기준은 **Windows 중심**이며, AI 모델과 runtime은 앱 실행 흐름 안에서 필요한 시점에 정리되도록 맞춰져 있습니다.
+- `Windows 배포용`은 GitHub Actions에서 **installer 중심**으로 빌드하고 GitHub Release에 자동 업로드합니다.
+- 사용자가 직접 받는 자산은 `NSIS/MSI installer`가 기준입니다.
+- 자동업데이트는 installer와 별개로 **업데이트 전용 ZIP 자산**을 유지합니다.
+- 현재 배포 기준은 **Windows 중심**이며, AI 모델과 runtime은 설치 또는 첫 실행 흐름 안에서 필요한 시점에 정리되도록 맞춰져 있습니다.
 
 ## GitHub Actions
 
@@ -47,7 +49,9 @@ Tauri(AppDataDir)에 아래 파일로 저장됩니다.
 
 - `main` 브랜치 push 또는 수동 실행 시 동작합니다.
 - 결과물은 GitHub Release와 Actions artifact로 함께 올라갑니다.
-- Windows portable 배포 zip은 이제 `roosycozy.exe`만 담습니다. resident `llama-server`, 관련 DLL, 기본 HyperCLOVA/Roosy 모델은 **빌드 시 실행파일 안에 포함**되고, 첫 실행 시 `%APPDATA%/.../sidecar`와 `Public/Documents/.../models` 아래로 자동 풀립니다. 기본 Windows runtime 소스는 2026년 4월 11일 기준 공식 llama.cpp Windows x64 CPU asset입니다.
+- 사용자 배포 기준 자산은 `installer(.exe / .msi)`입니다.
+- 자동업데이트용 자산은 별도로 `roosycozy-x86_64-pc-windows-msvc.zip`을 유지합니다.
+- Windows updater ZIP은 `roosycozy.exe`만 담고, resident `llama-server`, 관련 DLL, 기본 HyperCLOVA/Roosy 모델은 **빌드 시 실행파일 안에 포함**됩니다. 설치 또는 첫 실행 시 `%APPDATA%/.../sidecar`와 `Public/Documents/.../models` 아래로 자동 풀립니다. 기본 Windows runtime 소스는 2026년 4월 11일 기준 공식 llama.cpp Windows x64 CPU asset입니다.
 
 ```text
 https://github.com/ggml-org/llama.cpp/releases/download/b8763/llama-b8763-bin-win-cpu-x64.zip
