@@ -19,12 +19,8 @@ use std::path::{Path, PathBuf};
 #[cfg(target_os = "windows")]
 use std::process::Command;
 #[cfg(target_os = "windows")]
-use std::time::Duration;
-#[cfg(target_os = "windows")]
 use tauri::Manager;
 use tauri::{command, AppHandle};
-#[cfg(target_os = "windows")]
-use base64::Engine;
 
 #[cfg(target_os = "windows")]
 const UPDATE_REPO_OWNER: &str = "myongsung";
@@ -109,30 +105,8 @@ fn download_release_zip(url: &str, target_zip: &Path) -> Result<(), String> {
 }
 
 #[cfg(target_os = "windows")]
-fn windows_public_documents_root() -> PathBuf {
-    std::env::var_os("PUBLIC")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(r"C:\Users\Public"))
-        .join("Documents")
-        .join("RoosyCozy")
-        .join("co.roosycozy.app")
-}
-
-#[cfg(target_os = "windows")]
-fn windows_updates_root() -> PathBuf {
-    windows_public_documents_root().join("updates")
-}
-
-#[cfg(target_os = "windows")]
-fn windows_temp_work_dir(prefix: &str) -> PathBuf {
-    windows_updates_root()
-        .join("temp")
-        .join(format!("{prefix}-{}", std::process::id()))
-}
-
-#[cfg(target_os = "windows")]
 fn windows_staging_dir() -> PathBuf {
-    windows_updates_root().join("staging")
+    windows_updates_root_dir().join("staging")
 }
 
 #[cfg(target_os = "windows")]
