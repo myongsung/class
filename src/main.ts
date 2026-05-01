@@ -4,6 +4,9 @@ import { initApp } from './main/app';
 
 type BootStatusKind = 'loading' | 'updating' | 'repairing' | 'ready' | 'error';
 
+const BOOT_SPLASH_MIN_VISIBLE_MS = 900;
+const BOOT_SPLASH_MAX_VISIBLE_MS = 2200;
+
 function setBootSplash(message: string, hint = '', kind: BootStatusKind = 'loading') {
   const splash = document.getElementById('boot-splash');
   const status = document.getElementById('boot-splash-status');
@@ -20,6 +23,20 @@ function hideBootSplash(delay = 180) {
   window.setTimeout(() => {
     splash.classList.add('is-hidden');
   }, delay);
+}
+
+let bootSplashReleased = false;
+
+function releaseBootSplash(
+  message = '준비가 끝났어요.',
+  hint = '지금부터 바로 기록과 AI 대화를 시작할 수 있어요.',
+  kind: BootStatusKind = 'ready',
+  delay = 180
+) {
+  if (bootSplashReleased) return;
+  bootSplashReleased = true;
+  setBootSplash(message, hint, kind);
+  hideBootSplash(delay);
 }
 
 function showUpdateToast(message: string, autoHide: boolean = false) {
@@ -58,43 +75,15 @@ function showUpdateToast(message: string, autoHide: boolean = false) {
 }
 
 async function checkAndUpdateApp() {
-  let splashReleased = false;
-  let timeoutHandle = 0;
-  const releaseSplashForBackgroundWork = (message: string, hint: string) => {
-    if (splashReleased) return;
-    splashReleased = true;
-    setBootSplash(message, hint, 'ready');
-    hideBootSplash(220);
-  };
-
   try {
-    setBootSplash(
-      '업데이트를 마무리하는 중이에요…',
-      '절대 화면을 중간에 닫지 마세요. 예상 소요 시간은 3분 내외입니다.',
-      'loading'
-    );
-    showUpdateToast('🔄 새 버전을 확인하고 있습니다...');
+    showUpdateToast('🔄 백그라운드에서 새 버전과 Windows 런타임을 확인하고 있어요.', true);
     const updatePromise = invoke<string>('check_and_update');
-    timeoutHandle = window.setTimeout(() => {
-      releaseSplashForBackgroundWork(
-        '기본 화면을 먼저 열어둘게요.',
-        '업데이트와 Windows 런타임 점검은 백그라운드에서 이어서 진행합니다.'
-      );
-      showUpdateToast('🕒 백그라운드에서 업데이트와 런타임을 계속 점검하고 있어요.', true);
-    }, 4500);
-
     const result = await updatePromise;
-    if (timeoutHandle) {
-      window.clearTimeout(timeoutHandle);
-    }
 
     if (result.includes('업데이트 완료')) {
-      setBootSplash(
-        '업데이트 파일 준비를 마쳤어요.',
-        '잠시 후 자동으로 앱이 다시 열리며 새 버전이 적용됩니다.',
-        'updating'
+      showUpdateToast(
+        '✅ 업데이트 파일 준비를 마쳤어요.\n잠시 후 앱이 자동으로 다시 열리며 새 버전이 적용됩니다.'
       );
-      showUpdateToast('✅ 업데이트를 받았어요. 잠시 후 새 버전으로 자동 전환됩니다.');
       window.setTimeout(() => {
         void invoke('exit_for_update').catch((error) => {
           console.error('업데이트 종료 에러:', error);
@@ -104,66 +93,44 @@ async function checkAndUpdateApp() {
     }
 
     if (result.includes('복구했어요')) {
-      if (!splashReleased) {
-        setBootSplash(
-          '업데이트 마무리를 마쳤어요.',
-          '이제 바로 채팅을 시작할 수 있어요.',
-          'repairing'
-        );
-      }
       showUpdateToast(`🛠️ ${result}`, false);
-      if (!splashReleased) {
-        hideBootSplash(520);
-      }
       return;
     }
 
-    showUpdateToast('✨ 현재 최신 버전입니다.', true);
-    if (!splashReleased) {
-      setBootSplash(
-        '준비가 끝났어요.',
-        '지금부터 바로 기록과 AI 대화를 시작할 수 있어요.',
-        'ready'
-      );
-      hideBootSplash(380);
-    }
+    showUpdateToast('✨ 현재 최신 버전이에요.', true);
   } catch (error) {
-    if (timeoutHandle) {
-      window.clearTimeout(timeoutHandle);
-    }
     console.error('업데이트 에러:', error);
     const errMsg = String(error ?? '');
 
     if (errMsg.includes('No asset found for target')) {
       const toast = document.getElementById('update-toast');
       if (toast) toast.style.opacity = '0';
-      if (!splashReleased) {
-        setBootSplash(
-          '준비가 끝났어요.',
-          '지금부터 바로 기록과 AI 대화를 시작할 수 있어요.',
-          'ready'
-        );
-        hideBootSplash(280);
-      }
       return;
     }
 
     showUpdateToast(`❌ 자동 업데이트 확인에 실패했어요.\n${errMsg}`, false);
-    if (!splashReleased) {
-      setBootSplash(
-        '업데이트 확인에 실패했어요.',
-        '인터넷 상태를 확인한 뒤 다시 열면 자동으로 한 번 더 점검합니다.',
-        'error'
-      );
-      hideBootSplash(1200);
-    }
   }
 }
 
 setBootSplash(
-  '업데이트를 준비하고 있어요…',
-  '절대 화면을 중간에 닫지 마세요. 예상 소요 시간은 3분 내외입니다.',
+  '앱을 준비하고 있어요…',
+  '화면은 곧 열리고, 업데이트와 Windows 런타임 점검은 백그라운드에서 이어집니다.',
   'loading'
 );
 initApp();
-void checkAndUpdateApp();
+window.setTimeout(() => {
+  releaseBootSplash();
+}, BOOT_SPLASH_MIN_VISIBLE_MS);
+
+window.setTimeout(() => {
+  releaseBootSplash(
+    '기본 화면을 먼저 열어둘게요.',
+    '업데이트와 Windows 런타임 점검은 백그라운드에서 이어서 진행합니다.',
+    'ready',
+    120
+  );
+}, BOOT_SPLASH_MAX_VISIBLE_MS);
+
+window.setTimeout(() => {
+  void checkAndUpdateApp();
+}, 240);
