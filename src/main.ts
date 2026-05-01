@@ -133,4 +133,4 @@ window.setTimeout(() => {
 
 window.setTimeout(() => {
   void checkAndUpdateApp();
-}, 240);
+}, BOOT_SPLASH_MAX_VISIBLE_MS + 1200);

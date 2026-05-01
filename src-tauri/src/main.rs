@@ -573,8 +573,7 @@ fn apply_portable_release_update(
     Ok(())
 }
 
-#[command]
-fn check_and_update(app: AppHandle) -> Result<String, String> {
+fn check_and_update_sync(app: AppHandle) -> Result<String, String> {
     #[cfg(not(target_os = "windows"))]
     {
         let _ = app;
@@ -624,6 +623,13 @@ fn check_and_update(app: AppHandle) -> Result<String, String> {
             Ok("프로그램 파일을 복구했어요. resident llama-server runtime을 다시 채워 넣었으니 지금 바로 AI 채팅을 다시 시도해보세요.".to_string())
         }
     }
+}
+
+#[command]
+async fn check_and_update(app: AppHandle) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || check_and_update_sync(app))
+        .await
+        .map_err(|e| format!("업데이트 작업 스레드가 중단되었어요: {e}"))?
 }
 
 #[command]
