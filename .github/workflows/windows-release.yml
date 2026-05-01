@@ -28,16 +28,13 @@ jobs:
       - name: install frontend dependencies
         run: npm install --legacy-peer-deps
 
-      - name: prepare placeholder models for Windows CI
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path src-tauri/resources/models | Out-Null
-          if (-not (Test-Path src-tauri/resources/models/HyperCLOVAX-SEED-Text-Instruct-0.5B-q4_0.gguf)) {
-            New-Item -ItemType File -Path src-tauri/resources/models/HyperCLOVAX-SEED-Text-Instruct-0.5B-q4_0.gguf | Out-Null
-          }
-          if (-not (Test-Path src-tauri/resources/models/hyperclovax_roosy_Q4_K_M.gguf)) {
-            New-Item -ItemType File -Path src-tauri/resources/models/hyperclovax_roosy_Q4_K_M.gguf | Out-Null
-          }
+      - name: ensure bundled models for embedded Windows build
+        env:
+          ROOSYCOZY_MODEL_URL: "${{ secrets.ROOSYCOZY_MODEL_URL || vars.ROOSYCOZY_MODEL_URL }}"
+          ROOSYCOZY_MODEL_SHA256: "${{ secrets.ROOSYCOZY_MODEL_SHA256 || vars.ROOSYCOZY_MODEL_SHA256 }}"
+          ROOSYCOZY_ROOSY_MODEL_URL: "${{ secrets.ROOSYCOZY_ROOSY_MODEL_URL || vars.ROOSYCOZY_ROOSY_MODEL_URL }}"
+          ROOSYCOZY_ROOSY_MODEL_SHA256: "${{ secrets.ROOSYCOZY_ROOSY_MODEL_SHA256 || vars.ROOSYCOZY_ROOSY_MODEL_SHA256 }}"
+        run: npm run ci:ensure-model
 
       - name: resolve version
         id: meta

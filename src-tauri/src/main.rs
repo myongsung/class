@@ -13,7 +13,7 @@ use std::fs;
 #[cfg(target_os = "windows")]
 use std::fs::File;
 #[cfg(target_os = "windows")]
-use std::io;
+use std::io::{self, Cursor};
 #[cfg(target_os = "windows")]
 use std::path::{Path, PathBuf};
 #[cfg(target_os = "windows")]
@@ -25,16 +25,25 @@ use tauri::{command, AppHandle};
 #[cfg(target_os = "windows")]
 const UPDATE_REPO_OWNER: &str = "myongsung";
 #[cfg(target_os = "windows")]
-const UPDATE_REPO_NAME: &str = "roosycozy";
+const UPDATE_REPO_NAME: &str = "class";
 #[cfg(target_os = "windows")]
 const UPDATE_ASSET_NAME: &str = "roosycozy-x86_64-pc-windows-msvc.zip";
 #[cfg(target_os = "windows")]
 const WINDOWS_BUNDLE_SUPPORT_DIR_NAME: &str = "RoosyCozy";
 #[cfg(target_os = "windows")]
 const WINDOWS_RUNTIME_URL: &str =
-    "https://github.com/myongsung/roosycozy/releases/latest/download/roosycozy-windows-runtime.zip";
+    "https://github.com/myongsung/class/releases/latest/download/roosycozy-windows-runtime.zip";
 #[cfg(target_os = "windows")]
 const WINDOWS_RUNTIME_MARKER_FILENAME: &str = ".runtime-ready";
+#[cfg(target_os = "windows")]
+const EMBEDDED_WINDOWS_RUNTIME_ZIP: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/embedded-windows-runtime.zip"));
+#[cfg(target_os = "windows")]
+const EMBEDDED_HYPERCLOVA_MODEL: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/embedded-hyper-model.gguf"));
+#[cfg(target_os = "windows")]
+const EMBEDDED_ROOSY_MODEL: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/embedded-roosy-model.gguf"));
 
 #[cfg(target_os = "windows")]
 #[derive(Debug, serde::Deserialize)]
@@ -147,6 +156,38 @@ fn extract_release_zip(zip_path: &Path, target_dir: &Path) -> Result<(), String>
 
         let mut out_file = File::create(&out_path).map_err(|e| format!("업데이트 파일을 만들지 못했어요: {}", e))?;
         io::copy(&mut entry, &mut out_file).map_err(|e| format!("업데이트 파일 저장에 실패했어요: {}", e))?;
+    }
+
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn extract_zip_archive_to_dir<R: io::Read + io::Seek>(
+    reader: R,
+    target_dir: &Path,
+) -> Result<(), String> {
+    fs::create_dir_all(target_dir).map_err(|e| format!("압축 해제 폴더를 만들지 못했어요: {}", e))?;
+    let mut archive =
+        zip::ZipArchive::new(reader).map_err(|e| format!("내장 runtime zip 형식이 올바르지 않아요: {}", e))?;
+
+    for index in 0..archive.len() {
+        let mut entry = archive
+            .by_index(index)
+            .map_err(|e| format!("내장 runtime zip 항목을 읽지 못했어요: {}", e))?;
+        let out_path = target_dir.join(entry.mangled_name());
+
+        if entry.is_dir() {
+            fs::create_dir_all(&out_path).map_err(|e| format!("runtime 폴더를 만들지 못했어요: {}", e))?;
+            continue;
+        }
+
+        if let Some(parent) = out_path.parent() {
+            fs::create_dir_all(parent).map_err(|e| format!("runtime 파일 폴더를 만들지 못했어요: {}", e))?;
+        }
+
+        let mut out_file =
+            File::create(&out_path).map_err(|e| format!("runtime 파일을 만들지 못했어요: {}", e))?;
+        io::copy(&mut entry, &mut out_file).map_err(|e| format!("runtime 파일 저장에 실패했어요: {}", e))?;
     }
 
     Ok(())
@@ -385,6 +426,94 @@ fn download_windows_runtime_to_appdata(sidecar_dir: &Path) -> Result<(), String>
 }
 
 #[cfg(target_os = "windows")]
+fn restore_embedded_windows_runtime_to_appdata(sidecar_dir: &Path) -> Result<bool, String> {
+    if EMBEDDED_WINDOWS_RUNTIME_ZIP.is_empty() {
+        return Ok(false);
+    }
+
+    let temp_root = windows_temp_work_dir("embedded-runtime");
+    if temp_root.exists() {
+        let _ = fs::remove_dir_all(&temp_root);
+    }
+    fs::create_dir_all(&temp_root).map_err(|e| format!("내장 runtime 임시 폴더를 만들지 못했어요: {}", e))?;
+    let extract_dir = temp_root.join("runtime");
+
+    let cursor = Cursor::new(EMBEDDED_WINDOWS_RUNTIME_ZIP);
+    extract_zip_archive_to_dir(cursor, &extract_dir)?;
+
+    let runtime_server = find_runtime_llama_server_candidate(&extract_dir)
+        .ok_or_else(|| "실행파일에 포함된 runtime 안에서 llama-server.exe를 찾지 못했어요.".to_string())?;
+    let runtime_dlls = collect_runtime_dlls(&extract_dir);
+
+    for required in windows_sidecar_required_files()
+        .iter()
+        .skip(1)
+        .chain(windows_msvc_runtime_files().iter())
+    {
+        if !runtime_dlls.iter().any(|path| path.file_name().and_then(|x| x.to_str()) == Some(required)) {
+            return Err(format!(
+                "실행파일에 포함된 runtime 안에 필요한 DLL이 빠져 있어요: {}",
+                required
+            ));
+        }
+    }
+
+    fs::create_dir_all(sidecar_dir).map_err(|e| format!("공용 AI 런타임 폴더를 만들지 못했어요: {}", e))?;
+    fs::copy(&runtime_server, sidecar_dir.join("llama-server.exe"))
+        .map_err(|e| format!("내장 llama-server를 공용 폴더로 복사하지 못했어요: {}", e))?;
+    for dll in runtime_dlls {
+        let Some(name) = dll.file_name() else {
+            continue;
+        };
+        let _ = fs::copy(&dll, sidecar_dir.join(name));
+    }
+    fs::write(
+        windows_runtime_marker_path(sidecar_dir),
+        "runtime-ready\nsource=embedded-executable\n",
+    )
+    .map_err(|e| format!("내장 AI 런타임 준비 표시를 저장하지 못했어요: {}", e))?;
+
+    let _ = fs::remove_dir_all(&temp_root);
+    Ok(true)
+}
+
+#[cfg(target_os = "windows")]
+fn restore_embedded_windows_models(resources_dir: &Path) -> Result<bool, String> {
+    let embedded_models = [
+        (
+            "HyperCLOVAX-SEED-Text-Instruct-0.5B-q4_0.gguf",
+            EMBEDDED_HYPERCLOVA_MODEL,
+        ),
+        ("hyperclovax_roosy_Q4_K_M.gguf", EMBEDDED_ROOSY_MODEL),
+    ];
+
+    fs::create_dir_all(resources_dir)
+        .map_err(|e| format!("공용 AI 모델 폴더를 만들지 못했어요: {}", e))?;
+
+    let mut restored = false;
+    for (name, bytes) in embedded_models {
+        if bytes.is_empty() {
+            continue;
+        }
+
+        let target = resources_dir.join(name);
+        let needs_write = match fs::metadata(&target) {
+            Ok(metadata) => metadata.len() == 0,
+            Err(_) => true,
+        };
+        if !needs_write {
+            continue;
+        }
+
+        fs::write(&target, bytes)
+            .map_err(|e| format!("내장 모델 {} 를 공용 폴더로 풀지 못했어요: {}", name, e))?;
+        restored = true;
+    }
+
+    Ok(restored)
+}
+
+#[cfg(target_os = "windows")]
 fn ensure_windows_runtime_cache(app: &AppHandle) -> Result<(), String> {
     let current_exe = std::env::current_exe()
         .map_err(|e| format!("현재 실행 파일 경로를 읽지 못했어요: {}", e))?;
@@ -413,7 +542,10 @@ fn ensure_windows_runtime_cache(app: &AppHandle) -> Result<(), String> {
     }
 
     if windows_install_needs_repair(app) {
-        download_windows_runtime_to_appdata(&sidecar_dir)?;
+        let restored_from_embedded = restore_embedded_windows_runtime_to_appdata(&sidecar_dir)?;
+        if !restored_from_embedded && windows_install_needs_repair(app) {
+            download_windows_runtime_to_appdata(&sidecar_dir)?;
+        }
     }
 
     let resource_candidates = [
@@ -428,6 +560,8 @@ fn ensure_windows_runtime_cache(app: &AppHandle) -> Result<(), String> {
             break;
         }
     }
+
+    let _ = restore_embedded_windows_models(&resources_dir)?;
 
     Ok(())
 }
