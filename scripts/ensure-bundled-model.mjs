@@ -9,6 +9,11 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, '..');
 const modelDir = resolve(repoRoot, 'src-tauri', 'resources', 'models');
 
+const DEFAULT_HYPERCLOVA_MODEL_URL =
+  'https://github.com/myongsung/roosycozy-models/releases/download/model_v1/HyperCLOVAX-SEED-Text-Instruct-0.5B-q4_0.gguf';
+const DEFAULT_ROOSY_MODEL_URL =
+  'https://github.com/myongsung/roosycozy-models2/releases/download/model/hyperclovax_roosy_Q4_K_M.gguf';
+
 const models = [
   {
     required: true,
@@ -16,13 +21,15 @@ const models = [
     envPath: 'ROOSYCOZY_MODEL_PATH',
     envUrl: 'ROOSYCOZY_MODEL_URL',
     envSha256: 'ROOSYCOZY_MODEL_SHA256',
+    defaultUrl: DEFAULT_HYPERCLOVA_MODEL_URL,
   },
   {
-    required: false,
+    required: true,
     name: 'hyperclovax_roosy_Q4_K_M.gguf',
     envPath: 'ROOSYCOZY_ROOSY_MODEL_PATH',
     envUrl: 'ROOSYCOZY_ROOSY_MODEL_URL',
     envSha256: 'ROOSYCOZY_ROOSY_MODEL_SHA256',
+    defaultUrl: DEFAULT_ROOSY_MODEL_URL,
   },
 ];
 
@@ -45,7 +52,7 @@ async function ensureHash(filePath, expectedSha256) {
 async function ensureOneModel(spec) {
   const modelPath = resolve(modelDir, spec.name);
   const sourcePath = process.env[spec.envPath] ? resolve(process.env[spec.envPath]) : '';
-  const sourceUrl = process.env[spec.envUrl]?.trim() || '';
+  const sourceUrl = process.env[spec.envUrl]?.trim() || spec.defaultUrl || '';
   const expectedSha256 = process.env[spec.envSha256]?.trim().toLowerCase() || '';
 
   if (existsSync(modelPath)) {
@@ -79,12 +86,11 @@ async function ensureOneModel(spec) {
         '번들 모델 파일이 없어요.',
         `기대 경로: ${modelPath}`,
         `로컬 빌드라면 src-tauri/resources/models 아래에 ${spec.name} 파일을 두거나,`,
-        `CI라면 ${spec.envPath} 또는 ${spec.envUrl} 환경변수를 설정해주세요.`
+        `CI라면 ${spec.envPath} 또는 ${spec.envUrl} 환경변수를 설정해주세요.`,
+        `환경변수가 없으면 기본 릴리즈 자산 URL을 사용합니다: ${spec.defaultUrl}`
       ].join('\n')
     );
   }
-
-  console.log(`선택형 모델 ${spec.name} 은(는) 아직 제공되지 않았어요. 기본 모델만 번들링합니다.`);
 }
 
 async function main() {
