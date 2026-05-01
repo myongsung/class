@@ -215,14 +215,17 @@ Start-Process -FilePath $target\n",
 
 #[cfg(target_os = "windows")]
 fn windows_sidecar_storage_dir(app: &AppHandle) -> Result<PathBuf, String> {
-    let _ = app;
-    Ok(windows_shared_root().join("sidecar"))
+    Ok(app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("AppData 폴더를 찾지 못했어요: {}", e))?
+        .join("sidecar"))
 }
 
 #[cfg(target_os = "windows")]
 fn windows_resources_storage_dir(app: &AppHandle) -> Result<PathBuf, String> {
     let _ = app;
-    Ok(windows_shared_root().join("resources"))
+    Ok(windows_shared_root().join("models"))
 }
 
 #[cfg(target_os = "windows")]
@@ -413,7 +416,7 @@ fn ensure_windows_runtime_cache(app: &AppHandle) -> Result<(), String> {
     let sidecar_dir = windows_sidecar_storage_dir(app)?;
     let resources_dir = windows_resources_storage_dir(app)?;
     fs::create_dir_all(&sidecar_dir).map_err(|e| format!("공용 AI 런타임 폴더를 만들지 못했어요: {}", e))?;
-    fs::create_dir_all(&resources_dir).map_err(|e| format!("공용 AI 리소스 폴더를 만들지 못했어요: {}", e))?;
+    fs::create_dir_all(&resources_dir).map_err(|e| format!("공용 AI 모델 폴더를 만들지 못했어요: {}", e))?;
 
     if windows_install_needs_repair(app) {
         let bootstrap_candidates = [
@@ -433,8 +436,10 @@ fn ensure_windows_runtime_cache(app: &AppHandle) -> Result<(), String> {
     }
 
     let resource_candidates = [
-        install_dir.join(WINDOWS_BUNDLE_SUPPORT_DIR_NAME).join("resources"),
-        install_dir.join("resources"),
+        install_dir.join(WINDOWS_BUNDLE_SUPPORT_DIR_NAME).join("resources").join("models"),
+        install_dir.join(WINDOWS_BUNDLE_SUPPORT_DIR_NAME).join("models"),
+        install_dir.join("resources").join("models"),
+        install_dir.join("models"),
     ];
     for source in resource_candidates {
         if source.exists() {
@@ -510,11 +515,19 @@ fn validate_extracted_release(extract_dir: &Path) -> Result<(PathBuf, Option<Pat
         None
     };
 
-    let extracted_resources = extracted_support_dir.join("resources");
-    let extracted_resources = if extracted_resources.exists() {
-        Some(extracted_resources)
-    } else {
-        None
+    let extracted_resources = {
+        let bundled_models = extracted_support_dir.join("resources").join("models");
+        let direct_models = extracted_support_dir.join("models");
+        let bundled_resources = extracted_support_dir.join("resources");
+        if bundled_models.exists() {
+            Some(bundled_models)
+        } else if direct_models.exists() {
+            Some(direct_models)
+        } else if bundled_resources.exists() {
+            Some(bundled_resources)
+        } else {
+            None
+        }
     };
 
     Ok((extracted_exe, extracted_sidecar, extracted_resources, Some(extracted_support_dir)))
@@ -541,7 +554,7 @@ fn apply_portable_release_update(
     let sidecar_dir = windows_sidecar_storage_dir(app)?;
     let resources_dir = windows_resources_storage_dir(app)?;
     fs::create_dir_all(&sidecar_dir).map_err(|e| format!("공용 AI 런타임 폴더를 만들지 못했어요: {}", e))?;
-    fs::create_dir_all(&resources_dir).map_err(|e| format!("공용 AI 리소스 폴더를 만들지 못했어요: {}", e))?;
+    fs::create_dir_all(&resources_dir).map_err(|e| format!("공용 AI 모델 폴더를 만들지 못했어요: {}", e))?;
 
     let (extracted_exe, extracted_sidecar, extracted_resources, _) = validate_extracted_release(&extract_dir)?;
 

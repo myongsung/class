@@ -107,5 +107,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: roosycozy-windows-x64-portable
-          path: src-tauri/target/release/portable/roosycozy-windows-x64/
+          path: |
+            src-tauri/target/release/portable/roosycozy-windows-x64/roosycozy.exe
+            src-tauri/target/release/portable/roosycozy-windows-x64/RoosyCozy/
           if-no-files-found: error

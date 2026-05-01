@@ -3516,8 +3516,7 @@ fn strategy_windows_shared_root() -> PathBuf {
 
 #[cfg(target_os = "windows")]
 fn strategy_sidecar_storage_dir(app: Option<&AppHandle>) -> Option<PathBuf> {
-  let _ = app;
-  Some(strategy_windows_shared_root().join("sidecar"))
+  app.and_then(|app| app.path().app_data_dir().ok()).map(|dir| dir.join("sidecar"))
 }
 
 #[cfg(not(target_os = "windows"))]
