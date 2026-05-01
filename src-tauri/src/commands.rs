@@ -1,6 +1,7 @@
 // src-tauri/src/commands.rs
 use crate::engine;
-use engine::{AdvisorItem, CaseItem, RankOpts, RankedHit, RecordItem, RiskPrediction, StrategyChatOptions, StrategyChatRunResult, StrategyChatTurn};
+use crate::drace::LlamaServerConfig;
+use engine::{AdvisorItem, CaseItem, RankOpts, RankedHit, RecordItem, StrategyBackendPrewarmResult, StrategyChatOptions, StrategyChatRunResult, StrategyChatTurn};
 
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -31,11 +32,6 @@ pub fn engine_advise(records: Vec<RecordItem>, case_item: CaseItem) -> Result<Ve
   Ok(engine::generate_advisors_for_case(&case_item, &records))
 }
 
-#[tauri::command]
-pub fn engine_classify_risk(records: Vec<RecordItem>) -> Result<Vec<RiskPrediction>, String> {
-  Ok(engine::classify_records_risk(&records))
-}
-
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StrategyChatArgs {
@@ -44,6 +40,8 @@ pub struct StrategyChatArgs {
   #[serde(default)]
   pub records: Vec<RecordItem>,
   pub message: String,
+  #[serde(default)]
+  pub mode: Option<String>,
   #[serde(default)]
   pub model: Option<String>,
   #[serde(default)]
@@ -56,6 +54,12 @@ pub struct StrategyChatArgs {
   pub n_ctx: Option<u32>,
   #[serde(default)]
   pub threads: Option<u32>,
+  #[serde(default)]
+  pub synthetic_cache_enabled: Option<bool>,
+  #[serde(default)]
+  pub backend_mode: Option<String>,
+  #[serde(default)]
+  pub llama_server: Option<LlamaServerConfig>,
 }
 
 #[tauri::command]
@@ -66,12 +70,16 @@ pub async fn strategy_agent_chat(app: AppHandle, args: StrategyChatArgs) -> Resu
       max_tokens: args.max_tokens,
       n_ctx: args.n_ctx,
       threads: args.threads,
+      synthetic_cache_enabled: args.synthetic_cache_enabled,
+      backend_mode: args.backend_mode,
+      llama_server: args.llama_server,
     };
     engine::run_strategy_chat(
       Some(&app),
       args.case_item.as_ref(),
       &args.records,
       &args.message,
+      args.mode.as_deref(),
       args.strategy_note.as_deref(),
       &args.conversation,
       Some(opts),
@@ -79,6 +87,33 @@ pub async fn strategy_agent_chat(app: AppHandle, args: StrategyChatArgs) -> Resu
   })
   .await
   .map_err(|e| format!("전략자문 작업 스레드가 중단되었어요: {e}"))?
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StrategyPrewarmArgs {
+  #[serde(default)]
+  pub backend_mode: Option<String>,
+  #[serde(default)]
+  pub llama_server: Option<LlamaServerConfig>,
+}
+
+#[tauri::command]
+pub async fn strategy_prewarm_backend(app: AppHandle, args: StrategyPrewarmArgs) -> Result<StrategyBackendPrewarmResult, String> {
+  tauri::async_runtime::spawn_blocking(move || {
+    let opts = StrategyChatOptions {
+      model: None,
+      max_tokens: None,
+      n_ctx: None,
+      threads: None,
+      synthetic_cache_enabled: Some(true),
+      backend_mode: args.backend_mode,
+      llama_server: args.llama_server,
+    };
+    Ok(engine::prewarm_strategy_backend(Some(&app), Some(opts)))
+  })
+  .await
+  .map_err(|e| format!("resident backend prewarm 작업 스레드가 중단되었어요: {e}"))?
 }
 
 

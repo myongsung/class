@@ -8,9 +8,19 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, '..');
 const runtimeDir = resolve(repoRoot, 'src-tauri', 'binaries', 'windows-x64');
 const archivePath = resolve(repoRoot, 'src-tauri', 'binaries', 'windows-x64-runtime.zip');
+const binariesDir = resolve(repoRoot, 'src-tauri', 'binaries');
+const canonicalSidecarPath = resolve(binariesDir, 'llama-sidecar-x86_64-pc-windows-msvc.exe');
+const canonicalServerPath = resolve(binariesDir, 'llama-server.exe');
 const runtimeUrl =
   process.env.ROOSYCOZY_WINDOWS_RUNTIME_URL?.trim() ||
   'https://github.com/ggml-org/llama.cpp/releases/download/b8763/llama-b8763-bin-win-cpu-x64.zip';
+
+const sidecarExecutableCandidates = [
+  'llama-sidecar-x86_64-pc-windows-msvc.exe',
+  'llama-sidecar.exe',
+  'llama-cli.exe'
+];
+const residentServerCandidates = ['llama-server.exe', 'llama-server'];
 
 const requiredDlls = [
   'llama.dll',
@@ -36,7 +46,25 @@ function walk(dir) {
 function hasRuntimeBundle() {
   if (!existsSync(runtimeDir)) return false;
   const files = walk(runtimeDir).map((filePath) => filePath.toLowerCase());
-  return requiredDlls.every((name) => files.some((filePath) => filePath.endsWith(`/${name}`) || filePath.endsWith(`\\${name}`)));
+  const hasSidecar = sidecarExecutableCandidates.some((name) =>
+    files.some((filePath) => filePath.endsWith(`/${name}`) || filePath.endsWith(`\\${name}`))
+  );
+  const hasServer = residentServerCandidates.some((name) =>
+    files.some((filePath) => filePath.endsWith(`/${name}`) || filePath.endsWith(`\\${name}`))
+  );
+  return hasSidecar && hasServer && requiredDlls.every((name) => files.some((filePath) => filePath.endsWith(`/${name}`) || filePath.endsWith(`\\${name}`)));
+}
+
+function resolveCandidateFile(rootDir, candidates) {
+  const files = walk(rootDir);
+  for (const candidate of candidates) {
+    const found = files.find((filePath) => {
+      const lower = filePath.toLowerCase();
+      return lower.endsWith(`/${candidate.toLowerCase()}`) || lower.endsWith(`\\${candidate.toLowerCase()}`);
+    });
+    if (found) return found;
+  }
+  return null;
 }
 
 function copyWindowsSystemDlls() {
@@ -49,6 +77,22 @@ function copyWindowsSystemDlls() {
       copyFileSync(source, resolve(runtimeDir, name));
     }
   }
+}
+
+function canonicalizeRuntimeExecutables() {
+  mkdirSync(binariesDir, { recursive: true });
+
+  const sidecarSource = resolveCandidateFile(runtimeDir, sidecarExecutableCandidates);
+  if (!sidecarSource) {
+    throw new Error(`Windows runtime에서 sidecar 실행 파일을 찾지 못했어요: ${sidecarExecutableCandidates.join(', ')}`);
+  }
+  copyFileSync(sidecarSource, canonicalSidecarPath);
+
+  const serverSource = resolveCandidateFile(runtimeDir, residentServerCandidates);
+  if (!serverSource) {
+    throw new Error(`Windows runtime에서 llama-server 실행 파일을 찾지 못했어요: ${residentServerCandidates.join(', ')}`);
+  }
+  copyFileSync(serverSource, canonicalServerPath);
 }
 
 function runOrThrow(command, args) {
@@ -92,18 +136,22 @@ async function main() {
   await downloadArchive();
   extractArchive();
   copyWindowsSystemDlls();
+  canonicalizeRuntimeExecutables();
 
   if (!hasRuntimeBundle()) {
     throw new Error(
       [
         'Windows runtime zip 압축을 풀었지만 필요한 DLL 구성이 보이지 않아요.',
         `확인 폴더: ${runtimeDir}`,
-        `필수 DLL: ${requiredDlls.join(', ')}`
+        `필수 DLL: ${requiredDlls.join(', ')}`,
+        `필수 실행 파일: ${sidecarExecutableCandidates.join(' | ')} + ${residentServerCandidates.join(' | ')}`
       ].join('\n')
     );
   }
 
   console.log(`Windows runtime을 준비했어요: ${runtimeDir}`);
+  console.log(`Canonical sidecar: ${canonicalSidecarPath}`);
+  console.log(`Canonical llama-server: ${canonicalServerPath}`);
 }
 
 main().catch((error) => {

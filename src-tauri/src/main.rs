@@ -1,8 +1,14 @@
+#![recursion_limit = "512"]
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod engine;
 mod commands;
+mod drace;
 
+#[cfg(target_os = "windows")]
+use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
+#[cfg(target_os = "windows")]
+use base64::Engine;
 use std::fs;
 #[cfg(target_os = "windows")]
 use std::fs::File;
@@ -103,6 +109,48 @@ fn download_release_zip(url: &str, target_zip: &Path) -> Result<(), String> {
 }
 
 #[cfg(target_os = "windows")]
+fn windows_public_documents_root() -> PathBuf {
+    std::env::var_os("PUBLIC")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(r"C:\Users\Public"))
+        .join("Documents")
+        .join("RoosyCozy")
+        .join("co.roosycozy.app")
+}
+
+#[cfg(target_os = "windows")]
+fn windows_updates_root() -> PathBuf {
+    windows_public_documents_root().join("updates")
+}
+
+#[cfg(target_os = "windows")]
+fn windows_temp_work_dir(prefix: &str) -> PathBuf {
+    windows_updates_root()
+        .join("temp")
+        .join(format!("{prefix}-{}", std::process::id()))
+}
+
+#[cfg(target_os = "windows")]
+fn windows_staging_dir() -> PathBuf {
+    windows_updates_root().join("staging")
+}
+
+#[cfg(target_os = "windows")]
+fn windows_ps_escape(value: &Path) -> String {
+    value.to_string_lossy().replace('\'', "''")
+}
+
+#[cfg(target_os = "windows")]
+fn windows_ps_encoded(script: &str) -> String {
+    let utf16: Vec<u16> = script.encode_utf16().collect();
+    let mut bytes = Vec::with_capacity(utf16.len() * 2);
+    for unit in utf16 {
+        bytes.extend_from_slice(&unit.to_le_bytes());
+    }
+    BASE64_STANDARD.encode(bytes)
+}
+
+#[cfg(target_os = "windows")]
 fn extract_release_zip(zip_path: &Path, target_dir: &Path) -> Result<(), String> {
     fs::create_dir_all(target_dir).map_err(|e| format!("업데이트 압축 해제 폴더를 만들지 못했어요: {}", e))?;
     let file = File::open(zip_path).map_err(|e| format!("업데이트 zip을 열지 못했어요: {}", e))?;
@@ -154,45 +202,37 @@ fn copy_dir_recursive(source: &Path, target: &Path) -> Result<(), String> {
 
 #[cfg(target_os = "windows")]
 fn schedule_windows_exe_swap(current_exe: &Path, staged_exe: &Path) -> Result<(), String> {
-    let target = current_exe
-        .to_str()
-        .ok_or_else(|| "현재 실행 파일 경로를 읽지 못했어요.".to_string())?;
-    let staged = staged_exe
-        .to_str()
-        .ok_or_else(|| "새 실행 파일 경로를 읽지 못했어요.".to_string())?;
+    let staging_dir = windows_staging_dir();
+    fs::create_dir_all(&staging_dir)
+        .map_err(|e| format!("업데이트 staging 폴더를 만들지 못했어요: {}", e))?;
+
+    let old_exe = current_exe.with_extension("exe.old");
     let pid = std::process::id();
-    let escape_ps = |value: &str| value.replace('\'', "''");
-    let command = format!(
-        "$ErrorActionPreference = 'SilentlyContinue'; \
-$target = '{target}'; \
-$staged = '{staged}'; \
-$pidToWait = {pid}; \
-while (Get-Process -Id $pidToWait -ErrorAction SilentlyContinue) {{ Start-Sleep -Milliseconds 800 }}; \
-$backup = \"$target.old\"; \
-if (Test-Path -LiteralPath $backup) {{ Remove-Item -LiteralPath $backup -Force }}; \
-if (Test-Path -LiteralPath $target) {{ Move-Item -LiteralPath $target -Destination $backup -Force }}; \
-if (Test-Path -LiteralPath $staged) {{ Move-Item -LiteralPath $staged -Destination $target -Force }}; \
-if (Test-Path -LiteralPath $target) {{ Start-Process -FilePath $target }}",
-        target = escape_ps(target),
-        staged = escape_ps(staged),
+    let script = format!(
+        "$target = '{target}'\n\
+$staged = '{staged}'\n\
+$old = '{old}'\n\
+while (Get-Process -Id {pid} -ErrorAction SilentlyContinue) {{ Start-Sleep -Milliseconds 500 }}\n\
+if (Test-Path $old) {{ Remove-Item -LiteralPath $old -Force -ErrorAction SilentlyContinue }}\n\
+if (Test-Path $target) {{ Move-Item -LiteralPath $target -Destination $old -Force }}\n\
+Move-Item -LiteralPath $staged -Destination $target -Force\n\
+Start-Process -FilePath $target\n",
+        target = windows_ps_escape(current_exe),
+        staged = windows_ps_escape(staged_exe),
+        old = windows_ps_escape(&old_exe),
         pid = pid
     );
-    let encoded = base64::engine::general_purpose::STANDARD.encode(
-        command
-            .encode_utf16()
-            .flat_map(|unit| unit.to_le_bytes())
-            .collect::<Vec<u8>>(),
-    );
+    let encoded = windows_ps_encoded(&script);
     Command::new("powershell")
         .args([
             "-NoProfile",
             "-NonInteractive",
-            "-WindowStyle",
-            "Hidden",
             "-ExecutionPolicy",
             "Bypass",
+            "-WindowStyle",
+            "Hidden",
             "-EncodedCommand",
-            encoded.as_str(),
+            &encoded,
         ])
         .spawn()
         .map_err(|e| format!("업데이트 적용 스크립트를 실행하지 못했어요: {}", e))?;
@@ -242,6 +282,11 @@ fn windows_sidecar_required_files() -> [&'static str; 3] {
 }
 
 #[cfg(target_os = "windows")]
+fn windows_resident_server_required_files() -> [&'static str; 1] {
+    ["llama-server.exe"]
+}
+
+#[cfg(target_os = "windows")]
 fn windows_msvc_runtime_files() -> [&'static str; 4] {
     [
         "msvcp140.dll",
@@ -268,6 +313,7 @@ fn windows_install_needs_repair(app: &AppHandle) -> bool {
 
     windows_sidecar_required_files()
         .iter()
+        .chain(windows_resident_server_required_files().iter())
         .chain(windows_msvc_runtime_files().iter())
         .any(|name| !sidecar_dir.join(name).exists())
         || !windows_runtime_marker_path(&sidecar_dir).exists()
@@ -280,6 +326,18 @@ fn find_runtime_sidecar_candidate(root: &Path) -> Option<PathBuf> {
         "llama-sidecar.exe",
         "llama-cli.exe",
     ] {
+        if let Some(path) = find_path_recursively(root, &|path| {
+            path.is_file() && path.file_name().and_then(|x| x.to_str()) == Some(candidate)
+        }) {
+            return Some(path);
+        }
+    }
+    None
+}
+
+#[cfg(target_os = "windows")]
+fn find_runtime_llama_server_candidate(root: &Path) -> Option<PathBuf> {
+    for candidate in ["llama-server.exe", "llama-server"] {
         if let Some(path) = find_path_recursively(root, &|path| {
             path.is_file() && path.file_name().and_then(|x| x.to_str()) == Some(candidate)
         }) {
@@ -330,6 +388,8 @@ fn download_windows_runtime_to_appdata(sidecar_dir: &Path) -> Result<(), String>
 
     let runtime_exe = find_runtime_sidecar_candidate(&extract_dir)
         .ok_or_else(|| "다운로드한 AI 런타임 안에서 실행 파일을 찾지 못했어요.".to_string())?;
+    let runtime_server = find_runtime_llama_server_candidate(&extract_dir)
+        .ok_or_else(|| "다운로드한 AI 런타임 안에서 llama-server.exe를 찾지 못했어요.".to_string())?;
     let runtime_dlls = collect_runtime_dlls(&extract_dir);
 
     for required in windows_sidecar_required_files()
@@ -348,6 +408,9 @@ fn download_windows_runtime_to_appdata(sidecar_dir: &Path) -> Result<(), String>
     fs::create_dir_all(sidecar_dir).map_err(|e| format!("공용 AI 런타임 폴더를 만들지 못했어요: {}", e))?;
     let target_exe = sidecar_dir.join("llama-sidecar-x86_64-pc-windows-msvc.exe");
     fs::copy(&runtime_exe, &target_exe).map_err(|e| format!("AI 실행 파일을 공용 폴더로 복사하지 못했어요: {}", e))?;
+    let target_server = sidecar_dir.join("llama-server.exe");
+    fs::copy(&runtime_server, &target_server)
+        .map_err(|e| format!("resident llama-server를 공용 폴더로 복사하지 못했어요: {}", e))?;
     for dll in runtime_dlls {
         let Some(name) = dll.file_name() else {
             continue;
@@ -460,6 +523,14 @@ fn validate_extracted_release(extract_dir: &Path) -> Result<(PathBuf, Option<Pat
                 ));
             }
         }
+        for required in windows_resident_server_required_files() {
+            if !extracted_sidecar.join(required).exists() {
+                return Err(format!(
+                    "업데이트 압축 파일 안에 resident 서버 파일이 빠져 있어요: {}",
+                    required
+                ));
+            }
+        }
         Some(extracted_sidecar)
     } else {
         None
@@ -482,7 +553,7 @@ fn apply_portable_release_update(
     current_exe: &Path,
     replace_exe: bool,
 ) -> Result<(), String> {
-    let temp_root = windows_temp_work_dir("release");
+    let temp_root = windows_temp_work_dir("update");
     if temp_root.exists() {
         let _ = fs::remove_dir_all(&temp_root);
     }
@@ -509,8 +580,9 @@ fn apply_portable_release_update(
     }
 
     if replace_exe {
-        let staging_dir = windows_updates_root_dir().join("staging");
-        fs::create_dir_all(&staging_dir).map_err(|e| format!("업데이트 staging 폴더를 만들지 못했어요: {}", e))?;
+        let staging_dir = windows_staging_dir();
+        fs::create_dir_all(&staging_dir)
+            .map_err(|e| format!("업데이트 staging 폴더를 만들지 못했어요: {}", e))?;
         let staged_exe = staging_dir.join("roosycozy.exe.new");
         if staged_exe.exists() {
             let _ = fs::remove_file(&staged_exe);
@@ -538,7 +610,6 @@ fn check_and_update(app: AppHandle) -> Result<String, String> {
         let app_version = app.package_info().version.to_string();
         let current_exe = std::env::current_exe()
             .map_err(|e| format!("현재 실행 파일 경로를 읽지 못했어요: {}", e))?;
-        let needs_repair = windows_install_needs_repair(&app);
 
         let latest = latest_github_release()?;
         let latest_version = normalize_release_version(&latest.tag_name);
@@ -548,33 +619,40 @@ fn check_and_update(app: AppHandle) -> Result<String, String> {
             .find(|item| item.name == UPDATE_ASSET_NAME)
             .ok_or_else(|| format!("릴리즈 자산에서 {} 파일을 찾지 못했어요.", UPDATE_ASSET_NAME))?;
 
-        if parse_version_triplet(&app_version) >= parse_version_triplet(&latest_version) && !needs_repair {
-            Ok("최신 버전입니다.".to_string())
-        } else {
-            let replace_exe = parse_version_triplet(&app_version) < parse_version_triplet(&latest_version);
+        if parse_version_triplet(&app_version) < parse_version_triplet(&latest_version) {
             apply_portable_release_update(
                 &app,
                 &asset.browser_download_url,
                 &current_exe,
-                replace_exe,
+                true,
             )?;
+            return Ok(format!(
+                "업데이트 완료: 버전 {}. 잠시 후 자동으로 새 버전이 다시 열립니다.",
+                latest_version
+            ));
+        }
 
-            if replace_exe {
-                let app_handle = app.clone();
-                std::thread::spawn(move || {
-                    std::thread::sleep(Duration::from_millis(900));
-                    app_handle.exit(0);
-                });
-                Ok(format!(
-                    "업데이트 완료: 버전 {}. 앱을 자동으로 다시 시작하고 있어요.",
-                    latest_version
-                ))
-            } else {
-                ensure_windows_runtime_cache(&app)?;
-                Ok("프로그램 파일을 복구했어요. sidecar를 다시 채워 넣었으니 지금 바로 AI 채팅을 다시 시도해보세요.".to_string())
-            }
+        ensure_windows_runtime_cache(&app)?;
+        let needs_repair = windows_install_needs_repair(&app);
+
+        if !needs_repair {
+            Ok("최신 버전입니다.".to_string())
+        } else {
+            apply_portable_release_update(
+                &app,
+                &asset.browser_download_url,
+                &current_exe,
+                false,
+            )?;
+            ensure_windows_runtime_cache(&app)?;
+            Ok("프로그램 파일을 복구했어요. sidecar를 다시 채워 넣었으니 지금 바로 AI 채팅을 다시 시도해보세요.".to_string())
         }
     }
+}
+
+#[command]
+fn exit_for_update(app: AppHandle) {
+    app.exit(0);
 }
 
 fn cleanup_old_versions() {
@@ -601,8 +679,8 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             commands::engine_rank,
             commands::engine_advise,
-            commands::engine_classify_risk,
             commands::strategy_agent_chat,
+            commands::strategy_prewarm_backend,
             commands::strategy_model_status,
       commands::start_strategy_model_download,
       commands::download_strategy_models,
@@ -612,7 +690,8 @@ fn main() {
             commands::export_case_pdf,
             commands::export_backup_json,
             commands::import_backup_json,
-            check_and_update
+            check_and_update,
+            exit_for_update
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

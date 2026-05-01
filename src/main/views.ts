@@ -97,59 +97,21 @@ const renderRelationshipMemberPicker = (
   return `<select data-action="${esc(action)}" data-field="${esc(field)}">${renderSelectWithPlaceholder(members, selected, placeholder)}</select>`;
 };
 
-
-
-function riskToneClass(label: number) {
-  return label === 2 ? 'riskDanger' : label === 1 ? 'riskWarn' : 'riskNormal';
-}
-
-function riskInlineTagStyle(label: number) {
-  return label === 2
-    ? 'background:rgba(244,214,214,0.72);color:#8f5f5f;border-color:rgba(217,164,164,0.70);'
-    : label === 1
-      ? 'background:rgba(246,228,206,0.78);color:#8b6b47;border-color:rgba(223,191,152,0.72);'
-      : 'background:rgba(219,236,224,0.82);color:#557863;border-color:rgba(173,206,182,0.80);';
-}
-
-function riskInlineCardStyle(label: number) {
-  const color = label === 2 ? '#e4c1c1' : label === 1 ? '#e8ccb0' : '#bfd8c5';
-  return `border-color:${color};--risk-accent:${color};`;
-}
-
-function normalizeRisk(risk: any) {
-  if (!risk || typeof risk !== 'object') return null;
-  const label = Number(risk.label) === 2 ? 2 : Number(risk.label) === 1 ? 1 : 0;
-  const labelText = label === 2 ? '높음' : label === 1 ? '주의' : '안정';
-  const probs = Array.isArray(risk.probs) ? risk.probs : [0, 0, 0];
-  const confidence = Number.isFinite(+risk.confidence) ? Math.max(0, Math.min(1, +risk.confidence)) : Math.max(...probs.map((x: any) => Number(x) || 0));
-  const reasons = Array.isArray(risk.reasons) ? risk.reasons.map((x: any) => String(x || '').trim()).filter(Boolean).slice(0, 4) : [];
-  return { label, labelText, confidence, reasons };
-}
-
-function renderRiskTag(risk: any) {
-  const rr = normalizeRisk(risk);
-  if (!rr) return '';
-  return `<span class="tag ${riskToneClass(rr.label)}" style="${riskInlineTagStyle(rr.label)}">리스크 ${esc(rr.labelText)}</span>`;
-}
-
-function renderRiskSummary(risk: any) {
-  const rr = normalizeRisk(risk);
-  if (!rr) return `<div class="muted">아직 리스크 신호가 계산되지 않았어요.</div>`;
-  const confidencePct = Math.round(rr.confidence * 100);
-  const reasonTags = rr.reasons.length
-    ? `<div class="tags mini" style="margin-top:8px">${rr.reasons.map((x: any) => `<span class="tag aiReason">${esc(String(x))}</span>`).join('')}</div>`
-    : '';
-  return `
-    <div class="riskBlock">
-      <div class="riskHead">
-        <span class="tag ${riskToneClass(rr.label)}" style="${riskInlineTagStyle(rr.label)}">리스크 ${esc(rr.labelText)}</span>
-        <span class="muted">신뢰도 ${esc(String(confidencePct))}%</span>
-      </div>
-      ${reasonTags}
-    </div>
-  `;
-}
-
+const getSignatureDraftActors = (draft: any): ActorRef[] => {
+  const current = Array.isArray(draft?.actors) ? draft.actors : [];
+  return current
+    .map((actor: any) => ({
+      type: ((actor?.type || '기타') as ActorRef['type']),
+      name: String(actor?.name || '').trim(),
+      ...(String(actor?.groupId || '').trim() ? { groupId: String(actor.groupId).trim() } : {}),
+      ...(String(actor?.groupLabel || '').trim() ? { groupLabel: String(actor.groupLabel).trim() } : {}),
+    }))
+    .filter((actor: ActorRef) => actor.name)
+    .reduce((acc: ActorRef[], actor: ActorRef) => {
+      if (!acc.some((item) => actorEqLite(item, actor))) acc.push(actor);
+      return acc;
+    }, []);
+};
 
 const dl = (id: string, values: string[]) =>
   `<datalist id="${id}">${values.map((v) => `<option value="${esc(v)}"></option>`).join('')}</datalist>`;
@@ -196,6 +158,51 @@ function strategyTextHtml(text: string) {
   return esc(cleanStrategyDisplayText(text)).replace(/\n/g, "<br/>");
 }
 
+const STRATEGY_COMPOSER_MENTION_TOKEN_RE = /@[0-9A-Za-z가-힣._-]{1,24}\([^()\n]{1,40}\)/gu;
+
+function collectStrategyComposerHighlightRanges(text: string) {
+  const ranges: Array<{ start: number; end: number }> = [];
+  for (const match of String(text || '').matchAll(STRATEGY_COMPOSER_MENTION_TOKEN_RE)) {
+    const start = Number(match.index ?? -1);
+    const token = String(match[0] || '');
+    if (start >= 0 && token) ranges.push({ start, end: start + token.length });
+  }
+  const source = String(text || '');
+  let cursor = 0;
+  while (cursor < source.length) {
+    const start = source.indexOf('#', cursor);
+    if (start < 0) break;
+    const close = source.indexOf('#', start + 1);
+    const end = close >= 0 ? close + 1 : source.length;
+    if (end > start) ranges.push({ start, end });
+    cursor = end;
+  }
+  ranges.sort((a, b) => a.start - b.start || a.end - b.end);
+  const merged: Array<{ start: number; end: number }> = [];
+  for (const range of ranges) {
+    const last = merged[merged.length - 1];
+    if (!last || range.start > last.end) merged.push({ ...range });
+    else last.end = Math.max(last.end, range.end);
+  }
+  return merged;
+}
+
+function renderStrategyComposerDecoratedHtml(text: string) {
+  const source = String(text || '');
+  if (!source) return '';
+  const ranges = collectStrategyComposerHighlightRanges(source);
+  if (!ranges.length) return esc(source);
+  let html = '';
+  let cursor = 0;
+  for (const range of ranges) {
+    if (range.start > cursor) html += esc(source.slice(cursor, range.start));
+    html += `<span class="strategyComposerMarkedText">${esc(source.slice(range.start, range.end))}</span>`;
+    cursor = range.end;
+  }
+  if (cursor < source.length) html += esc(source.slice(cursor));
+  return html;
+}
+
 function windowPlatform() {
   if (typeof navigator === 'undefined') return 'other';
   const ua = String(navigator.userAgent || '');
@@ -232,7 +239,7 @@ function formatSidebarThreadAge(iso: string) {
 
 
 function renderAppSidebar(currentTab: string) {
-  const isHome = currentTab === 'home';
+  const isHome = currentTab === 'home' || (currentTab === 'legal' && getLegalHubTab() === 'simulation');
   const strategyPackages = Array.isArray((S as any).strategyThreadPackages)
     ? [ ...((S as any).strategyThreadPackages as any[]) ].sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')))
     : [];
@@ -307,29 +314,25 @@ function renderAppSidebar(currentTab: string) {
     `;
   return `
     <aside class="serviceSidebar" aria-label="작업 메뉴">
-      <button class="serviceLogo ${isHome ? 'active' : ''}" data-action="tab" data-tab="home" data-route-tab="home" type="button" aria-label="홈으로 이동">
-        <span class="serviceLogoGlyph" aria-hidden="true">R</span>
-      </button>
-
       <div class="serviceSidebarNav">
-        <button class="sidebarIconBtn ${isHome ? 'active' : ''}" data-action="tab" data-tab="home" data-route-tab="home" type="button" aria-label="홈">
+        <button class="sidebarIconBtn ${isHome ? 'active' : ''}" data-action="tab" data-tab="home" data-route-tab="home" type="button" aria-label="AI 법무팀 에이전트">
           <span class="sidebarIcon" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M4.75 10.5L12 4.75L19.25 10.5V18C19.25 18.9665 18.4665 19.75 17.5 19.75H6.5C5.5335 19.75 4.75 18.9665 4.75 18V10.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
               <path d="M9.25 19.75V13.75H14.75V19.75" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
             </svg>
           </span>
-          <span class="sidebarLabel">홈</span>
+          <span class="sidebarLabel">AI 법무팀</span>
         </button>
 
-        <button class="sidebarIconBtn accent" data-action="open-record-composer" type="button" aria-label="빠른 캡처 열기">
+        <button class="sidebarIconBtn ${(currentTab === 'cases' || currentTab === 'records') ? 'active' : ''}" data-action="tab" data-tab="cases" data-route-tab="cases" type="button" aria-label="데이터 관리">
           <span class="sidebarIcon" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M12 5V19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              <path d="M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <path d="M3.75 8C3.75 6.75736 4.75736 5.75 6 5.75H9.2C9.8066 5.75 10.3884 5.99553 10.8125 6.43089L11.6875 7.31911C12.1116 7.75447 12.6934 8 13.3 8H18C19.2426 8 20.25 9.00736 20.25 10.25V17C20.25 18.2426 19.2426 19.25 18 19.25H6C4.75736 19.25 3.75 18.2426 3.75 17V8Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+              <path d="M3.75 10H20.25" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
             </svg>
           </span>
-          <span class="sidebarLabel">빠른 캡처</span>
+          <span class="sidebarLabel">데이터 관리</span>
         </button>
 
         <button class="sidebarIconBtn ${ui.classRosterOpen ? 'active' : ''}" data-action="open-class-roster" type="button" aria-label="관계 관리 열기" title="관계 관리">
@@ -458,117 +461,92 @@ function renderHomeMain() {
   const collectionIds = visibleCases();
   const collections = collectionIds.map((id) => S.cases[id]).filter(Boolean);
   const collectionRecordCounts = new Map(collections.map((item) => [String(item.id || ''), recordsForCase(S.records, item).length]));
-  const recentRecords = allRecords.slice(0, 4);
-  const recentCollections = collections.slice(0, 4);
-  const riskyRecords = allRecords
-    .filter((record) => (normalizeRisk((record as any).risk)?.label || 0) > 0)
-    .slice(0, 4);
+  const recentRecords = allRecords.slice(0, 3);
+  const recentCollections = collections.slice(0, 2);
   const selectedCollection = getSelectedCase();
   const selectedCollectionRecords = selectedCollection ? recordsForCase(S.records, selectedCollection) : [];
   const selectedCollectionRecordCount = selectedCollectionRecords.length;
   const selectedCollectionLatestTs = selectedCollectionRecords
     .slice()
     .sort((a, b) => String(b.ts || '').localeCompare(String(a.ts || '')))[0]?.ts || '';
-  const sharedReadyCount = collections.filter((item) => (collectionRecordCounts.get(String(item.id || '')) || 0) > 0).length;
-  const strategyResult = ((ui as any).simulationResult || null) as any;
   const strategyMessages = Array.isArray((ui as any).strategyChatMessages) ? ((ui as any).strategyChatMessages as any[]) : [];
+
   const progressState = (() => {
     if (!allRecords.length) {
       return {
         label: '시작 전',
-        title: '첫 기록을 남기면 워크스페이스가 바로 살아나요',
-        desc: '대화, 파일, 사진, 메모 중 하나만 빠르게 캡처해도 홈에서 흐름을 자동으로 정리해드려요.',
+        title: '첫 기록 하나면 바로 시작할 수 있어요',
+        desc: '대화, 사진, 메모 중 하나만 남겨도 홈이 다음 흐름을 자동으로 잡아드려요.',
         tone: 'is-idle',
       };
     }
     if (!collections.length) {
       return {
         label: '정리 단계',
-        title: '관련 기록을 묶어 첫 컬렉션을 만들 시점이에요',
-        desc: '비슷한 기록 3~5개만 모아도 타임라인과 AI 민원 법무팀 에이전트의 맥락이 훨씬 또렷해집니다.',
+        title: '관련 기록을 묶어 첫 컬렉션을 만들 차례예요',
+        desc: '비슷한 기록 몇 개만 묶어도 흐름과 맥락이 훨씬 또렷해집니다.',
         tone: 'is-active',
       };
     }
     if (!selectedCollection) {
       return {
         label: '포커스 필요',
-        title: '최근 컬렉션 하나를 열어 흐름을 잡아보세요',
-        desc: '선택된 컬렉션이 있으면 홈과 AI 민원 법무팀 에이전트가 지금 무엇을 먼저 해야 하는지 더 선명하게 보여줍니다.',
+        title: '컬렉션 하나를 열어 지금 볼 흐름을 고르세요',
+        desc: '선택된 컬렉션이 있으면 홈과 AI 민원 법무팀 에이전트가 그 흐름을 기준으로 정리됩니다.',
         tone: 'is-calm',
       };
     }
-    if (!strategyMessages.length && !strategyResult) {
+    if (!strategyMessages.length) {
       return {
         label: '분석 준비',
-        title: '현재 컬렉션은 AI 민원 법무팀 에이전트를 시작할 준비가 되어 있어요',
-        desc: '질문 한 줄만 보내도 답변 초안과 다음 행동 순서를 정리해주는 흐름으로 넘어갈 수 있습니다.',
+        title: '지금 컬렉션은 바로 분석을 시작할 수 있어요',
+        desc: '질문 한 줄만 보내도 답변 초안과 다음 행동 순서를 정리해드릴 수 있어요.',
         tone: 'is-accent',
-      };
-    }
-    if (!sharedReadyCount) {
-      return {
-        label: '문서화 단계',
-        title: '이제 공유 또는 제출용 문서 초안을 만들어둘 차례예요',
-        desc: '컬렉션 흐름이 어느 정도 쌓였으니 PDF로 정리해두면 전달과 보관이 훨씬 수월해집니다.',
-        tone: 'is-calm',
       };
     }
     return {
       label: '안정화',
-      title: '기록, 분석, 문서화 흐름이 안정적으로 이어지고 있어요',
-      desc: '최근 캡처와 리스크 신호만 꾸준히 확인하면 전체 맥락을 차분하게 유지할 수 있습니다.',
+      title: '기록과 분석 흐름이 안정적으로 이어지고 있어요',
+      desc: '최근 흐름과 우선 확인 항목만 체크하면 전체 맥락을 차분하게 유지할 수 있습니다.',
       tone: 'is-ready',
     };
   })();
 
-  const todoItems = [
+  const nextActions = [
     !allRecords.length ? '빠른 캡처로 첫 기록을 남겨보세요.' : '',
     allRecords.length > 0 && !collections.length ? '관련 기록 몇 개를 묶어 첫 컬렉션을 만들어보세요.' : '',
-    collections.length > 0 && !selectedCollection ? '최근 컬렉션 하나를 열어 흐름과 타임라인을 점검해보세요.' : '',
+    collections.length > 0 && !selectedCollection ? '최근 컬렉션 하나를 열어 흐름을 고르세요.' : '',
     selectedCollection && selectedCollectionRecordCount < 2 ? '현재 컬렉션에 기록을 더 연결해 맥락을 보강해보세요.' : '',
-    selectedCollection && !strategyMessages.length ? 'AI 민원 법무팀 에이전트 탭에서 질문 한 줄을 보내 답장 초안과 다음 행동을 받아보세요.' : '',
-    sharedReadyCount > 0 ? '공유가 필요하면 공유/제출 문서 탭에서 PDF를 저장해두세요.' : '',
-  ].filter(Boolean).slice(0, 4);
+    selectedCollection && !strategyMessages.length ? 'AI 민원 법무팀 에이전트 탭에서 질문 한 줄을 보내보세요.' : '',
+  ].filter(Boolean).slice(0, 3);
 
-  const aiRecommendations = strategyResult
-    ? [
-        cleanStrategyDisplayText(String(strategyResult.recommendedTone || '')),
-        cleanStrategyDisplayText(String(strategyResult.recommendedAction || '')),
-      ].filter(Boolean)
-    : [
-        riskyRecords.length ? '리스크가 높은 기록부터 시각, 원본, 관련 대화 흐름을 다시 확인해보세요.' : '',
-        collections.length ? '가장 최근 컬렉션을 기준으로 AI 민원 법무팀 에이전트를 실행해 다음 행동 순서를 정리해보세요.' : '',
-        allRecords.length ? '비슷한 기록 3~5개를 묶으면 AI 민원 법무팀 에이전트와 공유 문서 품질이 훨씬 안정적으로 올라갑니다.' : '첫 기록을 남기면 홈에서 최근 캡처와 AI 추천 행동을 자동으로 보여드려요.',
-      ].filter(Boolean).slice(0, 3);
-
-  const nextActions = todoItems.length ? todoItems : ['최근 기록을 확인하고 필요한 항목을 컬렉션으로 묶어보세요.'];
   const heroHighlights = [
     selectedCollection
-      ? `${selectedCollectionRecordCount}개 기록이 현재 선택된 컬렉션에 연결되어 있어요.`
+      ? `${selectedCollectionRecordCount}개 기록이 현재 컬렉션에 연결되어 있어요.`
       : allRecords.length
         ? `최근 캡처 ${allRecords.length}건이 워크스페이스에 정리돼 있어요.`
         : '첫 기록을 남기면 홈이 현재 상황을 자동으로 요약해드려요.',
-    riskyRecords.length
-      ? `우선 확인할 리스크 항목 ${riskyRecords.length}건이 감지됐어요.`
-      : '지금은 눈에 띄는 고위험 신호가 많지 않아요.',
-    strategyResult
-      ? cleanStrategyDisplayText(String(strategyResult.recommendedAction || 'AI 민원전용 법무팀 결과가 다음 행동을 제안할 준비가 됐어요.'))
+    allRecords.length
+      ? '기록과 컬렉션 흐름은 그대로 유지되고 있어요.'
+      : '첫 기록 하나만 남겨도 전체 흐름이 바로 시작됩니다.',
+    strategyMessages.length
+      ? '최근 분석 대화가 있어 바로 이어서 정리할 수 있어요.'
       : collections.length
         ? 'AI 민원 법무팀 에이전트 탭에서 다음 대응 순서를 바로 정리할 수 있어요.'
-        : '컬렉션을 만들면 분석과 공유 문서 품질이 더 안정적으로 올라가요.',
-  ].filter(Boolean).slice(0, 3);
+        : '컬렉션을 만들면 분석 흐름이 더 선명해집니다.',
+  ].filter(Boolean).slice(0, 2);
 
   const recentRecordItems = recentRecords.length
     ? recentRecords.map((record) => `
         <button class="homeEntryButton" data-action="view-record" data-id="${esc(String(record.id || ''))}" type="button">
           <div class="homeEntryTop">
-            <span class="homeEntryTitle">${esc(trunc(String(record.summary || '제목 없는 기록'), 56))}</span>
+            <span class="homeEntryTitle">${esc(trunc(String(record.summary || '제목 없는 기록'), 54))}</span>
             <span class="homeEntryMeta">${esc(fmt(String(record.ts || '')))}</span>
           </div>
           <div class="homeEntrySub">${esc(trunc(`${recordActorText(record)} · ${placeLabel(record.place, record.placeOther)} · ${storeLabel(record.storeType, record.storeOther)}`, 72))}</div>
         </button>
       `).join('')
-    : `<div class="homeEntryEmpty">아직 캡처된 기록이 없어요. 사이드바의 빠른 캡처부터 시작해보세요.</div>`;
+    : `<div class="homeEntryEmpty">아직 캡처된 기록이 없어요.</div>`;
 
   const recentCollectionItems = recentCollections.length
     ? recentCollections.map((item) => {
@@ -576,45 +554,29 @@ function renderHomeMain() {
         return `
           <button class="homeEntryButton" data-action="select-case" data-id="${esc(String(item.id || ''))}" type="button">
             <div class="homeEntryTop">
-              <span class="homeEntryTitle">${esc(trunc(String(item.title || '제목 없는 컬렉션'), 48))}</span>
+              <span class="homeEntryTitle">${esc(trunc(String(item.title || '제목 없는 기록묶음'), 46))}</span>
               <span class="homeEntryMeta">${esc(String(count))}개 기록</span>
             </div>
-            <div class="homeEntrySub">${esc(trunc(String(item.query || '주제 설명이 아직 없어요.'), 76))}</div>
+            <div class="homeEntrySub">${esc(trunc(String(item.query || '주제 설명이 아직 없어요.'), 68))}</div>
           </button>
         `;
       }).join('')
-    : `<div class="homeEntryEmpty">아직 컬렉션이 없어요. 관련 기록을 묶어 흐름별로 관리해보세요.</div>`;
-
-  const riskyItems = riskyRecords.length
-    ? riskyRecords.map((record) => {
-      const rr = normalizeRisk((record as any).risk);
-      return `
-          <button class="homeEntryButton homeEntryButtonRisk" data-action="view-record" data-id="${esc(String(record.id || ''))}" type="button">
-            <div class="homeEntryTop homeEntryTopLoose">
-              ${renderRiskTag((record as any).risk)}
-              <span class="homeEntryMeta">${esc(fmt(String(record.ts || '')))}</span>
-            </div>
-            <div class="homeEntryTitle homeRiskTitle">${esc(trunc(String(record.summary || '제목 없는 기록'), 70))}</div>
-            <div class="homeEntrySub">${esc(trunc(`${recordActorText(record)} · ${placeLabel(record.place, record.placeOther)}${rr?.reasons?.length ? ` · ${rr.reasons[0]}` : ''}`, 78))}</div>
-          </button>
-        `;
-    }).join('')
-    : `<div class="homeEntryEmpty">지금은 리스크가 높게 표시된 기록이 없어요.</div>`;
+    : `<div class="homeEntryEmpty">아직 기록묶음이 없어요.</div>`;
 
   const collectionFocusHtml = selectedCollection
     ? `
       <div class="homeFocusMetaRow">
-        <span class="homeProgressPill ${progressState.tone}">선택된 컬렉션</span>
+        <span class="homeProgressPill ${progressState.tone}">선택된 기록묶음</span>
         ${selectedCollectionLatestTs ? `<span class="homeEntryMeta">${esc(fmt(selectedCollectionLatestTs))}</span>` : ''}
       </div>
-      <div class="homeFocusTitle">${esc(String(selectedCollection.title || '제목 없는 컬렉션'))}</div>
+      <div class="homeFocusTitle">${esc(String(selectedCollection.title || '제목 없는 기록묶음'))}</div>
       <div class="homeFocusSummary">${esc(String(selectedCollection.query || '주제 설명이 아직 없어요. 관련 기록을 더 연결하면 맥락이 훨씬 선명해집니다.'))}</div>
       <div class="homeFocusTags">
         <span class="homeInlineStat">기록 ${esc(String(selectedCollectionRecordCount))}개</span>
-        <span class="homeInlineStat">${sharedReadyCount > 0 ? '공유 문서 흐름 준비 가능' : '문서 초안은 아직 준비 전'}</span>
+        <span class="homeInlineStat">${strategyMessages.length ? '최근 분석 대화 있음' : '분석 시작 준비'}</span>
       </div>
       <div class="homeFocusActionRow">
-        ${H.btnData('컬렉션 열기', 'select-case', { id: String(selectedCollection.id || '') }, 'btn primary')}
+        ${H.btnData('기록묶음 열기', 'select-case', { id: String(selectedCollection.id || '') }, 'btn primary')}
         ${H.btnData('AI 민원 법무팀 에이전트', 'switch-legal-tab', { 'legal-tab': 'simulation' }, 'btn ghost')}
       </div>
     `
@@ -626,12 +588,12 @@ function renderHomeMain() {
       <div class="homeFocusSummary">${esc(progressState.desc)}</div>
       <div class="homeFocusTags">
         <span class="homeInlineStat">최근 캡처 ${esc(String(allRecords.length))}건</span>
-        <span class="homeInlineStat">컬렉션 ${esc(String(collections.length))}개</span>
+        <span class="homeInlineStat">기록묶음 ${esc(String(collections.length))}개</span>
       </div>
       <div class="homeFocusActionRow">
         ${collections.length
-          ? H.btnData('컬렉션 보기', 'switch-case-tab', { 'case-tab': 'list' }, 'btn primary')
-          : H.btnData('컬렉션 만들기', 'switch-case-tab', { 'case-tab': 'create' }, 'btn primary')}
+          ? H.btnData('데이터 관리 열기', 'tab', { tab: 'cases' }, 'btn primary')
+          : H.btnData('기록보관함 열기', 'switch-case-tab', { 'case-tab': 'records' }, 'btn primary')}
         ${allRecords.length
           ? H.btnData('AI 민원 법무팀 에이전트', 'switch-legal-tab', { 'legal-tab': 'simulation' }, 'btn ghost')
           : H.btn('빠른 캡처', 'open-record-composer', '', 'btn ghost')}
@@ -639,129 +601,90 @@ function renderHomeMain() {
     `;
 
   return `
-    <section class="homeSectionStack homeDashboard homeWorkspace" aria-label="홈 대시보드">
-      <article class="homeHeroPanel" aria-label="홈 핵심 안내">
+    <section class="homeSectionStack homeDashboard homeWorkspace homeDashboardLean" aria-label="홈 대시보드">
+      <article class="homeHeroPanel homeHeroPanelLean" aria-label="홈 핵심 안내">
         <div class="homeHeroContent">
           <div class="homeHeroEyebrow">Evidence Workspace</div>
-          <div class="homeHeroTitle">차분하게 기록하고, 필요한 순간 바로 꺼내 쓰는 모던 워크스페이스</div>
-          <div class="homeHeroText">흩어진 대화, 사진, 파일, 메모를 한곳에 정리하고 컬렉션, AI 민원 법무팀 에이전트, 공유 문서 흐름으로 자연스럽게 이어가세요.</div>
+          <div class="homeHeroTitle">지금 필요한 흐름만 바로 정리하세요</div>
+          <div class="homeHeroText">기록을 정리하고, 묶고, 내보내기까지 한 흐름 안에서 바로 이어갈 수 있게 정리했습니다.</div>
           <div class="homeHeroActions" aria-label="빠른 작업">
             ${H.btn('빠른 캡처', 'open-record-composer', '', 'btn primary')}
-            ${H.btnData('컬렉션 만들기', 'switch-case-tab', { 'case-tab': 'create' }, 'btn ghost')}
+            ${collections.length
+              ? H.btnData('데이터 관리', 'tab', { tab: 'cases' }, 'btn ghost')
+              : H.btnData('기록보관함', 'switch-case-tab', { 'case-tab': 'records' }, 'btn ghost')}
             ${H.btnData('AI 민원 법무팀 에이전트', 'switch-legal-tab', { 'legal-tab': 'simulation' }, 'btn ghost')}
-            ${H.btn('업데이트 노트', 'open-updates-note', ' aria-label="업데이트 노트 보기"', 'btn ghost homeHeroQuietAction')}
+          </div>
+          <div class="homeHeroLeanMeta">
+            ${heroHighlights.map((item) => `<span class="homeInlineStat">${esc(item)}</span>`).join('')}
           </div>
         </div>
-        <div class="homeHeroAside">
-          <div class="homeHeroAsideTop">
-            <span class="homeProgressPill ${progressState.tone}">${esc(progressState.label)}</span>
-            <span class="homeHeroAsideMeta">${selectedCollection ? '선택된 컬렉션 기준' : '현재 워크플로 상태'}</span>
+        <div class="homeHeroLeanStats" aria-label="핵심 수치">
+          <div class="homeHeroLeanStat">
+            <span class="homeStatLabel">최근 캡처</span>
+            <strong class="homeStatValue">${esc(String(allRecords.length))}</strong>
+            <span class="homeStatNote">${allRecords[0]?.ts ? `마지막 ${esc(fmt(String(allRecords[0].ts || '')))} ` : '아직 기록이 없어요.'}</span>
           </div>
-          <div class="homeHeroAsideTitle">${esc(progressState.title)}</div>
-          <div class="homeHeroAsideText">${esc(progressState.desc)}</div>
-          <div class="homeProgressList">
-            ${heroHighlights.map((item) => `<div class="homeProgressItem">${esc(item)}</div>`).join('')}
+          <div class="homeHeroLeanStat">
+            <span class="homeStatLabel">기록묶음</span>
+            <strong class="homeStatValue">${esc(String(collections.length))}</strong>
+            <span class="homeStatNote">${selectedCollection ? `현재 포커스 ${esc(String(selectedCollectionRecordCount))}개 기록` : '열어볼 흐름을 고를 수 있어요.'}</span>
           </div>
-          <div class="homeHeroAsideFooter">
-            <span>${selectedCollection ? `포커스: ${esc(trunc(String(selectedCollection.title || '제목 없는 컬렉션'), 30))}` : '포커스 컬렉션을 고르면 더 선명하게 정리돼요.'}</span>
+          <div class="homeHeroLeanStat">
+            <span class="homeStatLabel">대화</span>
+            <strong class="homeStatValue">${esc(String(strategyMessages.length))}</strong>
+            <span class="homeStatNote">${strategyMessages.length ? '최근 분석 흐름이 이어지고 있어요.' : '아직 분석 대화가 없어요.'}</span>
           </div>
         </div>
       </article>
 
-      <section class="homeStatRail" aria-label="현재 상태">
-        <article class="homeStatCard">
-          <span class="homeStatLabel">최근 캡처</span>
-          <strong class="homeStatValue">${esc(String(allRecords.length))}</strong>
-          <span class="homeStatNote">${allRecords[0]?.ts ? `마지막 기록 ${esc(fmt(String(allRecords[0].ts || '')))} ` : '아직 기록이 없어요.'}</span>
-        </article>
-        <article class="homeStatCard">
-          <span class="homeStatLabel">컬렉션</span>
-          <strong class="homeStatValue">${esc(String(collections.length))}</strong>
-          <span class="homeStatNote">${selectedCollection ? `현재 포커스 ${esc(String(selectedCollectionRecordCount))}개 기록` : collections.length ? '최근 흐름을 다시 열어볼 수 있어요.' : '첫 컬렉션을 만들 차례예요.'}</span>
-        </article>
-        <article class="homeStatCard">
-          <span class="homeStatLabel">리스크 항목</span>
-          <strong class="homeStatValue">${esc(String(riskyRecords.length))}</strong>
-          <span class="homeStatNote">${riskyRecords.length ? '먼저 확인해야 할 항목이 있어요.' : '지금은 비교적 안정적인 상태예요.'}</span>
-        </article>
-        <article class="homeStatCard">
-          <span class="homeStatLabel">공유 준비</span>
-          <strong class="homeStatValue">${esc(String(sharedReadyCount))}</strong>
-          <span class="homeStatNote">${sharedReadyCount ? '문서 흐름으로 바로 연결할 수 있어요.' : '조금 더 정리하면 문서화가 쉬워져요.'}</span>
-        </article>
-      </section>
-
-      <section class="homeDashboardMatrix" aria-label="대시보드 영역">
-        <article class="homePanel homePanelWide">
+      <section class="homeDashboardQuickGrid" aria-label="대시보드 핵심 영역">
+        <article class="homePanel homePanelCompact">
           <div class="homePanelHead">
             <div>
-              <div class="homePanelTitle">지금 하면 좋은 일</div>
-              <div class="homePanelText">작업 흐름이 끊기지 않도록 우선순위를 차분하게 정리했어요.</div>
+              <div class="homePanelTitle">지금 할 일</div>
+              <div class="homePanelText">다음 단계만 짧고 선명하게 남겼어요.</div>
             </div>
           </div>
-          <div class="homeChecklist">
-            ${nextActions
-              .map((item, index) => `
-                <div class="homeChecklistItem">
-                  <span class="homeChecklistNumber">${index + 1}</span>
-                  <span class="homeChecklistText">${esc(item)}</span>
-                </div>
-              `).join('')}
+          <div class="homeTaskList">
+            ${nextActions.map((item, index) => `
+              <div class="homeTaskItem">
+                <span class="homeTaskNumber">${index + 1}</span>
+                <span class="homeTaskText">${esc(item)}</span>
+              </div>
+            `).join('')}
           </div>
         </article>
 
-        <article class="homePanel homePanelSide">
-          <div class="homePanelHead">
-            <div>
-              <div class="homePanelTitle">AI 추천 행동</div>
-              <div class="homePanelText">현재 기록 흐름을 기준으로 다음 행동을 짧고 선명하게 보여드려요.</div>
-            </div>
-          </div>
-          <div class="homeSignalList">
-            ${aiRecommendations.map((item) => `<div class="homeSignalItem">${esc(item)}</div>`).join('')}
-          </div>
-        </article>
-
-        <article class="homePanel homePanelSoft">
+        <article class="homePanel homePanelCompact homePanelFocusCompact">
           <div class="homePanelHead">
             <div>
               <div class="homePanelTitle">현재 포커스</div>
-              <div class="homePanelText">선택된 컬렉션이나 다음 정리 지점을 기준으로 작업 축을 잡아드려요.</div>
+              <div class="homePanelText">지금 기준으로 잡고 있는 흐름만 보여드려요.</div>
             </div>
           </div>
           ${collectionFocusHtml}
         </article>
 
-        <article class="homePanel">
+        <article class="homePanel homePanelCompact homePanelFlowCompact">
           <div class="homePanelHead">
             <div>
-              <div class="homePanelTitle">최근 캡처</div>
-              <div class="homePanelText">방금 추가한 기록을 다시 열어 수정하거나 컬렉션에 묶을 수 있어요.</div>
+              <div class="homePanelTitle">최근 흐름</div>
+              <div class="homePanelText">최근 기록과 컬렉션만 간단히 이어서 볼 수 있어요.</div>
             </div>
           </div>
-          <div class="homeEntryList">${recentRecordItems}</div>
-        </article>
-
-        <article class="homePanel">
-          <div class="homePanelHead">
-            <div>
-              <div class="homePanelTitle">최근 컬렉션</div>
-              <div class="homePanelText">비슷한 기록을 묶어 흐름과 타임라인을 이어가세요.</div>
+          <div class="homeFlowBlock">
+            <div class="homeFlowSection">
+              <div class="homeFlowSectionTitle">최근 캡처</div>
+              <div class="homeEntryList homeFlowList">${recentRecordItems}</div>
+            </div>
+            <div class="homeFlowSection">
+              <div class="homeFlowSectionTitle">최근 컬렉션</div>
+              <div class="homeEntryList homeFlowList">${recentCollectionItems}</div>
             </div>
           </div>
-          <div class="homeEntryList">${recentCollectionItems}</div>
-        </article>
-
-        <article class="homePanel homePanelFull">
-          <div class="homePanelHead">
-            <div>
-              <div class="homePanelTitle">리스크 높은 항목</div>
-              <div class="homePanelText">확인과 정리가 먼저 필요한 기록만 따로 모아 빠르게 볼 수 있게 했어요.</div>
-            </div>
-          </div>
-          <div class="homeEntryList">${riskyItems}</div>
         </article>
       </section>
+
     </section>
   `;
 }
@@ -787,7 +710,18 @@ function renderLegalSimulationPanel() {
   const chatPending = !!(ui as any).strategyChatPending;
   const chatPendingStartedAt = String((ui as any).strategyChatPendingStartedAt || '').trim();
   const chatInput = String((ui as any).strategyChatInput || '');
+  const mentionOpen = !!(ui as any).strategyMentionOpen;
+  const mentionSuggestions = Array.isArray((ui as any).strategyMentionSuggestions)
+    ? ((ui as any).strategyMentionSuggestions as Array<{ groupId: string; memberId: string; name: string; groupLabel: string }>)
+    : [];
+  const mentionSelectedIndex = Math.max(0, Number((ui as any).strategyMentionSelectedIndex || 0));
+  const actionPromptOpen = !!(ui as any).strategyActionPromptOpen;
+  const actionDraft = String((ui as any).strategyActionDraft || '');
+  const chatMode = String((ui as any).strategyChatMode || 'record') === 'record' ? 'record' : 'analysis';
+  const isRecordMode = chatMode === 'record';
   const chatError = String((ui as any).strategyChatError || '').trim();
+  const strategyRecordEditMessageId = String((ui as any).strategyRecordEditMessageId || '').trim();
+  const strategyRecordEditDraft = String((ui as any).strategyRecordEditDraft || '');
   const strategyModelStatus = ((ui as any).strategyModelStatus || null) as any;
   const strategyModelStatusLoading = !!(ui as any).strategyModelStatusLoading;
   const strategyModelDownloadPending = !!(ui as any).strategyModelDownloadPending;
@@ -877,47 +811,53 @@ function renderLegalSimulationPanel() {
   const goalLabel = goalLabelMap[String(draft.goal || 'stabilize')] || goalLabelMap.stabilize;
   const recommendedTone = cleanStrategyDisplayText(result?.recommendedTone || '차분하게 핵심만 정리하는 대응이 좋아 보여요.');
   const recommendedAction = cleanStrategyDisplayText(result?.recommendedAction || '현재 기록을 기준으로 가장 안전한 다음 행동을 정리해드릴게요.');
-  const contextSummaryLine = [
-    selectedCase ? String(selectedCase.title || '선택한 컬렉션').trim() || '선택한 컬렉션' : '직접 분석 모드',
-    `기록 ${selectedRecords.length}개`,
-    goalLabel,
-    presetLabel,
-  ].join(' · ');
+  const contextSummaryLine = isRecordMode
+    ? `통합모드 · 관련 기록 ${selectedRecords.length || 0}개 반영 가능`
+    : [
+        selectedCase ? String(selectedCase.title || '선택한 컬렉션').trim() || '선택한 컬렉션' : '연결 기록 분석',
+        `기록 ${selectedRecords.length}개`,
+        goalLabel,
+        presetLabel,
+      ].join(' · ');
 
-  const briefingBubble = result
-    ? `
-      <article class="strategyMsg agent primary strategySummaryMsg">
-        <div class="strategyAvatar">AI</div>
-        <div class="strategyBubble">
-          <div class="strategyInlineMeta">
-            <span>${esc(contextSummaryLine)}</span>
-            <span>${dirty ? '기록 변경됨' : `마지막 분석 ${esc(fmt(result.calculatedAt))}`}</span>
+  const briefingBubble = isRecordMode
+    ? ''
+    : (result
+      ? `
+        <article class="strategyMsg agent primary strategySummaryMsg">
+          <div class="strategyAvatar">AI</div>
+          <div class="strategyBubble">
+            <div class="strategyInlineMeta">
+              <span>${esc(contextSummaryLine)}</span>
+              <span>${dirty ? '기록 변경됨' : `마지막 분석 ${esc(fmt(result.calculatedAt))}`}</span>
+            </div>
+            <div class="strategyLead">${esc(recommendedTone)}</div>
+            <div class="strategyParagraph">${esc(recommendedAction)}</div>
+            <div class="strategyContextRow">
+              <span class="strategyContextPill">근거 ${esc(String(result.evidencePower || 0))}</span>
+              <span class="strategyContextPill">논리 ${esc(String(result.counterLogic || 0))}</span>
+              <span class="strategyContextPill">확산 ${esc(String(result.escalationRisk || 0))}</span>
+              <span class="strategyContextPill">통제 ${esc(String(result.communicationControl || 0))}</span>
+            </div>
           </div>
-          <div class="strategyLead">${esc(recommendedTone)}</div>
-          <div class="strategyParagraph">${esc(recommendedAction)}</div>
-          <div class="strategyContextRow">
-            <span class="strategyContextPill">근거 ${esc(String(result.evidencePower || 0))}</span>
-            <span class="strategyContextPill">논리 ${esc(String(result.counterLogic || 0))}</span>
-            <span class="strategyContextPill">확산 ${esc(String(result.escalationRisk || 0))}</span>
-            <span class="strategyContextPill">통제 ${esc(String(result.communicationControl || 0))}</span>
+        </article>
+      `
+      : `
+        <article class="strategyMsg agent primary strategySummaryMsg">
+          <div class="strategyAvatar">AI</div>
+          <div class="strategyBubble">
+            <div class="strategyInlineMeta">
+              <span>${esc(contextSummaryLine)}</span>
+            </div>
+            <div class="strategyLead">기록 흐름을 읽고 어떤 말부터 꺼내야 하는지, 무엇을 먼저 정리해야 하는지 바로 정리해드릴게요.</div>
+            <div class="strategyParagraph">하단 입력창에 질문만 보내면 답장 초안, 기록 포인트, 다음 행동 순서를 채팅으로 이어서 도와드려요.</div>
           </div>
-        </div>
-      </article>
-    `
-    : `
-      <article class="strategyMsg agent primary strategySummaryMsg">
-        <div class="strategyAvatar">AI</div>
-        <div class="strategyBubble">
-          <div class="strategyInlineMeta">
-            <span>${esc(contextSummaryLine)}</span>
-          </div>
-          <div class="strategyLead">기록 흐름을 읽고 어떤 말부터 꺼내야 하는지, 무엇을 먼저 정리해야 하는지 바로 정리해드릴게요.</div>
-          <div class="strategyParagraph">하단 입력창에 질문만 보내면 답장 초안, 기록 포인트, 다음 행동 순서를 채팅으로 이어서 도와드려요.</div>
-        </div>
-      </article>
-    `;
+        </article>
+      `);
 
-  const caseSummary = selectedCase
+  const caseSummary = isRecordMode
+    ? '상황을 입력하면 빠른캡쳐 형식 기록 초안을 만들고, 지금까지 쌓인 관련 기록이 있으면 함께 반영해 더 꼼꼼하게 정리해드려요.'
+    : selectedCase
     ? `${String(selectedCase.title || '선택한 컬렉션').trim() || '선택한 컬렉션'} 컬렉션을 기준으로 보고 있어요. 연결된 기록 ${selectedCaseRecordCount}개 중 현재 ${selectedRecords.length}개가 분석에 포함돼 있어요.`
     : selectedRecords.length
       ? `지금은 컬렉션을 고르지 않고 기록 ${selectedRecords.length}개만 붙여 놓은 상태예요. 이 정도면 빠른 1차 분석은 가능해요.`
@@ -969,9 +909,38 @@ function renderLegalSimulationPanel() {
 
   const renderedChatMessages = chatMessages.map((msg) => {
     const role = String(msg.role || 'assistant') === 'user' ? 'user' : 'assistant';
+    const isRecordDraft = role === 'assistant' && (String((msg as any).mode || '') === 'record' || !!(msg as any).recordDraft);
+    const isEditingRecordDraft = isRecordDraft && strategyRecordEditMessageId === String(msg.id || '');
     const bubbleClass = role === 'user' ? 'strategyBubble userBubble strategyUserCard' : 'strategyBubble strategyAssistantCard';
     const wrapperClass = role === 'user' ? 'strategyMsg user strategyUserMsg' : 'strategyMsg agent strategyResponseMsg';
     const headMeta = String(msg.meta || '').trim() || fmt(String(msg.ts || ''));
+    const bodyHtml = isEditingRecordDraft
+      ? `
+        <div class="strategyRecordDraftEditor">
+          <textarea class="strategyRecordDraftTextarea" rows="10" data-action="draft-strategy-record-edit" data-field="content">${esc(strategyRecordEditDraft)}</textarea>
+          <div class="strategyRecordDraftActions">
+            <button class="btn ghost" type="button" data-action="cancel-edit-strategy-record-draft">취소</button>
+            <button class="btn ghost" type="button" data-action="save-strategy-record-draft" data-id="${esc(String(msg.id || ''))}">저장하기</button>
+            <button class="btn primary" type="button" data-action="save-edit-strategy-record-draft" data-id="${esc(String(msg.id || ''))}">수정 반영</button>
+          </div>
+        </div>
+      `
+      : `
+        <div class="strategyParagraph">${strategyTextHtml(String(msg.content || ''))}</div>
+        ${isRecordDraft ? `
+          <div class="strategyRecordDraftHint">HyperCLOVA-X가 기록의 뼈대와 사실 흐름을 먼저 잡고, Roosy-X가 각 항목을 더 구체적이고 실무적으로 채운 기록 초안이에요. 검토 후 수정하거나 바로 저장할 수 있어요.</div>
+          <div class="strategyRecordDraftActions">
+            <button class="btn ghost" type="button" data-action="edit-strategy-record-draft" data-id="${esc(String(msg.id || ''))}">수정하기</button>
+            <button class="btn primary" type="button" data-action="save-strategy-record-draft" data-id="${esc(String(msg.id || ''))}">저장하기</button>
+          </div>
+          ${Array.isArray((msg as any).relatedRecordIds) && (msg as any).relatedRecordIds.length ? `
+            <div class="strategyRecordDraftCollectionPrompt">
+              <div class="strategyRecordDraftCollectionText">부합하는 관련 기록이 함께 보여서 컬렉션으로 묶을 수 있어요. 컬렉션을 생성할까요?</div>
+              <button class="btn ghost" type="button" data-action="create-strategy-record-collection" data-id="${esc(String(msg.id || ''))}">확인</button>
+            </div>
+          ` : ''}
+        ` : ''}
+      `;
     return `
       <article class="${wrapperClass}">
         ${role === 'assistant' ? `<div class="strategyAvatar">AI</div>` : ''}
@@ -979,7 +948,7 @@ function renderLegalSimulationPanel() {
           ${role === 'assistant'
             ? `<div class="strategyBubbleMetaOnly"><span>${esc(headMeta)}</span></div>`
             : ''}
-          <div class="strategyParagraph">${strategyTextHtml(String(msg.content || ''))}</div>
+          ${bodyHtml}
         </div>
       </article>
     `;
@@ -1048,10 +1017,15 @@ function renderLegalSimulationPanel() {
           <span>${esc(contextSummaryLine)}</span>
         </div>
         <div class="strategyParagraph">${esc(caseSummary)}</div>
-        <div class="strategyParagraph">질문을 보내면 답변 문구, 기록 포인트, 다음 행동 순서를 짧고 실무적으로 정리해드릴게요.</div>
+        <div class="strategyParagraph">${esc(isRecordMode ? '상황을 입력하면 빠른캡쳐 형식으로 정리한 기록 초안을 만들고, 수정과 저장까지 이어서 도와드릴게요.' : '질문을 보내면 답변 문구, 기록 포인트, 다음 행동 순서를 짧고 실무적으로 정리해드릴게요.')}</div>
       </div>
     </article>
   ` : '';
+  const strategyPlaceholder = modelsReady
+    ? (isRecordMode
+      ? '예: 쉬는 시간에 학생 둘이 말다툼이 있었고 분리 지도했어. 기록 초안으로 정리해줘'
+      : '예: 이 상황을 상대방에게 어떻게 정리해 보낼지 3문장으로 써줘')
+    : '우선 AI모델을 다운로드 받아주세요';
 
   return `
     <article class="legalHubPanel strategyChatPage" aria-label="AI 민원 법무팀 에이전트">
@@ -1060,7 +1034,7 @@ function renderLegalSimulationPanel() {
           ${modelSetupBanner}
           ${threadPackageBanner}
           ${starterThread}
-          ${result ? briefingBubble : ''}
+          ${briefingBubble}
           ${renderedChatMessages}
           ${pendingBubble}
           ${errorBubble}
@@ -1068,15 +1042,48 @@ function renderLegalSimulationPanel() {
 
         <footer class="strategyChatOnlyComposer">
           <label class="strategyComposerTextareaWrap strategyComposerTextareaWrapOnly">
-            <textarea class="strategyComposerTextarea strategyComposerTextareaOnly" rows="1" placeholder="${esc(modelsReady ? '예: 이 상황을 상대방에게 어떻게 정리해 보낼지 3문장으로 써줘' : '우선 AI모델을 다운로드 받아주세요')}" ${modelsReady ? '' : 'disabled aria-disabled="true"'} data-action="draft-strategy-chat" data-field="input">${esc(chatInput)}</textarea>
+            <textarea class="strategyComposerTextarea strategyComposerTextareaOnly" rows="1" placeholder="${esc(strategyPlaceholder)}" ${modelsReady ? '' : 'disabled aria-disabled="true"'} data-action="draft-strategy-chat" data-field="input">${esc(chatInput)}</textarea>
           </label>
+          ${actionPromptOpen ? `
+            <div class="strategyActionPrompt" role="group" aria-label="내 대응 입력">
+              <div class="strategyActionPromptHead">나의 대응을 입력하세요</div>
+              <div class="strategyActionPromptRow">
+                <input class="strategyActionPromptInput" type="text" value="${esc(actionDraft)}" placeholder="예: 두 학생을 분리 지도하고 보호자에게 안내함" data-action="draft-strategy-action" data-field="input" />
+                <button class="strategyActionPromptBtn" type="button" data-action="apply-strategy-action">적용</button>
+              </div>
+            </div>
+          ` : ''}
+          ${mentionOpen && mentionSuggestions.length ? `
+            <div class="strategyMentionPanel" role="listbox" aria-label="관계관리 주체 추천">
+              <div class="strategyMentionPanelHead">@로 관계관리 주체 연결</div>
+              <div class="strategyMentionPanelList">
+                ${mentionSuggestions.map((item, index) => `
+                  <button
+                    class="strategyMentionOption ${index === mentionSelectedIndex ? 'active' : ''}"
+                    type="button"
+                    role="option"
+                    aria-selected="${index === mentionSelectedIndex ? 'true' : 'false'}"
+                    data-action="pick-strategy-mention"
+                    data-group-id="${esc(item.groupId)}"
+                    data-member-id="${esc(item.memberId)}"
+                    data-name="${esc(item.name)}"
+                    data-group-label="${esc(item.groupLabel)}"
+                  >
+                    <span class="strategyMentionOptionName">@${esc(item.name)}</span>
+                    <span class="strategyMentionOptionGroup">${esc(item.groupLabel)}</span>
+                  </button>
+                `).join('')}
+              </div>
+            </div>
+          ` : ''}
           <div class="strategyChatOnlyComposerBar">
             <div class="strategyChatOnlyComposerTools">
-              ${H.btn(selectedRecords.length ? `기록 ${selectedRecords.length}개` : '기록 붙이기', 'open-simulation-picker', '', 'btn ghost')}
+              ${isRecordMode ? '' : H.btn(selectedRecords.length ? `기록 ${selectedRecords.length}개` : '기록 붙이기', 'open-simulation-picker', '', 'btn ghost')}
               ${chatPending || !modelsReady ? `<div class="strategyChatOnlyComposerHint">${chatPending ? esc(`${pendingStage} · ${pendingElapsedLabel}`) : '모델 다운로드 후 채팅 가능'}</div>` : ''}
               ${strategyHybridDesk}
             </div>
             <div class="strategyComposerActions">
+              <button class="strategyComposerGuideBtn" data-action="open-strategy-input-guide" type="button">입력 가이드</button>
               ${H.btn(chatPending ? '생성 중…' : '보내기', 'send-strategy-chat', chatPending || !modelsReady ? ' disabled aria-disabled="true"' : '', 'btn primary')}
             </div>
           </div>
@@ -1179,6 +1186,7 @@ let queuedPrimaryTab = '';
 
 function normalizePrimaryTab(value: string) {
   const tab = String(value || '').trim();
+  if (tab === 'records') return 'cases';
   return PRIMARY_TABS.has(tab) ? tab : '';
 }
 
@@ -1349,8 +1357,7 @@ function actorKey(a: ActorRef) {
 export function render() {
   if (ui.caseCreateOpen) {
     S.tab = 'cases';
-    ui.caseTab = 'create';
-    ui.caseCreateOpen = false;
+    ui.caseTab = 'list' as any;
   }
   if (ui.paperPickOpen) {
     S.tab = 'cases';
@@ -1362,14 +1369,398 @@ export function render() {
   (S as any).tab = currentTab;
   queuedPrimaryTab = '';
   const selected = getSelectedCase();
-  const activeCaseTab = ui.caseTab === 'list' ? 'list' : ui.caseTab === 'proof' ? 'proof' : 'create';
+  const activeCaseTab = ui.caseTab === 'list' ? 'list' : ui.caseTab === 'proof' ? 'proof' : 'records';
   const isHome = currentTab === 'home';
-  const isEvidence = currentTab === 'records';
   const isLegal = currentTab === 'legal';
   const legalHubTab = getLegalHubTab();
+  const isLegalHome = isHome || (isLegal && legalHubTab === 'simulation');
   const isCasesListView = currentTab === 'cases' && activeCaseTab === 'list';
   const showCaseSide = isCasesListView && !!selected && !HIDE_CASE_ACTIONS_AND_GUIDES;
   const platform = windowPlatform();
+  const strategySyntheticCacheEnabled = (ui as any).strategySyntheticCacheEnabled !== false;
+  const perfLab = (((ui as any).strategyPerfLab || { baseline: null, drace: null, baselineRuns: [], draceRuns: [], draceWarmup: null, latest: null, comparisonWarning: '' }) as any);
+  const baselinePerf = perfLab.baseline;
+  const dracePerf = perfLab.drace;
+  const warmupPerf = perfLab.draceWarmup;
+  const latestPerf = perfLab.latest;
+  const perfRunState = (((ui as any).strategyPerfRunState || {
+    status: 'idle',
+    requestedBackend: 'cli',
+    requestedMode: 'Off',
+    actualBackend: '',
+    startedAt: '',
+    finishedAt: '',
+    error: '',
+    cacheApplied: false,
+  }) as any);
+  const comparisonWarning = String((perfLab as any).comparisonWarning || '').trim();
+  const baselineRunsCount = Array.isArray(perfLab?.baselineRuns) ? perfLab.baselineRuns.length : 0;
+  const draceRunsCount = Array.isArray(perfLab?.draceRuns) ? perfLab.draceRuns.length : 0;
+  const requestedBackendType = strategySyntheticCacheEnabled ? 'llama-server' : 'cli';
+  const requestedCacheMode = strategySyntheticCacheEnabled ? 'FullDRACE' : 'Off';
+  const activePerf = strategySyntheticCacheEnabled
+    ? (dracePerf || warmupPerf || latestPerf || baselinePerf)
+    : (baselinePerf || latestPerf || dracePerf || warmupPerf);
+  const activePerfLabel = strategySyntheticCacheEnabled
+    ? (dracePerf ? 'DRaCE 최근 측정값' : baselinePerf ? 'Baseline 최근 측정값' : '측정 대기')
+    : (baselinePerf ? 'Baseline 최근 측정값' : dracePerf ? 'DRaCE 최근 측정값' : '측정 대기');
+  const currentRunsCount = strategySyntheticCacheEnabled
+    ? (draceRunsCount || (warmupPerf ? 1 : 0))
+    : baselineRunsCount;
+  const activePerfIsWarmup = !!(activePerf && activePerf.benchmarkPhase === 'warmup');
+  const perfNumber = (value: number | undefined | null) => Number(value || 0);
+  const perfRowHtml = (
+    label: string,
+    currentValue: string,
+    detail: string,
+  ) => `
+    <div class="strategyPerfRow">
+      <div class="strategyPerfRowLabel">${esc(label)}</div>
+      <div class="strategyPerfRowValue">${esc(currentValue)}</div>
+      <div class="strategyPerfRowDetail">${esc(detail)}</div>
+    </div>
+  `;
+  const perfSeconds = (ms: number | undefined | null) => `${Math.max(0, Math.round(Number(ms || 0) / 100) / 10)}s`;
+  const perfCompactMs = (sample: any, meanMs: number | undefined | null, p50Ms: number | undefined | null) =>
+    sample && Number(sample.sampleSize || 0) > 1 && perfNumber(p50Ms) > 0 ? perfSeconds(p50Ms) : perfSeconds(meanMs);
+  const perfCompactTps = (sample: any, meanTps: number | undefined | null, p50Tps: number | undefined | null) =>
+    `${(sample && Number(sample.sampleSize || 0) > 1 && perfNumber(p50Tps) > 0 ? perfNumber(p50Tps) : perfNumber(meanTps)).toFixed(1)}`;
+  const perfCompactMb = (sample: any, meanMb: number | undefined | null, p95Mb: number | undefined | null) =>
+    `${Math.round(sample && Number(sample.sampleSize || 0) > 1 && perfNumber(p95Mb) > 0 ? perfNumber(p95Mb) : perfNumber(meanMb))}MB`;
+  const perfDeltaText = (baselineValue: number | undefined | null, currentValue: number | undefined | null, higherIsBetter = false) => {
+    const base = Number(baselineValue || 0);
+    const current = Number(currentValue || 0);
+    if (!(base > 0) || !(current > 0)) return '측정 대기';
+    const ratio = higherIsBetter ? current / base : base / current;
+    if (ratio > 1.05) return `${ratio.toFixed(2)}× faster`;
+    if (ratio >= 0.95) return 'about same';
+    const slowerPercent = higherIsBetter
+      ? Math.max(0, ((base - current) / base) * 100)
+      : Math.max(0, ((current - base) / base) * 100);
+    return `${Math.round(slowerPercent)}% slower`;
+  };
+  const debugCache = activePerf?.cacheSummary || {
+    backendType: String(perfRunState.actualBackend || (perfRunState.status === 'running' ? 'pending' : 'unknown')),
+    cacheRequested: strategySyntheticCacheEnabled,
+    cacheLoaded: false,
+    cacheApplied: false,
+    cacheModeRequested: requestedCacheMode,
+    cacheModeApplied: 'Off',
+    promptTokenCacheSupported: false,
+    promptTokenCacheApplied: false,
+    promptTokenCacheLoaded: false,
+    promptTokenCacheHitRatio: 0,
+    prefixKvSupported: false,
+    prefixKvApplied: false,
+    prefixReusedTokens: 0,
+    prefixTotalTokens: 0,
+    prefixReuseRatio: 0,
+    syntheticCacheRequested: strategySyntheticCacheEnabled,
+    syntheticCacheSupported: false,
+    syntheticCacheApplied: false,
+    tokenCacheLoaded: false,
+    draftProvider: 'noop',
+    tokenVerificationSupported: false,
+    proposedTokens: 0,
+    acceptedTokens: 0,
+    rejectedTokens: 0,
+    acceptanceRatio: 0,
+    verifyBatches: 0,
+    acceptedTokensPerVerify: 0,
+    avgProposedBatchSize: 0,
+    avgAcceptedBatchSize: 0,
+    fallbackDecodeTokens: 0,
+    rendererInsertedTokens: 0,
+    llmGeneratedTokens: 0,
+    outputTokenReductionRatio: 0,
+    bypassReason:
+      perfRunState.status === 'failed'
+        ? String(perfRunState.error || '')
+        : strategySyntheticCacheEnabled
+          ? 'resident_benchmark_pending'
+          : '',
+  };
+  const debugStageRows = Array.isArray(activePerf?.stages) ? activePerf.stages : [];
+  const perfCollapsed = !!(ui as any).strategyPerfCollapsed;
+  const perfTitle = !activePerf
+    ? '기본 모드'
+    : !activePerf.cacheRequested
+      ? '기본 모드'
+      : activePerf.cacheApplied
+        ? '기본 모드 vs 캐시 모드'
+        : '기본 모드 vs 캐시 요청(우회됨)';
+  const sameComparisonKey = baselinePerf && dracePerf && baselinePerf.comparisonKey === dracePerf.comparisonKey;
+  const comparisonReady = !!(baselinePerf && dracePerf && sameComparisonKey);
+  const comparisonStatus = comparisonWarning
+    ? comparisonWarning
+    : comparisonReady
+      ? `비교 준비 완료 · 기본 ${baselineRunsCount}회 / 캐시 ${draceRunsCount}회`
+      : activePerfIsWarmup
+        ? `캐시 warmup 완료 · 기본 ${baselineRunsCount}회 / 캐시 측정 ${draceRunsCount}회 · 다음 실행부터 평균 비교`
+      : perfRunState.status === 'running'
+        ? `측정 진행 중 · 기본 ${baselineRunsCount}회 / 캐시 ${draceRunsCount}회`
+        : perfRunState.status === 'succeeded' && !activePerf
+          ? `최근 실행 완료 · 측정값이 아직 저장되지 않았어요 · 기본 ${baselineRunsCount}회 / 캐시 ${draceRunsCount}회`
+        : perfRunState.status === 'failed'
+          ? `최근 실행 실패 · 기본 ${baselineRunsCount}회 / 캐시 ${draceRunsCount}회`
+          : `비교 대기 · 기본 ${baselineRunsCount}회 / 캐시 ${draceRunsCount}회`;
+  const baselineFinalStage = sameComparisonKey && baselinePerf?.stages?.length ? baselinePerf.stages[baselinePerf.stages.length - 1] : null;
+  const draceFinalStage = sameComparisonKey && dracePerf?.stages?.length ? dracePerf.stages[dracePerf.stages.length - 1] : null;
+  const compactCompareText = (
+    label: string,
+    baseValue: string,
+    currentValue: string,
+    delta: string,
+  ) => `${label} · 기본 ${baseValue} / 캐시 ${currentValue} / ${delta}`;
+  const perfCompactSummary = activePerf
+    ? [
+        activePerf.cacheApplied ? 'applied' : (activePerf.cacheRequested ? 'bypassed' : 'baseline'),
+        `E2E ${perfSeconds(activePerf.totalE2eMs)}`,
+        `TTFT ${perfSeconds(activePerf.ttftMs)}`,
+      ].join(' · ')
+    : perfRunState.status === 'running'
+      ? `${activePerfLabel} · 실행 중`
+      : perfRunState.status === 'failed'
+        ? '최근 실행 실패'
+        : '측정 대기';
+  const perfPendingDetail = perfRunState.status === 'running'
+    ? `${strategySyntheticCacheEnabled ? '캐시 모드' : '기본 모드'} 실행 중이에요. 완료되면 같은 입력 기준으로 비교를 시작합니다`
+    : activePerfIsWarmup
+      ? '이 수치는 warmup 실행이에요. 평균 비교에는 제외되고, 다음 캐시 실행부터 비교 표본으로 쌓입니다'
+    : perfRunState.status === 'succeeded' && !activePerf
+      ? '최근 실행은 끝났지만 측정 payload가 저장되지 않았어요. 같은 입력으로 한 번 더 실행해 확인해보세요'
+    : perfRunState.status === 'failed'
+      ? `최근 실행이 실패했어요. ${String(perfRunState.error || '').trim() || '마지막 오류를 확인한 뒤 같은 입력으로 다시 실행해주세요'}`
+      : strategySyntheticCacheEnabled
+        ? '캐시 모드 실행이 끝나면 같은 입력 기준으로 기본/캐시 비교를 시작합니다'
+        : '기본 모드 실행이 끝나면 같은 입력 기준으로 기본/캐시 비교를 시작합니다';
+  const perfHeaderHtml = `
+    <div class="strategyPerfPanel ${perfCollapsed ? 'isCollapsed' : ''}" aria-label="실험용 지표 측정기">
+      <div class="strategyPerfHeader">
+        <div class="strategyPerfHeaderText">
+          <div class="strategyPerfEyebrow">실험용 지표 측정기</div>
+          <div class="strategyPerfTitle">${esc(perfTitle)}</div>
+          ${perfCollapsed ? `<div class="strategyPerfCompactSummary">${esc(perfCompactSummary)}</div>` : ''}
+        </div>
+        <div class="strategyPerfHeaderActions">
+          <button
+            type="button"
+            class="strategyPerfResetBtn"
+            data-action="reset-strategy-perf-lab"
+            title="측정값 초기화"
+          >초기화</button>
+          <button
+            type="button"
+            class="strategyPerfCollapseBtn"
+            data-action="toggle-strategy-perf-panel"
+            aria-pressed="${perfCollapsed ? 'true' : 'false'}"
+            title="${perfCollapsed ? '지표 펼치기' : '지표 접기'}"
+          >${perfCollapsed ? '펼치기' : '접기'}</button>
+        </div>
+      </div>
+      ${perfCollapsed ? '' : `
+      <div class="strategyPerfSummaryInline">
+        <span>요청 backend <strong>${esc(String(perfRunState.requestedBackend || requestedBackendType))}</strong></span>
+        <span>실행 backend <strong>${esc(String(debugCache?.backendType || 'unknown'))}</strong></span>
+        <span>요청 <strong>${esc(String(debugCache?.cacheRequested ? 'ON' : 'OFF'))}</strong></span>
+        <span>적용 <strong>${esc(String(!!debugCache?.cacheApplied))}</strong></span>
+        <span>mode <strong>${esc(String(debugCache?.cacheModeApplied || (strategySyntheticCacheEnabled ? 'Pending' : 'Off')))}</strong></span>
+        <span>n <strong>${esc(String(currentRunsCount))}</strong></span>
+      </div>
+      <div class="strategyPerfStatusLine">${esc(comparisonStatus)}</div>
+      ${perfRunState.status === 'failed' && !activePerf ? `<div class="strategyPerfDebugReason">${esc(String(perfRunState.error || '최근 실행 오류를 확인해주세요.'))}</div>` : ''}
+      <div class="strategyPerfRows">
+        ${perfRowHtml(
+          'E2E',
+          activePerf ? perfCompactMs(activePerf, activePerf.totalE2eMs, activePerf.e2eP50Ms) : '—',
+          !activePerf
+            ? perfPendingDetail
+            :
+          comparisonReady
+            ? compactCompareText('완료', perfCompactMs(baselinePerf, baselinePerf.totalE2eMs, baselinePerf.e2eP50Ms), perfCompactMs(dracePerf, dracePerf.totalE2eMs, dracePerf.e2eP50Ms), perfDeltaText(baselinePerf.totalE2eMs, dracePerf.totalE2eMs))
+            : `현재값 ${perfSeconds(activePerf?.totalE2eMs)} · p95 ${perfSeconds(activePerf?.e2eP95Ms)} · 같은 입력으로 양쪽을 다시 실행하면 비교합니다`
+        )}
+        ${perfRowHtml(
+          'TTFT',
+          activePerf ? perfCompactMs(activePerf, activePerf.ttftMs, activePerf.ttftP50Ms) : '—',
+          !activePerf
+            ? perfPendingDetail
+            :
+          comparisonReady
+            ? compactCompareText('첫 응답', perfCompactMs(baselinePerf, baselinePerf.ttftMs, baselinePerf.ttftP50Ms), perfCompactMs(dracePerf, dracePerf.ttftMs, dracePerf.ttftP50Ms), perfDeltaText(baselinePerf.ttftMs, dracePerf.ttftMs))
+            : `현재값 ${perfSeconds(activePerf?.ttftMs)} · p95 ${perfSeconds(activePerf?.ttftP95Ms)} · 같은 입력으로 양쪽을 다시 실행하면 비교합니다`
+        )}
+        ${perfRowHtml(
+          'Peak WS',
+          activePerf ? perfCompactMb(activePerf, activePerf.peakMemoryMb, activePerf.peakMemoryP95Mb) : '—',
+          !activePerf
+            ? perfPendingDetail
+            :
+          comparisonReady
+            ? compactCompareText('메모리', perfCompactMb(baselinePerf, baselinePerf.peakMemoryMb, baselinePerf.peakMemoryP95Mb), perfCompactMb(dracePerf, dracePerf.peakMemoryMb, dracePerf.peakMemoryP95Mb), perfDeltaText(baselinePerf.peakMemoryMb, dracePerf.peakMemoryMb))
+            : `현재값 ${Math.round(perfNumber(activePerf?.peakMemoryMb))}MB · p95 ${Math.round(perfNumber(activePerf?.peakMemoryP95Mb))}MB · 같은 입력으로 양쪽을 다시 실행하면 비교합니다`
+        )}
+        ${perfRowHtml(
+          'Final TPS',
+          activePerf ? `${perfCompactTps(activePerf, activePerf.finalStageTps, activePerf.tpsP50)} TPS` : '—',
+          !activePerf
+            ? perfPendingDetail
+            :
+          comparisonReady
+            ? compactCompareText('최종 단계', `${Number(baselinePerf.finalStageTps || 0).toFixed(1)} TPS`, `${Number(dracePerf.finalStageTps || 0).toFixed(1)} TPS`, perfDeltaText(baselinePerf.finalStageTps, dracePerf.finalStageTps, true))
+            : `E2E ${Number(activePerf?.e2eTps || 0).toFixed(1)} TPS · Decode ${Number(activePerf?.decodeTps || 0).toFixed(1)} TPS · 같은 입력으로 양쪽을 다시 실행하면 비교합니다`
+        )}
+      </div>
+      ${comparisonWarning ? `<div class="strategyPerfDebugReason">${esc(comparisonWarning)}</div>` : ''}
+      ${debugCache?.backendType === 'cli' ? `<div class="strategyPerfDebugReason">CLI backend does not support persistent Prefix KV Cache or Synthetic Token Cache verification.</div>` : ''}
+      <details class="strategyPerfDebug" ${debugCache ? 'open' : ''}>
+        <summary>DRaCE Debug Panel</summary>
+        <div class="strategyPerfDebugGrid">
+          <div><span>Backend type</span><strong>${esc(String(debugCache?.backendType || 'unknown'))}</strong></div>
+          <div><span>Cache requested</span><strong>${esc(String(debugCache?.cacheRequested ? 'ON' : 'OFF'))}</strong></div>
+          <div><span>Cache loaded</span><strong>${esc(String(!!debugCache?.cacheLoaded))}</strong></div>
+          <div><span>Cache applied</span><strong>${esc(String(!!debugCache?.cacheApplied))}</strong></div>
+          <div><span>Requested mode</span><strong>${esc(String(debugCache?.cacheModeRequested || 'Off'))}</strong></div>
+          <div><span>Applied mode</span><strong>${esc(String(debugCache?.cacheModeApplied || 'Off'))}</strong></div>
+          <div><span>Prompt token cache</span><strong>${esc(String(
+            debugCache?.promptTokenCacheApplied
+              ? `applied (${Math.round(Number(debugCache?.promptTokenCacheHitRatio || 0) * 100)}% hit)`
+              : debugCache?.promptTokenCacheSupported
+                ? (debugCache?.promptTokenCacheLoaded ? 'loaded, not applied' : 'supported, cold')
+                : 'unsupported'
+          ))}</strong></div>
+          <div><span>Prefix KV supported</span><strong>${esc(String(!!debugCache?.prefixKvSupported))}</strong></div>
+          <div><span>Prefix KV applied</span><strong>${esc(String(!!debugCache?.prefixKvApplied))}</strong></div>
+          <div><span>Prefix reused tokens</span><strong>${esc(String(debugCache ? `${debugCache.prefixReusedTokens} / ${debugCache.prefixTotalTokens}` : '0 / 0'))}</strong></div>
+          <div><span>Prefix reuse ratio</span><strong>${esc(String(debugCache ? `${Math.round((debugCache.prefixReuseRatio || 0) * 100)}%` : '0%'))}</strong></div>
+          <div><span>Synthetic cache requested</span><strong>${esc(String(!!debugCache?.syntheticCacheRequested))}</strong></div>
+          <div><span>Synthetic token cache</span><strong>${esc(String(
+            debugCache?.syntheticCacheApplied
+              ? 'applied'
+              : (Number(debugCache?.verifyBatches || 0) > 0 && Number(debugCache?.proposedTokens || 0) > 0)
+                ? 'verified, bypassed'
+              : debugCache?.syntheticCacheSupported
+                ? (debugCache?.tokenCacheLoaded ? 'loaded, waiting for verification path' : 'supported, cold')
+                : debugCache?.syntheticCacheRequested
+                  ? 'verification unsupported / PrefixKV fallback'
+                  : 'not requested'
+          ))}</strong></div>
+          <div><span>Synthetic cache applied</span><strong>${esc(String(!!debugCache?.syntheticCacheApplied))}</strong></div>
+          <div><span>Draft provider</span><strong>${esc(String(debugCache?.draftProvider || 'noop'))}</strong></div>
+          <div><span>Token verification supported</span><strong>${esc(String(!!debugCache?.tokenVerificationSupported))}</strong></div>
+          <div><span>Proposed tokens</span><strong>${esc(String(debugCache?.proposedTokens ?? 0))}</strong></div>
+          <div><span>Accepted tokens</span><strong>${esc(String(debugCache?.acceptedTokens ?? 0))}</strong></div>
+          <div><span>Rejected tokens</span><strong>${esc(String(debugCache?.rejectedTokens ?? 0))}</strong></div>
+          <div><span>Acceptance ratio</span><strong>${esc(`${Math.round(Number(debugCache?.acceptanceRatio || 0) * 100)}%`)}</strong></div>
+          <div><span>Verify result</span><strong>${esc(`${debugCache?.acceptedTokens ?? 0} ok / ${debugCache?.rejectedTokens ?? 0} reject`)}</strong></div>
+          <div><span>Verify batches</span><strong>${esc(String(debugCache?.verifyBatches ?? 0))}</strong></div>
+          <div><span>Accepted / verify</span><strong>${esc(String(Number(debugCache?.acceptedTokensPerVerify || 0).toFixed(2)))}</strong></div>
+          <div><span>Avg proposed batch</span><strong>${esc(String(Number(debugCache?.avgProposedBatchSize || 0).toFixed(2)))}</strong></div>
+          <div><span>Avg accepted batch</span><strong>${esc(String(Number(debugCache?.avgAcceptedBatchSize || 0).toFixed(2)))}</strong></div>
+          <div><span>Rejected batches</span><strong>${esc(String(debugCache?.rejectedBatches ?? 0))}</strong></div>
+          <div><span>Fallback tokens</span><strong>${esc(String(debugCache?.fallbackTokens ?? 0))}</strong></div>
+          <div><span>Fallback decode tokens</span><strong>${esc(String(debugCache?.fallbackDecodeTokens ?? 0))}</strong></div>
+          <div><span>Renderer inserted</span><strong>${esc(String(debugCache?.rendererInsertedTokens ?? 0))}</strong></div>
+          <div><span>LLM generated</span><strong>${esc(String(debugCache?.llmGeneratedTokens ?? 0))}</strong></div>
+          <div><span>Output reduction</span><strong>${esc(`${Math.round(Number(debugCache?.outputTokenReductionRatio || 0) * 100)}%`)}</strong></div>
+          <div><span>Cache warm</span><strong>${esc(String(!!debugCache?.cacheWarm))}</strong></div>
+          <div><span>Token cache lookup p50</span><strong>${esc(`${Number(debugCache?.tokenCacheLookupMs || 0).toFixed(1)}ms`)}</strong></div>
+          <div><span>Stage execution sum</span><strong>${esc(perfSeconds(activePerf?.stageExecutionSumMs || 0))}</strong></div>
+          <div><span>Orchestration overhead</span><strong>${esc(perfSeconds(activePerf?.orchestrationOverheadMs || 0))}</strong></div>
+          <div><span>Full DRACE stages</span><strong>${esc(Array.isArray(activePerf?.fullDraceAppliedStages) && activePerf?.fullDraceAppliedStages.length ? activePerf.fullDraceAppliedStages.join(', ') : 'none')}</strong></div>
+        </div>
+        <div class="strategyPerfDebugReason">${esc(String(debugCache?.bypassReason || ''))}</div>
+        ${warmupPerf ? `<div class="strategyPerfDebugWarmup">최근 warmup 실행은 평균에서 제외됨 · ${esc(perfSeconds(warmupPerf.totalE2eMs))}</div>` : ''}
+        ${baselineFinalStage && draceFinalStage ? `
+          <div class="strategyPerfCompareBlock">
+            <div class="strategyPerfCompareTitle">Final Stage 비교</div>
+            <div class="strategyPerfCompareGrid">
+              <div class="strategyPerfCompareCol">
+                <div class="strategyPerfCompareColTitle">Baseline</div>
+                <div class="strategyPerfCompareRow"><span>model_id</span><strong>${esc(String(baselineFinalStage.modelId || ''))}</strong></div>
+                <div class="strategyPerfCompareRow"><span>prompt_tokens</span><strong>${esc(String(baselineFinalStage.promptTokens || 0))}</strong></div>
+                <div class="strategyPerfCompareRow"><span>output_tokens</span><strong>${esc(String(baselineFinalStage.outputTokens || 0))}</strong></div>
+                <div class="strategyPerfCompareRow"><span>n_ctx</span><strong>${esc(String(baselineFinalStage.nCtx || 0))}</strong></div>
+                <div class="strategyPerfCompareRow"><span>max_tokens</span><strong>${esc(String(baselineFinalStage.maxTokens || 0))}</strong></div>
+                <div class="strategyPerfCompareRow"><span>threads</span><strong>${esc(String(baselineFinalStage.threads || 0))}</strong></div>
+                <div class="strategyPerfCompareRow"><span>process_spawn_ms</span><strong>${esc(perfSeconds(baselineFinalStage.processSpawnMs || 0))}</strong></div>
+                <div class="strategyPerfCompareRow"><span>prompt_eval_ms</span><strong>${esc(perfSeconds(baselineFinalStage.promptEvalMs || 0))}</strong></div>
+                <div class="strategyPerfCompareRow"><span>decode_ms</span><strong>${esc(perfSeconds(baselineFinalStage.decodeMs || 0))}</strong></div>
+                <div class="strategyPerfCompareRow"><span>stdout_read_ms</span><strong>${esc(perfSeconds(baselineFinalStage.stdoutReadMs || 0))}</strong></div>
+                <div class="strategyPerfCompareRow"><span>postprocess_ms</span><strong>${esc(perfSeconds(baselineFinalStage.postprocessMs || 0))}</strong></div>
+              </div>
+              <div class="strategyPerfCompareCol">
+                <div class="strategyPerfCompareColTitle">Cache Requested</div>
+                <div class="strategyPerfCompareRow"><span>model_id</span><strong>${esc(String(draceFinalStage.modelId || ''))}</strong></div>
+                <div class="strategyPerfCompareRow"><span>prompt_tokens</span><strong>${esc(String(draceFinalStage.promptTokens || 0))}</strong></div>
+                <div class="strategyPerfCompareRow"><span>output_tokens</span><strong>${esc(String(draceFinalStage.outputTokens || 0))}</strong></div>
+                <div class="strategyPerfCompareRow"><span>n_ctx</span><strong>${esc(String(draceFinalStage.nCtx || 0))}</strong></div>
+                <div class="strategyPerfCompareRow"><span>max_tokens</span><strong>${esc(String(draceFinalStage.maxTokens || 0))}</strong></div>
+                <div class="strategyPerfCompareRow"><span>threads</span><strong>${esc(String(draceFinalStage.threads || 0))}</strong></div>
+                <div class="strategyPerfCompareRow"><span>process_spawn_ms</span><strong>${esc(perfSeconds(draceFinalStage.processSpawnMs || 0))}</strong></div>
+                <div class="strategyPerfCompareRow"><span>prompt_eval_ms</span><strong>${esc(perfSeconds(draceFinalStage.promptEvalMs || 0))}</strong></div>
+                <div class="strategyPerfCompareRow"><span>decode_ms</span><strong>${esc(perfSeconds(draceFinalStage.decodeMs || 0))}</strong></div>
+                <div class="strategyPerfCompareRow"><span>stdout_read_ms</span><strong>${esc(perfSeconds(draceFinalStage.stdoutReadMs || 0))}</strong></div>
+                <div class="strategyPerfCompareRow"><span>postprocess_ms</span><strong>${esc(perfSeconds(draceFinalStage.postprocessMs || 0))}</strong></div>
+              </div>
+            </div>
+          </div>
+        ` : ''}
+        <div class="strategyPerfDebugStages">
+          ${debugStageRows.map((stage: any) => `
+            <div class="strategyPerfDebugStage">
+              <div class="strategyPerfDebugStageTitle">${esc(String(stage.stageName || 'stage'))} · ${esc(String(stage.modelId || 'model'))} · ${esc(String(stage.backendKind || 'backend'))}</div>
+              <div class="strategyPerfDebugStageMeta">
+                <span>E2E ${esc(perfSeconds(stage.e2eMs))}</span>
+                <span>TTFT ${esc(perfSeconds(stage.ttftMs))}</span>
+                <span>Prompt ${esc(String(stage.promptTokens || 0))} tok</span>
+                <span>Output ${esc(String(stage.outputTokens || 0))} tok</span>
+                <span>Decode TPS ${esc(String(Number(stage.decodeTps || 0).toFixed(1)))}</span>
+                <span>ctx ${esc(String(stage.nCtx || 0))}</span>
+                <span>threads ${esc(String(stage.threads || 0))}</span>
+                <span>max ${esc(String(stage.maxTokens || 0))}</span>
+              </div>
+              <div class="strategyPerfDebugStageMeta">
+                <span>runner ${esc(String(stage.runnerPath || ''))}</span>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </details>
+      `}
+    </div>
+  `;
+  const headerToolsHtml = `
+    <div class="topbarTools" aria-label="헤더 도구">
+      ${perfHeaderHtml}
+      <button
+        type="button"
+        class="strategyCacheToggle ${strategySyntheticCacheEnabled ? 'isOn' : ''}"
+        data-action="toggle-strategy-synthetic-cache"
+        aria-pressed="${strategySyntheticCacheEnabled ? 'true' : 'false'}"
+        title="Synthetic Token Cache"
+      >
+        <span class="strategyCacheToggleLabel">캐싱</span>
+        <span class="strategyCacheToggleTrack" aria-hidden="true">
+          <span class="strategyCacheToggleThumb"></span>
+        </span>
+      </button>
+    </div>
+  `;
+  const topNavHtml = `
+    <button
+      type="button"
+      class="strategyCacheToggle ${strategySyntheticCacheEnabled ? 'isOn' : ''}"
+      data-action="toggle-strategy-synthetic-cache"
+      aria-pressed="${strategySyntheticCacheEnabled ? 'true' : 'false'}"
+      title="Synthetic Token Cache"
+    >
+      <span class="strategyCacheToggleLabel">캐싱</span>
+      <span class="strategyCacheToggleTrack" aria-hidden="true">
+        <span class="strategyCacheToggleThumb"></span>
+      </span>
+    </button>
+  `;
 
   const casesMainHtml = renderCasesMain(selected);
   const casesSideHtml = showCaseSide ? renderCaseSidebar(selected) : '';
@@ -1379,10 +1770,8 @@ export function render() {
     : `<main class="card">${casesMainHtml}</main>`;
 
   const contentHtml = isHome
-    ? `<section class="serviceSection homeSection"><main class="homeMain">${renderHomeMain()}</main></section>`
-    : isEvidence
-      ? `<section class="serviceSection recordsSection"><main class="recordsMain">${renderRecordsMain()}</main></section>`
-      : isLegal
+    ? `<section class="serviceSection legalSection"><main class="legalMain">${renderLegalConsultMain()}</main></section>`
+    : isLegal
         ? `<section class="serviceSection legalSection"><main class="legalMain">${renderLegalConsultMain()}</main></section>`
         : `<section class="serviceSection casesSection"><main class="casesMain">${renderCasesShell(selected, gridClass, isCasesListView ? gridInner : '')}</main></section>`;
 
@@ -1398,42 +1787,12 @@ export function render() {
               ${renderWindowControls()}
             </div>
             <div class="topbarInner topbarCompact">
-              <nav class="topNav topNavShifted" aria-label="주요 메뉴">
-                <button class="topNavBtn ${currentTab === 'records' ? 'active' : ''}" data-action="tab" data-tab="records" data-route-tab="records" type="button" ${currentTab === 'records' ? 'aria-current="page"' : ''}>
-                  <span class="topNavIcon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M7 3.75H13.5L18 8.25V18.25C18 19.2165 17.2165 20 16.25 20H7C5.89543 20 5 19.1046 5 18V5.75C5 4.64543 5.89543 3.75 7 3.75Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
-                      <path d="M13 3.75V8.75H18" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
-                      <path d="M8.5 12H14.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                      <path d="M8.5 15.5H14.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                    </svg>
-                  </span>
-                  <span class="topNavLabel">기록 보관함</span>
-                </button>
-                <button class="topNavBtn ${currentTab === 'cases' ? 'active' : ''}" data-action="tab" data-tab="cases" data-route-tab="cases" type="button" ${currentTab === 'cases' ? 'aria-current="page"' : ''}>
-                  <span class="topNavIcon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M3.75 8C3.75 6.75736 4.75736 5.75 6 5.75H9.2C9.8066 5.75 10.3884 5.99553 10.8125 6.43089L11.6875 7.31911C12.1116 7.75447 12.6934 8 13.3 8H18C19.2426 8 20.25 9.00736 20.25 10.25V17C20.25 18.2426 19.2426 19.25 18 19.25H6C4.75736 19.25 3.75 18.2426 3.75 17V8Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
-                      <path d="M3.75 10H20.25" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                    </svg>
-                  </span>
-                  <span class="topNavLabel">컬렉션</span>
-                </button>
-                <button class="topNavBtn topNavBtnLegal ${currentTab === 'legal' && legalHubTab === 'simulation' ? 'active' : ''}" data-action="switch-legal-tab" data-legal-tab="simulation" data-route-tab="legal" type="button" ${currentTab === 'legal' && legalHubTab === 'simulation' ? 'aria-current="page"' : ''}>
-                  <span class="topNavIcon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M12 4.75L18.5 8.5L12 12.25L5.5 8.5L12 4.75Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
-                      <path d="M8 10.5V15.25L12 17.5L16 15.25V10.5" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
-                      <path d="M19 14.5L21 15.75L19 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                  </span>
-                  <span class="topNavLabel">AI 민원 법무팀 에이전트 <span class="legalExperimentalBadge">현재 실험기능입니다</span></span>
-                </button>
-              </nav>
+              <div class="topNav topNavShifted" aria-label="주요 메뉴"></div>
             </div>
+            ${headerToolsHtml}
           </header>
 
-          <div class="serviceContent${currentTab === 'legal' ? ' serviceContentChatMode' : ''}">
+          <div class="serviceContent${isLegalHome ? ' serviceContentChatMode' : ''}">
             ${contentHtml}
           </div>
         </div>
@@ -1444,6 +1803,7 @@ export function render() {
         ${renderUpdateNotesModal()}
         ${renderSimulationPickerModal()}
         ${renderLogsModal()}
+        ${renderStrategyInputGuideModal()}
         ${renderConfirmModal()}
         ${renderSignatureModal()}
         ${renderSignSuccessModal()}
@@ -1484,9 +1844,9 @@ function renderCaseContentProofPanel() {
   if (!ids.length) {
     return `
       <div class="caseProofPanel compactMode">
-        <div class="empty" style="height:160px">아직 컬렉션이 없어요. 먼저 기록을 묶어 컬렉션을 만든 뒤 공유용 문서를 준비할 수 있어요.</div>
+        <div class="empty" style="height:160px">아직 기록묶음이 없어요. 먼저 기록을 묶은 뒤 내보내기 문서를 준비할 수 있어요.</div>
         <div class="rowInline" style="justify-content:flex-end; margin-top:10px">
-          ${H.btnData('컬렉션 만들기로 이동', 'switch-case-tab', { 'case-tab': 'create' }, 'btn primary')}
+          ${H.btnData('기록보관함으로 이동', 'switch-case-tab', { 'case-tab': 'records' }, 'btn primary')}
         </div>
       </div>
     `;
@@ -1500,9 +1860,9 @@ function renderCaseContentProofPanel() {
     <div class="caseProofPanel compactMode">
       <div class="caseProofHero compactMode">
         <div>
-          <div class="simulationEyebrow">공유/제출 문서</div>
-          <div class="h2">출력할 컬렉션을 먼저 선택하세요</div>
-          <div class="muted" style="margin-top:6px">컬렉션 목록에서 하나를 고른 뒤 <b>공유 문서 생성하기</b>를 누르면 미리보기 모달이 열립니다.</div>
+          <div class="simulationEyebrow">내보내기</div>
+          <div class="h2">출력할 기록묶음을 먼저 선택하세요</div>
+          <div class="muted" style="margin-top:6px">기록묶음 목록에서 하나를 고른 뒤 <b>공유 문서 생성하기</b>를 누르면 미리보기 모달이 열립니다.</div>
         </div>
         <div class="caseProofActionRow compactMode">
           ${proofCase ? H.btn('공유 문서 생성하기', 'open-paper-preview', '', 'btn primary') : '<button class="btn" type="button" disabled>공유 문서 생성하기</button>'}
@@ -1512,16 +1872,16 @@ function renderCaseContentProofPanel() {
       ${proofCase ? `
         <div class="caseProofTargetCard compactMode">
           <div class="caseProofTargetMain">
-            <div class="caseProofTargetTitle">${esc(String((proofCase as any).title || '제목 없는 컬렉션'))}</div>
-            <div class="caseProofTargetDesc">${esc(trunc(String((proofCase as any).query || ''), 140) || '컬렉션 설명이 아직 비어 있어요.')}</div>
-          </div>
+          <div class="caseProofTargetTitle">${esc(String((proofCase as any).title || '제목 없는 기록묶음'))}</div>
+          <div class="caseProofTargetDesc">${esc(trunc(String((proofCase as any).query || ''), 140) || '기록묶음 설명이 아직 비어 있어요.')}</div>
+        </div>
           <div class="caseProofStats compactMode">
             <div class="caseProofStat"><span class="k">기록</span><span class="v">${esc(String(proofRecords.length))}</span></div>
             <div class="caseProofStat"><span class="k">최근</span><span class="v">${lastTs ? esc(fmt(lastTs)) : '—'}</span></div>
           </div>
         </div>
       ` : `
-        <div class="caseProofHintCard">선택된 컬렉션이 없습니다. 아래 컬렉션 카드 중 하나를 눌러주세요.</div>
+        <div class="caseProofHintCard">선택된 기록묶음이 없습니다. 아래 목록 중 하나를 눌러주세요.</div>
       `}
 
       <div class="caseProofCaseGrid">
@@ -1535,7 +1895,7 @@ function renderCaseContentProofPanel() {
                 <span class="caseProofCaseTitle">${esc(trunc(String(c.title || '컬렉션'), 34))}</span>
                 <span class="caseProofCaseBadge">${active ? '선택됨' : '선택'}</span>
               </div>
-              <div class="caseProofCaseDesc">${esc(trunc(String(c.query || ''), 92) || '컬렉션 설명이 아직 비어 있어요.')}</div>
+              <div class="caseProofCaseDesc">${esc(trunc(String(c.query || ''), 92) || '기록묶음 설명이 아직 비어 있어요.')}</div>
               <div class="caseProofCaseMeta">${esc(String(recs.length))}개 기록 · ${c.status ? esc(String(c.status)) : '진행중'}</div>
             </button>
           `;
@@ -1563,14 +1923,14 @@ function renderPaperPickContent() {
   return all.length
     ? `
       <div class="paperPickToolbar">
-        <input class="searchInput paperPickSearch" placeholder="컬렉션 제목/설명 검색" value="${esc(q)}" data-action="search-paper-cases" />
+        <input class="searchInput paperPickSearch" placeholder="기록묶음 제목/설명 검색" value="${esc(q)}" data-action="search-paper-cases" />
       </div>
       <div class="paperPickList" role="list">
         ${filtered.length ? filtered.map(({ c, recCount, lastTs }) => `
           <button class="paperPickItem" data-action="pick-paper-case" data-id="${esc((c as any).id)}" type="button" role="listitem">
             <div class="paperPickMain">
               <div class="paperPickTitle">
-                ${esc(String((c as any).title || '제목 없는 컬렉션'))}
+                ${esc(String((c as any).title || '제목 없는 기록묶음'))}
                 ${S.selectedCaseId === (c as any).id ? `<span class="tag butter" style="margin-left:8px;">현재 열림</span>` : ''}
               </div>
               <div class="paperPickMeta">
@@ -1592,10 +1952,10 @@ function renderPaperPickContent() {
     `
     : `
       <div class="empty" style="height:160px">
-        아직 컬렉션이 없어요. 먼저 컬렉션을 만든 뒤 출력할 수 있어요.
+        아직 기록묶음이 없어요. 먼저 기록묶음을 만든 뒤 출력할 수 있어요.
       </div>
       <div class="rowInline" style="justify-content:flex-end; margin-top:10px">
-        ${H.btnData('컬렉션 만들기로 이동', 'switch-case-tab', { 'case-tab': 'create' }, 'btn primary')}
+        ${H.btnData('기록보관함으로 이동', 'switch-case-tab', { 'case-tab': 'records' }, 'btn primary')}
       </div>
     `;
 }
@@ -1603,12 +1963,12 @@ function renderPaperPickContent() {
 function renderPaperPickModal() {
   const actions = `
     <div class="rowInline">
-      ${H.btn('컬렉션 만들기', 'paper-open-case-create', '', 'btn')}
+      ${H.btnData('기록보관함', 'switch-case-tab', { 'case-tab': 'records' }, 'btn')}
       ${H.btn('닫기', 'close-paper-picker')}
     </div>
   `;
 
-  const head = H.modalHead('공유/제출 문서', '어떤 컬렉션으로 PDF를 만들까요?', actions);
+  const head = H.modalHead('내보내기', '어떤 기록묶음으로 PDF를 만들까요?', actions);
   return H.modal('paperPickModal', head, renderPaperPickContent(), 'modal paperPickModal');
 }
 
@@ -1641,9 +2001,27 @@ function renderRestoreModal() {
 
 function renderSettingsModal() {
   const pinReady = hasScreenPin();
+  const backendMode = ((ui as any).strategySyntheticCacheEnabled !== false) ? 'llama-server' : 'cli';
+  const llamaServer = ((ui as any).strategyLlamaServerConfig || {
+    hyperclovaUrl: 'http://127.0.0.1:18081/completion',
+    roosyUrl: 'http://127.0.0.1:18082/completion',
+    cachePrompt: true,
+    hyperclovaSlot: '0',
+    roosySlot: '0',
+    startupTimeoutMs: '90000',
+    requestTimeoutMs: '240000',
+  }) as {
+    hyperclovaUrl: string,
+    roosyUrl: string,
+    cachePrompt: boolean,
+    hyperclovaSlot: string,
+    roosySlot: string,
+    startupTimeoutMs: string,
+    requestTimeoutMs: string,
+  };
   return H.modal(
     'settingsModal',
-    H.modalHead('설정', '백업, 삭제와 화면 잠금 PIN을 여기에서 관리합니다.', H.btn('닫기', 'close-settings')),
+    H.modalHead('설정', '백업, 삭제, 화면 잠금 PIN과 추론 백엔드를 여기에서 관리합니다.', H.btn('닫기', 'close-settings')),
     `
       <div class="settingsGrid">
         <button class="settingsAction" data-action="backup" type="button">
@@ -1686,6 +2064,93 @@ function renderSettingsModal() {
           ${H.btn(pinReady ? 'PIN 변경' : 'PIN 설정', 'save-screen-pin', '', 'btn primary')}
           ${H.btn('PIN 삭제', 'clear-screen-pin', pinReady ? '' : ' disabled', 'btn')}
         </div>
+      </div>
+
+      <div class="settingsBackendCard">
+        <div class="settingsBackendHead">
+          <div>
+            <div class="settingsActionTitle">추론 백엔드</div>
+            <div class="muted">캐싱을 켜면 llama-server resident endpoint를 사용하고, 끄면 CLI baseline으로 동작합니다.</div>
+          </div>
+          <span class="settingsPinBadge ${backendMode === 'llama-server' ? 'ready' : ''}">${backendMode === 'llama-server' ? '캐싱 ON · llama-server' : '캐싱 OFF · CLI'}</span>
+        </div>
+
+        <div class="settingsBackendFields">
+          <label class="pinField settingsBackendField">
+            <span>HyperCLOVA-X endpoint</span>
+            <input
+              type="text"
+              placeholder="http://127.0.0.1:18081/completion"
+              value="${esc(String(llamaServer.hyperclovaUrl || ''))}"
+              data-action="draft-strategy-backend-settings"
+              data-field="hyperclovaUrl"
+            />
+          </label>
+          <label class="pinField settingsBackendField">
+            <span>Roosy-X endpoint</span>
+            <input
+              type="text"
+              placeholder="http://127.0.0.1:18082/completion"
+              value="${esc(String(llamaServer.roosyUrl || ''))}"
+              data-action="draft-strategy-backend-settings"
+              data-field="roosyUrl"
+            />
+          </label>
+          <label class="pinField settingsBackendField">
+            <span>HyperCLOVA-X slot</span>
+            <input
+              type="text"
+              placeholder="0"
+              value="${esc(String(llamaServer.hyperclovaSlot || ''))}"
+              data-action="draft-strategy-backend-settings"
+              data-field="hyperclovaSlot"
+            />
+          </label>
+          <label class="pinField settingsBackendField">
+            <span>Roosy-X slot</span>
+            <input
+              type="text"
+              placeholder="0"
+              value="${esc(String(llamaServer.roosySlot || ''))}"
+              data-action="draft-strategy-backend-settings"
+              data-field="roosySlot"
+            />
+          </label>
+          <label class="pinField settingsBackendField">
+            <span>Healthcheck timeout (ms)</span>
+            <input
+              type="text"
+              placeholder="90000"
+              value="${esc(String(llamaServer.startupTimeoutMs || ''))}"
+              data-action="draft-strategy-backend-settings"
+              data-field="startupTimeoutMs"
+            />
+          </label>
+          <label class="pinField settingsBackendField">
+            <span>Request timeout (ms)</span>
+            <input
+              type="text"
+              placeholder="240000"
+              value="${esc(String(llamaServer.requestTimeoutMs || ''))}"
+              data-action="draft-strategy-backend-settings"
+              data-field="requestTimeoutMs"
+            />
+          </label>
+          <label class="settingsBackendToggle">
+            <input
+              type="checkbox"
+              ${llamaServer.cachePrompt !== false ? 'checked' : ''}
+              data-action="draft-strategy-backend-settings"
+              data-field="cachePrompt"
+            />
+            <span>llama-server 요청에 cache_prompt=true 포함</span>
+          </label>
+        </div>
+
+        <div class="rowInline settingsBackendActions">
+          ${H.btn('가속 서버 설정 저장', 'save-strategy-backend-settings', '', 'btn primary')}
+        </div>
+        <div class="muted settingsBackendHint">llama-server 연결이 실패하면 자동으로 CLI fallback이 허용되며, 실험 패널에는 cache_applied=false와 bypass reason이 함께 표시됩니다. backend 선택은 캐싱 토글이 대신합니다.</div>
       </div>
 
       <div class="muted" style="margin-top:12px; font-size:12px">삭제 전에는 현재 데이터를 꼭 백업해 두는 편이 안전합니다.</div>
@@ -1787,6 +2252,26 @@ function renderConfirmModal() {
   );
 }
 
+function renderStrategyInputGuideModal() {
+  return H.modal(
+    'strategyInputGuideModal',
+    H.modalHead('입력 가이드', '@와 #를 쓰면 주체와 조치를 더 또렷하게 반영할 수 있어요.', H.btn('닫기', 'close-strategy-input-guide')),
+    `
+      <div class="strategyInputGuideBody">
+        <div class="strategyInputGuideItem">
+          <div class="strategyInputGuideToken">@이름</div>
+          <div class="strategyInputGuideText">관계관리 인물을 연결해 주체를 더 정확히 찾습니다. 예: <strong>@지수</strong></div>
+        </div>
+        <div class="strategyInputGuideItem">
+          <div class="strategyInputGuideToken">#한 조치#</div>
+          <div class="strategyInputGuideText">내가 실제로 한 말과 조치를 감싸서 기록의 <strong>내 대응 메모</strong>에 우선 반영합니다.</div>
+        </div>
+        <div class="strategyInputGuideExample">예: @지수와 @상수가 점심시간에 다퉜어. #두 학생을 분리 지도하고 각각 진술을 들은 뒤 보호자에게 안내함#</div>
+      </div>
+    `
+  );
+}
+
 function renderSignatureModal() {
   const mode = ui.signatureModalMode || 'create';
   const isAmend = mode === 'amend';
@@ -1798,12 +2283,21 @@ function renderSignatureModal() {
   const sealReasonLabel = isAmend ? '정정 사유' : '봉인 메모';
   const sealReasonPlaceholder = isAmend ? '예: 기록 시각 정정 / 표현 보완 / 이름 수정' : '예: 최초 사실기록 / 통화 직후 즉시 기록';
   const summary = String(activeDraft.summary || '').trim() || '내용 없음';
-  const actorText = String((isAmend ? draftRecordEdit.actorNameOther : draftRecord.actorNameOther) || '').trim() || '미입력';
+  const draftActors = getSignatureDraftActors(activeDraft as any);
+  const actorText = draftActors.map((actor: ActorRef) => actorShort(actor)).join(' · ') || '미입력';
   const placeText = String(((activeDraft as any).placeText || activeDraft.place || '')).trim() || '미입력';
   const storeText = String(((activeDraft as any).storeTypeText || activeDraft.storeType || '')).trim() || '미입력';
   const currentRaw = isAmend && ui.recordEditId ? S.records.find((x) => x.id === ui.recordEditId) ?? null : null;
   const record = currentRaw ? ensureRecordV8(currentRaw as any) : null;
   const currentHash = record ? String((record as any)?.integrity?.currentHash || '') : '';
+  const actorGroupId = String((activeDraft as any).actorGroupId || getRelationshipGroups()[0]?.id || 'group-1');
+  const relGroupId = String((activeDraft as any).relGroupId || getRelationshipGroups()[0]?.id || 'group-1');
+  const relatedItems = Array.isArray((activeDraft as any).related) ? (((activeDraft as any).related as ActorRef[]).filter((actor) => String(actor?.name || '').trim())) : [];
+  const createCanSubmit = isAmend
+    ? true
+    : (draftActors.length > 0
+      && String(((activeDraft as any).placeText || '')).trim().length > 0
+      && String(((activeDraft as any).storeTypeText || '')).trim().length > 0);
 
   return H.modal(
     'signatureModal',
@@ -1834,9 +2328,56 @@ function renderSignatureModal() {
           </div>
         </div>
 
+        ${!isAmend ? `
+          <div class="signatureFieldGrid signatureFieldGridCreate">
+            <div class="field compact signatureFieldFull">
+              <label>사람 <span class="reqStar">*</span></label>
+              <div class="rowInline compactRow gatherActorRow">
+                <div class="grow">${renderRelationshipGroupPicker('draft-record', 'actorGroupId', actorGroupId, '대분류 그룹')}</div>
+                <div class="grow">${renderRelationshipMemberPicker('draft-record', 'actorMemberId', actorGroupId, String((activeDraft as any).actorMemberId || ''), '소분류 인물')}</div>
+                ${H.btn('추가', 'add-record-actor', '', 'btn small')}
+              </div>
+              ${draftActors.length
+                ? `<div class="chips mini composerActorChips gatherActorChips">${draftActors.map((actor: ActorRef, idx: number) => `
+                    <span class="chip">
+                      ${esc(actorShort(actor))}
+                      <button class="chipX" data-action="remove-record-actor" data-idx="${esc(String(idx))}" type="button" title="삭제" aria-label="주체 삭제">×</button>
+                    </span>
+                  `).join('')}</div>`
+                : `<div class="muted composerEmptyHint gatherMutedHint">저장 전에 사람을 1명 이상 입력해 주세요.</div>`}
+            </div>
+
+            <div class="field compact signatureFieldFull">
+              <label>관련자</label>
+              <div class="rowInline compactRow gatherRelatedRow">
+                <div class="grow">${renderRelationshipGroupPicker('draft-record', 'relGroupId', relGroupId, '대분류 그룹')}</div>
+                <div class="grow">${renderRelationshipMemberPicker('draft-record', 'relMemberId', relGroupId, String((activeDraft as any).relMemberId || ''), '소분류 인물')}</div>
+                ${H.btn('추가', 'add-related', '', 'btn small')}
+              </div>
+              ${relatedItems.length
+                ? `<div class="chips mini composerActorChips gatherActorChips">${relatedItems.map((actor, idx) => `
+                    <span class="chip">
+                      ${esc(actorShort(actor))}
+                      <button class="chipX" data-action="remove-related" data-idx="${esc(String(idx))}" type="button" title="삭제" aria-label="관련자 삭제">×</button>
+                    </span>
+                  `).join('')}</div>`
+                : `<div class="muted composerEmptyHint gatherMutedHint">필요한 경우 관련자를 함께 남겨주세요.</div>`}
+            </div>
+
+            <div class="field compact">
+              <label>위치 / 채널 <span class="reqStar">*</span></label>
+              <select data-action="draft-record" data-field="placeText">${renderSelectFromList(PLACE_TYPES as any, String((activeDraft as any).placeText || '온라인'))}</select>
+            </div>
+            <div class="field compact">
+              <label>자료 형태 <span class="reqStar">*</span></label>
+              <select data-action="draft-record" data-field="storeTypeText">${renderSelectFromList(STORE_TYPES as any, String((activeDraft as any).storeTypeText || '전화'))}</select>
+            </div>
+          </div>
+        ` : ''}
+
         <div class="signatureActions">
           ${H.btn('취소', 'close-signature-modal', '', 'btn ghost')}
-          ${H.btn(primaryLabel, 'confirm-signature-submit', '', 'btn primary')}
+          ${H.btn(primaryLabel, 'confirm-signature-submit', !createCanSubmit ? ' disabled aria-disabled="true" title="사람과 위치/채널을 입력하면 저장할 수 있어요"' : '', 'btn primary')}
         </div>
       </div>
     `,
@@ -2095,7 +2636,7 @@ function renderRecordModal() {
     <section class="recordHero">
       <div class="recordHeroTop">
         <div class="recordHeroTitle">${esc(r.summary || '')}</div>
-        <div class="recordHeroBadges">${renderRiskTag((r as any).risk)}${integrityBadge}<span class="integrityCount">rev ${esc(String(getRecordRevisionCount(r as any)))}</span></div>
+        <div class="recordHeroBadges">${integrityBadge}<span class="integrityCount">rev ${esc(String(getRecordRevisionCount(r as any)))}</span></div>
       </div>
       <div class="recordHeroMeta">
         <div class="recordHeroMetaItem"><span>기록 시각</span><b>${esc(fmt(r.ts))}</b></div>
@@ -2114,7 +2655,6 @@ function renderRecordModal() {
         ${H.dr('수정 횟수', esc(String(Math.max(0, getRecordRevisionCount(r as any) - 1))))}
         ${H.ds('관련자', relatedHtml)}
         ${H.ds('현재 내용', `<div class="detailNote">${esc(r.summary || '')}</div>`)}
-        ${H.ds('AI 리스크 신호', renderRiskSummary((r as any).risk))}
       </div>
     </section>
   `;
@@ -2138,10 +2678,12 @@ function renderRecordModal() {
   ]);
 
   const body = `
-    <div class="recordModalTabsWrap">
+    <div class="recordModalBody">
+      <div class="recordModalTabsWrap">
       ${tabs.replace('sectionTabs', 'sectionTabs recordModalTabs')}
+      </div>
+      ${activeTab === 'history' ? historyPanel : activeTab === 'edit' ? editPanel : currentPanel}
     </div>
-    ${activeTab === 'history' ? historyPanel : activeTab === 'edit' ? editPanel : currentPanel}
   `;
 
   const headActions = `
@@ -2190,12 +2732,9 @@ function renderRecordSidebar() {
     const amendCount = Math.max(0, revCount - 1);
     const lastSealedAt = String(r?.integrity?.lastSealedAt || r.ts || '');
     const integrity = verifyRecordIntegrity(r);
-    const rr = normalizeRisk((r as any).risk);
-    const riskLabel = rr?.label ?? 0;
     return `
-      <article class="recMini recMiniTrust ${riskToneClass(riskLabel)} ${amendCount ? 'amended' : ''}" style="${riskInlineCardStyle(riskLabel)}">
+      <article class="recMini recMiniTrust ${amendCount ? 'amended' : ''}">
         ${H.tags([
-          renderRiskTag((r as any).risk),
           H.tag(trunc(recordActorText(r), 28)),
           H.tag(placeLabel(r.place, r.placeOther)),
           `<span class="tag lilac">${esc(storeLabel(r.storeType, r.storeOther))}</span>`,
@@ -2661,15 +3200,15 @@ function renderStudentRosterModal() {
 
 
 function renderCasesShell(selected: CaseItem | null, gridClass: string, gridInner: string) {
-  const active = ui.caseTab === 'list' ? 'list' : ui.caseTab === 'proof' ? 'proof' : 'create';
+  const active = ui.caseTab === 'list' ? 'list' : ui.caseTab === 'proof' ? 'proof' : 'records';
   const isList = active === 'list';
 
-  const panel = active === 'create'
+  const panel = active === 'records'
     ? `
       <div class="caseCommandPanel caseCommandPanelCreate">
-        <div class="subTabHint muted">컬렉션 만들기는 이 화면 안에서 바로 이어집니다.</div>
+        <div class="subTabHint muted">기록을 정리하고 수정한 뒤, 필요한 묶음은 다음 탭에서 이어서 관리할 수 있어요.</div>
         <div class="caseCommandPanelScroll">
-          ${renderCaseCreateContent()}
+          ${renderRecordsMain()}
         </div>
       </div>
     `
@@ -2682,7 +3221,7 @@ function renderCasesShell(selected: CaseItem | null, gridClass: string, gridInne
         </div>
       `
       : `
-        <div class="caseCommandMeta muted">컬렉션 목록과 타임라인은 보기 탭에서 확인할 수 있어요.</div>
+        <div class="caseCommandMeta muted">기록묶음 목록과 타임라인은 보기 탭에서 확인할 수 있어요.</div>
       `;
 
   return `
@@ -2690,9 +3229,9 @@ function renderCasesShell(selected: CaseItem | null, gridClass: string, gridInne
       <div class="card caseCommandDeck">
 
         ${renderMiniTabs([
-          { label: '컬렉션 만들기', action: 'switch-case-tab', dataKey: 'case-tab', dataValue: 'create', active: active === 'create' },
-          { label: '컬렉션 보기', action: 'switch-case-tab', dataKey: 'case-tab', dataValue: 'list', active: active === 'list' },
-          { label: '공유/제출 문서', action: 'switch-case-tab', dataKey: 'case-tab', dataValue: 'proof', active: active === 'proof' },
+          { label: '기록보관함', action: 'switch-case-tab', dataKey: 'case-tab', dataValue: 'records', active: active === 'records' },
+          { label: '기록묶음', action: 'switch-case-tab', dataKey: 'case-tab', dataValue: 'list', active: active === 'list' },
+          { label: '내보내기', action: 'switch-case-tab', dataKey: 'case-tab', dataValue: 'proof', active: active === 'proof' },
         ])}
 
         ${panel}
@@ -2711,8 +3250,8 @@ function renderCasesMain(selected: CaseItem | null) {
   const header = `
     <div class="sectionTitle caseMainTitle">
       <div>
-        <div class="h2">컬렉션</div>
-        <div class="muted">${isFocused ? '열어둔 컬렉션의 타임라인을 보고 있어요. 목록으로를 누르면 컬렉션 목록으로 돌아갑니다.' : '컬렉션 목록에서 열기를 누르면 이 자리에서 타임라인이 열립니다.'}</div>
+        <div class="h2">기록묶음</div>
+        <div class="muted">${isFocused ? '열어둔 기록묶음의 타임라인을 보고 있어요. 목록으로를 누르면 기록묶음 목록으로 돌아갑니다.' : '기록묶음 목록에서 열기를 누르면 이 자리에서 타임라인이 열립니다.'}</div>
       </div>
       <div class="titleActions">
         <span class="countPill">총 ${ids.length}개</span>
@@ -2722,7 +3261,7 @@ function renderCasesMain(selected: CaseItem | null) {
 
   if (!ids.length) {
     return `${header}
-      <div class="empty">아직 컬렉션이 없어요. 위의 컬렉션 만들기에서 먼저 시작해보세요.</div>
+      <div class="empty">아직 기록묶음이 없어요. 기록보관함에서 필요한 기록을 정리한 뒤 새 묶음을 만들어보세요.</div>
     `;
   }
 
@@ -2740,7 +3279,7 @@ function renderCasesMain(selected: CaseItem | null) {
     <div class="caseWorkspace caseWorkspaceSingle">
       <section class="caseWorkspacePane caseWorkspaceListPane">
         <div class="caseWorkspacePaneHead">
-          <div class="title">컬렉션 목록</div>
+          <div class="title">기록묶음 목록</div>
           <div class="muted">열기를 누르면 이 자리에서 타임라인이 열려요.</div>
         </div>
         <div class="caseListScroll">${listHtml}</div>
@@ -2790,7 +3329,7 @@ function renderCaseSidebar(selected: CaseItem | null) {
         <div class="sideCardHead">
           <div>
             <div class="sideCardTitle">실행 로그</div>
-            <div class="muted" style="margin-top:2px">이 컬렉션에서 남긴 내 메모와 조치</div>
+            <div class="muted" style="margin-top:2px">이 기록묶음에서 남긴 내 메모와 조치</div>
           </div>
           <span class="countPill">${esc(String(steps.length))}</span>
         </div>
@@ -2864,7 +3403,7 @@ function renderCaseCreateContent() {
   return `
     <div class="caseCreateFlow">
       <div class="helperBox" style="margin-bottom:14px; margin-top:0;">
-        <b>사용법:</b> 기록 보관함에 저장된 주체와 관련자 중 필요한 사람을 고르면 AI가 관련 기록을 우선적으로 모아 컬렉션을 구성해줍니다.
+        <b>사용법:</b> 기록보관함에 저장된 주체와 관련자 중 필요한 사람을 고르면 AI가 관련 기록을 우선적으로 모아 기록묶음을 구성해줍니다.
       </div>
 
       <div class="field highlight-section">
@@ -2889,7 +3428,7 @@ function renderCaseCreateContent() {
       </div>
 
       <div class="field" style="margin-top:16px;">
-        <label>② 이 컬렉션의 상황/주제를 적어주세요</label>
+        <label>② 이 기록묶음의 상황/주제를 적어주세요</label>
         <textarea rows="3" placeholder="예: 메신저 대화 정리, 계약 변경 요청, 반복 연락 이슈 등" data-action="draft-case" data-field="query">${esc(draftCase.query)}</textarea>
       </div>
 
@@ -2908,14 +3447,14 @@ function renderCaseCreateContent() {
           </div>
 
           <div class="field">
-            <label>컬렉션 제목 (비워두면 자동 생성)</label>
+            <label>기록묶음 제목 (비워두면 자동 생성)</label>
             <input value="${esc(draftCase.title)}" placeholder="예: 반복 연락 정리 / 프로젝트 이슈 모음" data-action="draft-case" data-field="title" />
           </div>
         </div>
       </details>
 
       <div class="rowInline caseCreateActions" style="margin-top:16px; padding-top:10px; border-top:1px solid var(--grey-200);">
-        ${H.btn('컬렉션 만들기 시작', 'create-case', startExtra, 'btn primary')}
+        ${H.btn('기록묶음 만들기', 'create-case', startExtra, 'btn primary')}
         ${H.btn('초기화', 'clear-case-draft')}
       </div>
     </div>
@@ -2925,7 +3464,7 @@ function renderCaseCreateContent() {
 function renderCaseCreateModal() {
   return H.modal(
     'caseCreateModal',
-    H.modalHead('컬렉션 만들기', 'AI가 관련 기록을 자동 선별해 첫 컬렉션을 제안합니다.', H.btn('닫기', 'close-case-create')),
+    H.modalHead('기록묶음 만들기', 'AI가 관련 기록을 자동 선별해 첫 기록묶음을 제안합니다.', H.btn('닫기', 'close-case-create')),
     renderCaseCreateContent(),
     'modal caseCreateModal'
   );
@@ -2976,7 +3515,7 @@ function renderCaseUpdateModal() {
     return String(b.record.ts || '').localeCompare(String(a.record.ts || '')); // 최신순
   });
 
-  const title = c ? trunc(c.title, 40) : '컬렉션에 기록 추가';
+  const title = c ? trunc(c.title, 40) : '기록묶음에 기록 추가';
 
   // 필터 바 (입력값=draft, 적용값=applied)
   const updPlaceSel = String(((ui as any).updFilterPlaceDraft ?? (ui as any).updFilterPlace) || '');
@@ -3037,7 +3576,6 @@ function renderCaseUpdateModal() {
             tags.push(`<span class="tag butter">#${rank ?? '?'} 점수 ${esc(score.toFixed(2))}</span>`);
             if (reasons) reasons.forEach((t: string) => tags.push(`<span class="tag aiReason">${esc(t)}</span>`));
           }
-          tags.push(renderRiskTag((record as any).risk));
           tags.push(H.tag(trunc(recordActorText(record), 28)));
           tags.push(H.tag(placeLabel(record.place, record.placeOther)));
 
@@ -3420,7 +3958,7 @@ function renderCaseTimeline(c: CaseItem) {
             <article class="caseTimelineStatCard">
               <span>전체 기록</span>
               <strong>${esc(String(mappedCount))}</strong>
-              <small>컬렉션에 연결된 기록 수</small>
+              <small>기록묶음에 연결된 기록 수</small>
             </article>
             <article class="caseTimelineStatCard">
               <span>보조 항목</span>

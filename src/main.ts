@@ -69,11 +69,16 @@ async function checkAndUpdateApp() {
 
     if (result.includes('업데이트 완료')) {
       setBootSplash(
-        '업데이트를 적용하고 있어요…',
-        '잠시만 기다려주세요. 자동으로 새 버전이 다시 열립니다.',
+        '업데이트 파일 준비를 마쳤어요.',
+        '잠시 후 자동으로 앱이 다시 열리며 새 버전이 적용됩니다.',
         'updating'
       );
-      showUpdateToast('✅ 업데이트를 받았어요. 잠시 후 자동으로 다시 시작됩니다.');
+      showUpdateToast('✅ 업데이트를 받았어요. 잠시 후 새 버전으로 자동 전환됩니다.');
+      window.setTimeout(() => {
+        void invoke('exit_for_update').catch((error) => {
+          console.error('업데이트 종료 에러:', error);
+        });
+      }, 900);
       return;
     }
 

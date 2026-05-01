@@ -49,6 +49,21 @@ function resolveWindowsSidecarExecutable() {
   throw new Error(`Windows sidecar 실행 파일을 찾지 못했어요: ${sidecarPath}`);
 }
 
+function resolveWindowsLlamaServerExecutable() {
+  const explicitServerPath = resolve(repoRoot, 'src-tauri', 'binaries', 'llama-server.exe');
+  if (existsSync(explicitServerPath)) return explicitServerPath;
+  for (const runtimeDir of runtimeDirCandidates) {
+    if (!existsSync(runtimeDir)) continue;
+    const files = walk(runtimeDir);
+    const found = files.find((filePath) => {
+      const lower = filePath.toLowerCase();
+      return lower.endsWith('/llama-server.exe') || lower.endsWith('\\llama-server.exe');
+    });
+    if (found) return found;
+  }
+  throw new Error('Windows llama-server 실행 파일을 찾지 못했어요. runtime zip 안에 llama-server.exe가 포함되어야 해요.');
+}
+
 function resolveRuntimeDlls() {
   for (const runtimeDir of runtimeDirCandidates) {
     if (!existsSync(runtimeDir)) continue;
@@ -70,11 +85,13 @@ function resolveRuntimeDlls() {
 function main() {
   const runtimeDlls = resolveRuntimeDlls();
   const resolvedSidecarPath = resolveWindowsSidecarExecutable();
+  const resolvedLlamaServerPath = resolveWindowsLlamaServerExecutable();
 
   rmSync(runtimeRoot, { recursive: true, force: true });
   mkdirSync(runtimeRoot, { recursive: true });
 
   copyFileSync(resolvedSidecarPath, resolve(runtimeRoot, 'llama-sidecar-x86_64-pc-windows-msvc.exe'));
+  copyFileSync(resolvedLlamaServerPath, resolve(runtimeRoot, 'llama-server.exe'));
   for (const dll of runtimeDlls) {
     copyFileSync(dll.source, resolve(runtimeRoot, dll.name));
   }

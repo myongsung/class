@@ -50,15 +50,15 @@ jobs:
           }
           "version=$version" >> $env:GITHUB_OUTPUT
 
-      - name: build windows portable app
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npm run windows:portable
-
       - name: ensure windows runtime bundle
         env:
           ROOSYCOZY_WINDOWS_RUNTIME_URL: "${{ secrets.ROOSYCOZY_WINDOWS_RUNTIME_URL || vars.ROOSYCOZY_WINDOWS_RUNTIME_URL || 'https://github.com/ggml-org/llama.cpp/releases/download/b8763/llama-b8763-bin-win-cpu-x64.zip' }}"
         run: npm run ci:ensure-windows-runtime
+
+      - name: build windows portable app
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run windows:portable
 
       - name: stage windows runtime asset
         run: node ./scripts/stage-windows-runtime.mjs
@@ -70,7 +70,7 @@ jobs:
           if (Test-Path roosycozy-x86_64-pc-windows-msvc.zip) {
             Remove-Item roosycozy-x86_64-pc-windows-msvc.zip -Force
           }
-          Compress-Archive -Path roosycozy.exe -DestinationPath roosycozy-x86_64-pc-windows-msvc.zip
+          Compress-Archive -Path roosycozy.exe,RoosyCozy -DestinationPath roosycozy-x86_64-pc-windows-msvc.zip
 
       - name: Compress windows runtime asset
         shell: pwsh

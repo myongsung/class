@@ -5451,7 +5451,7 @@ section.grid{
 
 /* ===================== Signature Flow ===================== */
 dialog.modal.signatureModal{
-  max-width: 640px;
+  max-width: 780px;
 }
 .signatureFlow{
   display:flex;
@@ -5503,11 +5503,47 @@ dialog.modal.signatureModal{
   grid-template-columns:repeat(2,minmax(0,1fr));
   gap:12px;
 }
+.signatureFieldGridCreate{
+  align-items:start;
+}
+.signatureFieldFull{
+  grid-column:1 / -1;
+}
+.signatureFieldGridCreate .rowInline.compactRow{
+  align-items:stretch;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.signatureFieldGridCreate .rowInline.compactRow > .grow{
+  min-width:220px;
+}
+.signatureFieldGridCreate .btn.small{
+  min-width:78px;
+  height:38px;
+}
+.signatureFieldGridCreate .gatherActorChips{
+  margin-top:10px;
+}
+.signatureFieldGridCreate .gatherMutedHint{
+  margin-top:8px;
+}
 .signatureActions{
   display:flex;
   align-items:center;
   justify-content:flex-end;
   gap:10px;
+}
+@media (max-width: 760px){
+  dialog.modal.signatureModal{
+    max-width: calc(100vw - 24px);
+  }
+  .signatureMetaGrid,
+  .signatureFieldGrid{
+    grid-template-columns:1fr;
+  }
+  .signatureFieldGridCreate .rowInline.compactRow > .grow{
+    min-width:100%;
+  }
 }
 .signSuccessModal{
   max-width: 460px;
@@ -10461,6 +10497,89 @@ dialog.modal.classRosterModal.__legacy_unused__::backdrop{
   background:#fff;
 }
 
+.settingsBackendCard{
+  margin-top:18px;
+  padding:18px;
+  border-radius:18px;
+  border:1px solid rgba(15,23,42,0.10);
+  background:#fff;
+}
+
+.settingsBackendHead{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:14px;
+}
+
+.settingsBackendModes{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  margin-bottom:14px;
+}
+
+.settingsBackendMode{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  min-height:40px;
+  padding:0 14px;
+  border-radius:999px;
+  border:1px solid rgba(15,23,42,0.10);
+  background:#f8fafc;
+  color:#475569;
+  font-size:13px;
+  font-weight:700;
+}
+
+.settingsBackendMode.active{
+  border-color:#111827;
+  background:#111827;
+  color:#fff;
+}
+
+.settingsBackendMode input{
+  margin:0;
+}
+
+.settingsBackendFields{
+  display:grid;
+  grid-template-columns:repeat(2, minmax(0, 1fr));
+  gap:12px;
+}
+
+.settingsBackendFields.isDisabled{
+  opacity:0.58;
+}
+
+.settingsBackendField input{
+  width:100%;
+}
+
+.settingsBackendToggle{
+  grid-column:1 / -1;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  min-height:42px;
+  padding:0 2px;
+  color:#334155;
+  font-size:13px;
+  font-weight:700;
+}
+
+.settingsBackendActions{
+  margin-top:14px;
+}
+
+.settingsBackendHint{
+  margin-top:10px;
+  font-size:12px;
+  line-height:1.55;
+}
+
 .settingsPinHead{
   display:flex;
   align-items:flex-start;
@@ -10496,6 +10615,9 @@ dialog.modal.classRosterModal.__legacy_unused__::backdrop{
 
 @media (max-width: 720px){
   .settingsPinFields{
+    grid-template-columns:1fr;
+  }
+  .settingsBackendFields{
     grid-template-columns:1fr;
   }
 }
@@ -11111,6 +11233,10 @@ dialog.modal.classRosterModal.__legacy_unused__::backdrop{
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .serviceContent{
   padding-top: 0 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceSection.casesSection{
+  padding-top: 2px !important;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .serviceSection,
@@ -17876,7 +18002,8 @@ body{
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .serviceSidebarNav{
-  gap: 4px !important;
+  margin-top: 10px !important;
+  gap: 0 !important;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .serviceLogo,
@@ -20778,19 +20905,19 @@ dialog.recordComposerModal::backdrop{
   width:min(100%, 1180px) !important;
   max-width:1180px !important;
   margin:0 auto !important;
-  gap:12px !important;
+  gap:10px !important;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroPanel{
   display:grid;
-  grid-template-columns:minmax(0, 1.45fr) minmax(300px, 0.9fr);
-  gap:14px;
+  grid-template-columns:minmax(0, 1.3fr) minmax(290px, 0.82fr);
+  gap:12px;
   align-items:stretch;
-  padding:22px;
-  border-radius:22px;
-  border:1px solid #eee7df;
-  background:#fffdfa;
-  box-shadow:0 12px 28px rgba(15,23,42,0.035);
+  padding:18px;
+  border-radius:18px;
+  border:1px solid #e7edf4;
+  background:#fcfdff;
+  box-shadow:0 8px 22px rgba(15,23,42,0.03);
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroContent{
@@ -20798,60 +20925,60 @@ dialog.recordComposerModal::backdrop{
   display:flex;
   flex-direction:column;
   justify-content:space-between;
-  gap:10px;
+  gap:8px;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroEyebrow{
-  font-size:10px;
-  font-weight:650;
-  letter-spacing:0.16em;
+  font-size:9px;
+  font-weight:600;
+  letter-spacing:0.14em;
   text-transform:uppercase;
-  color:#a08772;
+  color:#8c9aab;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroTitle{
-  max-width:12ch;
-  font-size:clamp(22px, 2.1vw, 32px);
-  line-height:1.06;
-  letter-spacing:-0.055em;
-  font-weight:740;
-  color:#171717;
+  max-width:15ch;
+  font-size:clamp(20px, 1.8vw, 28px);
+  line-height:1.1;
+  letter-spacing:-0.05em;
+  font-weight:680;
+  color:#111827;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroText{
-  max-width:58ch;
-  font-size:12.5px;
-  line-height:1.64;
-  color:#6b6258;
+  max-width:52ch;
+  font-size:11.5px;
+  line-height:1.58;
+  color:#667085;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroActions{
   display:flex;
   flex-wrap:wrap;
-  gap:8px;
+  gap:6px;
   align-items:center;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroActions .btn{
-  min-height:36px !important;
-  height:36px !important;
-  padding:0 13px !important;
-  border-radius:11px !important;
-  font-size:11px !important;
-  font-weight:620 !important;
+  min-height:34px !important;
+  height:34px !important;
+  padding:0 12px !important;
+  border-radius:10px !important;
+  font-size:10.5px !important;
+  font-weight:600 !important;
   box-shadow:none !important;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroActions .btn.primary{
-  background:#23262d !important;
-  border:1px solid rgba(35,38,45,0.08) !important;
+  background:#1f2937 !important;
+  border:1px solid rgba(31,41,55,0.08) !important;
   color:#ffffff !important;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroActions .btn.ghost{
-  background:rgba(255,255,255,0.92) !important;
-  border:1px solid rgba(24,24,27,0.07) !important;
-  color:#52525b !important;
+  background:#ffffff !important;
+  border:1px solid #dde5ef !important;
+  color:#5b6676 !important;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroQuietAction{
@@ -20862,11 +20989,11 @@ dialog.recordComposerModal::backdrop{
   min-width:0;
   display:flex;
   flex-direction:column;
-  gap:10px;
-  padding:16px;
-  border-radius:18px;
-  border:1px solid rgba(24,24,27,0.07);
-  background:rgba(255,255,255,0.9);
+  gap:9px;
+  padding:14px;
+  border-radius:16px;
+  border:1px solid #e7edf4;
+  background:#ffffff;
   box-shadow:none;
   backdrop-filter:none;
 }
@@ -20880,10 +21007,10 @@ dialog.recordComposerModal::backdrop{
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroAsideMeta{
-  font-size:10px;
+  font-size:9.5px;
   font-weight:560;
   letter-spacing:0.03em;
-  color:#a09489;
+  color:#98a2b3;
   white-space:nowrap;
 }
 
@@ -20931,18 +21058,51 @@ dialog.recordComposerModal::backdrop{
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroAsideTitle,
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeFocusTitle{
-  font-size:18px;
-  line-height:1.22;
+  font-size:16px;
+  line-height:1.24;
   letter-spacing:-0.04em;
-  font-weight:690;
-  color:#18181b;
+  font-weight:660;
+  color:#111827;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroAsideText,
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeFocusSummary{
-  font-size:12px;
-  line-height:1.6;
-  color:#6c6259;
+  font-size:11px;
+  line-height:1.55;
+  color:#667085;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroInlineStats{
+  display:grid;
+  grid-template-columns:repeat(3, minmax(0, 1fr));
+  gap:8px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroInlineStat{
+  min-width:0;
+  padding:9px 10px;
+  border-radius:12px;
+  border:1px solid #e8eef5;
+  background:#f9fbfd;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroInlineStat span{
+  display:block;
+  font-size:9px;
+  font-weight:600;
+  letter-spacing:0.08em;
+  text-transform:uppercase;
+  color:#94a3b8;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroInlineStat strong{
+  display:block;
+  margin-top:5px;
+  font-size:18px;
+  line-height:1;
+  letter-spacing:-0.05em;
+  font-weight:670;
+  color:#111827;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeProgressList{
@@ -20951,92 +21111,92 @@ dialog.recordComposerModal::backdrop{
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeProgressItem{
-  padding:9px 0 0;
-  font-size:11px;
-  line-height:1.56;
-  color:#5a554f;
+  padding:8px 0 0;
+  font-size:10.5px;
+  line-height:1.5;
+  color:#475467;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeProgressItem + .homeProgressItem{
-  margin-top:8px;
-  border-top:1px solid rgba(24,24,27,0.08);
+  margin-top:7px;
+  border-top:1px solid #eef2f6;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroAsideFooter{
   margin-top:auto;
   padding-top:10px;
-  border-top:1px solid rgba(24,24,27,0.08);
-  font-size:10.5px;
+  border-top:1px solid #eef2f6;
+  font-size:10px;
   line-height:1.48;
-  color:#92867b;
+  color:#98a2b3;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeStatRail{
   display:grid;
   grid-template-columns:repeat(4, minmax(0, 1fr));
-  gap:10px;
+  gap:8px;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeStatCard{
   min-width:0;
   display:flex;
   flex-direction:column;
-  gap:6px;
-  padding:14px 16px;
-  border-radius:16px;
-  border:1px solid #ece5de;
+  gap:4px;
+  padding:12px 14px;
+  border-radius:14px;
+  border:1px solid #e7edf4;
   background:#ffffff;
-  box-shadow:0 10px 24px rgba(15,23,42,0.03);
+  box-shadow:none;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeStatLabel{
-  font-size:10px;
-  font-weight:620;
+  font-size:9px;
+  font-weight:600;
   letter-spacing:0.12em;
   text-transform:uppercase;
-  color:#a08772;
+  color:#94a3b8;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeStatValue{
-  font-size:26px;
+  font-size:24px;
   line-height:1;
   letter-spacing:-0.06em;
-  font-weight:710;
-  color:#18181b;
+  font-weight:680;
+  color:#111827;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeStatNote{
-  font-size:11px;
+  font-size:10px;
   line-height:1.48;
-  color:#7a7f8a;
+  color:#98a2b3;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeDashboardMatrix{
   display:grid;
   grid-template-columns:repeat(12, minmax(0, 1fr));
-  gap:10px;
+  gap:8px;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homePanel{
   grid-column:span 4;
   min-width:0;
-  padding:16px;
-  border-radius:18px;
-  border:1px solid #ece5de;
+  padding:14px;
+  border-radius:16px;
+  border:1px solid #e7edf4;
   background:#ffffff;
-  box-shadow:0 10px 24px rgba(15,23,42,0.03);
+  box-shadow:none;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homePanelHalf{
+  grid-column:span 6;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homePanelWide{
-  grid-column:span 7;
-}
-
-.container.mobileRefined.iphonePremium.fluidDesktopShell .homePanelSide{
-  grid-column:span 5;
+  grid-column:span 6;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homePanelSoft{
-  background:linear-gradient(180deg, rgba(250,248,244,0.98), rgba(255,255,255,1));
+  background:#fbfdff;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homePanelFull{
@@ -21048,23 +21208,23 @@ dialog.recordComposerModal::backdrop{
   align-items:flex-start;
   justify-content:space-between;
   gap:8px;
-  margin-bottom:10px;
+  margin-bottom:8px;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homePanelTitle{
-  font-size:15px;
+  font-size:14px;
   line-height:1.25;
   letter-spacing:-0.035em;
-  font-weight:690;
-  color:#18181b;
+  font-weight:650;
+  color:#111827;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homePanelText{
-  margin-top:4px;
+  margin-top:3px;
   max-width:40ch;
-  font-size:11px;
-  line-height:1.5;
-  color:#7a7f8a;
+  font-size:10.5px;
+  line-height:1.45;
+  color:#98a2b3;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeChecklist,
@@ -21081,10 +21241,10 @@ dialog.recordComposerModal::backdrop{
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeEntryEmpty{
   width:100%;
   min-width:0;
-  padding:10px 12px;
-  border-radius:14px;
-  border:1px solid #efe9e2;
-  background:#fbfaf8;
+  padding:10px 11px;
+  border-radius:12px;
+  border:1px solid #edf2f7;
+  background:#fbfcfe;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeChecklistItem{
@@ -21101,23 +21261,23 @@ dialog.recordComposerModal::backdrop{
   height:20px;
   flex:0 0 20px;
   border-radius:999px;
-  background:#18181b;
+  background:#334155;
   color:#ffffff;
   font-size:9px;
-  font-weight:650;
+  font-weight:600;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeChecklistText{
-  font-size:12px;
+  font-size:11px;
   line-height:1.5;
-  color:#35302c;
+  color:#344054;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeSignalItem{
-  font-size:11.5px;
+  font-size:11px;
   line-height:1.52;
-  color:#35302c;
-  background:#fcfbf9;
+  color:#344054;
+  background:#fbfcfe;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeFocusTags{
@@ -21133,11 +21293,11 @@ dialog.recordComposerModal::backdrop{
   min-height:24px;
   padding:0 9px;
   border-radius:999px;
-  border:1px solid rgba(24,24,27,0.08);
+  border:1px solid #e6ecf2;
   background:rgba(255,255,255,0.84);
-  font-size:10px;
+  font-size:9.5px;
   font-weight:560;
-  color:#4b5563;
+  color:#667085;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeFocusActionRow{
@@ -21152,8 +21312,8 @@ dialog.recordComposerModal::backdrop{
   height:34px !important;
   padding:0 12px !important;
   border-radius:10px !important;
-  font-size:10.5px !important;
-  font-weight:620 !important;
+  font-size:10px !important;
+  font-weight:600 !important;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeEntryButton{
@@ -21164,13 +21324,13 @@ dialog.recordComposerModal::backdrop{
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeEntryButton:hover{
   transform:none;
-  border-color:#e2d8ce;
+  border-color:#d8e3ef;
   background:#ffffff;
-  box-shadow:0 8px 18px rgba(15,23,42,0.035);
+  box-shadow:0 6px 16px rgba(15,23,42,0.03);
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeEntryButtonRisk{
-  background:linear-gradient(180deg, rgba(255,250,248,0.98), rgba(255,255,255,1));
+  background:#fffdfc;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeEntryTop{
@@ -21186,24 +21346,24 @@ dialog.recordComposerModal::backdrop{
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeEntryTitle{
   min-width:0;
-  font-size:12px;
+  font-size:11px;
   line-height:1.42;
-  font-weight:630;
-  color:#18181b;
+  font-weight:620;
+  color:#111827;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeEntryMeta{
   flex:0 0 auto;
-  font-size:10px;
-  color:#b0aba6;
+  font-size:9.5px;
+  color:#98a2b3;
   white-space:nowrap;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeEntrySub{
   margin-top:6px;
-  font-size:11px;
+  font-size:10.5px;
   line-height:1.48;
-  color:#6b6258;
+  color:#667085;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeRiskTitle{
@@ -21212,10 +21372,10 @@ dialog.recordComposerModal::backdrop{
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .homeEntryEmpty{
   border-style:dashed;
-  background:#fafaf9;
-  font-size:11px;
+  background:#fbfcfe;
+  font-size:10.5px;
   line-height:1.52;
-  color:#7a7f8a;
+  color:#98a2b3;
 }
 
 @media (max-width: 1180px){
@@ -21231,9 +21391,9 @@ dialog.recordComposerModal::backdrop{
     grid-template-columns:repeat(2, minmax(0, 1fr));
   }
 
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .homePanelHalf,
   .container.mobileRefined.iphonePremium.fluidDesktopShell .homePanel,
   .container.mobileRefined.iphonePremium.fluidDesktopShell .homePanelWide,
-  .container.mobileRefined.iphonePremium.fluidDesktopShell .homePanelSide,
   .container.mobileRefined.iphonePremium.fluidDesktopShell .homePanelSoft,
   .container.mobileRefined.iphonePremium.fluidDesktopShell .homePanelFull{
     grid-column:span 1;
@@ -21259,6 +21419,10 @@ dialog.recordComposerModal::backdrop{
     font-size:28px;
   }
 
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroInlineStats{
+    grid-template-columns:1fr;
+  }
+
   .container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroActions .btn,
   .container.mobileRefined.iphonePremium.fluidDesktopShell .homeFocusActionRow .btn{
     width:100%;
@@ -21269,9 +21433,9 @@ dialog.recordComposerModal::backdrop{
     grid-template-columns:1fr;
   }
 
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .homePanelHalf,
   .container.mobileRefined.iphonePremium.fluidDesktopShell .homePanel,
   .container.mobileRefined.iphonePremium.fluidDesktopShell .homePanelWide,
-  .container.mobileRefined.iphonePremium.fluidDesktopShell .homePanelSide,
   .container.mobileRefined.iphonePremium.fluidDesktopShell .homePanelSoft,
   .container.mobileRefined.iphonePremium.fluidDesktopShell .homePanelFull{
     grid-column:1 / -1;
@@ -21716,14 +21880,8 @@ dialog.recordComposerModal::backdrop{
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .serviceLogo::before{
-  content: "" !important;
-  display: inline-block !important;
-  width: 2px !important;
-  height: 22px !important;
-  margin-right: 10px !important;
-  border-radius: 999px !important;
-  background: #111827 !important;
-  opacity: 0.9 !important;
+  content: none !important;
+  display: none !important;
 }
 
 .container.mobileRefined.iphonePremium.fluidDesktopShell .serviceLogoGlyph{
@@ -23464,6 +23622,425 @@ dialog.modal.strategyPickerModal::backdrop{
   vertical-align: middle;
 }
 
+.strategyCacheToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  min-height: 30px;
+  border-radius: 999px;
+  border: 1px solid rgba(160, 176, 197, 0.2);
+  background: rgba(255, 255, 255, 0.9);
+  color: #617289;
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 600;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.strategyCacheToggle:hover,
+.strategyCacheToggle:focus-visible {
+  border-color: rgba(116, 145, 185, 0.28);
+  background: rgba(248, 251, 255, 0.96);
+}
+
+.strategyCacheToggleTrack {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 30px;
+  height: 18px;
+  border-radius: 999px;
+  background: rgba(184, 196, 214, 0.42);
+  transition: background 160ms ease;
+}
+
+.strategyCacheToggleThumb {
+  position: absolute;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(44, 60, 84, 0.18);
+  transition: transform 160ms ease;
+}
+
+.strategyCacheToggle.isOn {
+  color: #33557d;
+}
+
+.strategyCacheToggle.isOn .strategyCacheToggleTrack {
+  background: rgba(111, 155, 214, 0.76);
+}
+
+.strategyCacheToggle.isOn .strategyCacheToggleThumb {
+  transform: translateX(12px);
+}
+
+.strategyBackendToggle{
+  appearance:none;
+  border:1px solid rgba(160, 176, 197, 0.26);
+  background:rgba(255,255,255,0.96);
+  color:#52637a;
+  min-height:38px;
+  padding:0 12px;
+  border-radius:14px;
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  box-shadow:0 10px 24px rgba(44, 60, 84, 0.06);
+  backdrop-filter:blur(12px);
+  font-size:12px;
+  font-weight:700;
+}
+
+.strategyBackendToggleLabel{
+  font-size:10px;
+  letter-spacing:0.05em;
+  text-transform:uppercase;
+  color:#91a1b6;
+}
+
+.strategyBackendToggle strong{
+  font-size:12px;
+  font-weight:800;
+  color:#233248;
+}
+
+.strategyBackendToggle.isServer{
+  border-color:rgba(37, 99, 235, 0.28);
+}
+
+.topbarTools {
+  position: absolute;
+  right: 14px;
+  top: 6px;
+  z-index: 3;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topbarTools {
+  position: fixed !important;
+  right: 18px !important;
+  top: 28px !important;
+  z-index: 460 !important;
+  display: flex !important;
+  align-items: flex-start !important;
+  gap: 10px !important;
+  pointer-events: auto !important;
+}
+
+.strategyPerfPanel {
+  width: min(500px, calc(100vw - 440px));
+  display: grid;
+  gap: 8px;
+  padding: 9px 10px;
+  max-height: min(72vh, 760px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  border-radius: 16px;
+  border: 1px solid rgba(160, 176, 197, 0.22);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 10px 24px rgba(44, 60, 84, 0.07);
+  backdrop-filter: blur(12px);
+}
+
+.strategyPerfPanel::-webkit-scrollbar {
+  width: 8px;
+}
+
+.strategyPerfPanel::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(140, 157, 182, 0.45);
+}
+
+.strategyPerfPanel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.strategyPerfHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.strategyPerfHeaderActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.strategyPerfHeaderText {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.strategyPerfEyebrow {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #6d7e98;
+}
+
+.strategyPerfTitle {
+  font-size: 13px;
+  font-weight: 800;
+  color: #233248;
+}
+
+.strategyPerfCompactSummary {
+  font-size: 10px;
+  line-height: 1.35;
+  color: #6d7e98;
+}
+
+.strategyPerfCollapseBtn {
+  flex: 0 0 auto;
+  min-height: 26px;
+  padding: 0 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(173, 187, 207, 0.32);
+  background: rgba(255, 255, 255, 0.95);
+  color: #4f6480;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.strategyPerfResetBtn {
+  flex: 0 0 auto;
+  min-height: 26px;
+  padding: 0 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(173, 187, 207, 0.28);
+  background: rgba(246, 249, 253, 0.92);
+  color: #667892;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.strategyPerfCollapseBtn:hover,
+.strategyPerfResetBtn:hover {
+  border-color: rgba(115, 142, 179, 0.42);
+  color: #233248;
+}
+
+.strategyPerfPanel.isCollapsed {
+  gap: 0;
+  padding: 9px 10px;
+}
+
+.strategyPerfSummaryInline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: 9px;
+  color: #6b7b94;
+}
+
+.strategyPerfSummaryInline strong {
+  color: #233248;
+  font-weight: 800;
+}
+
+.strategyPerfStatusLine {
+  font-size: 9px;
+  line-height: 1.45;
+  color: #6f809a;
+}
+
+.strategyPerfRows {
+  display: grid;
+  gap: 2px;
+}
+
+.strategyPerfRow {
+  display: grid;
+  grid-template-columns: 62px 74px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  padding: 3px 0;
+  border-bottom: 1px solid rgba(173, 187, 207, 0.12);
+}
+
+.strategyPerfRow:last-child {
+  border-bottom: 0;
+}
+
+.strategyPerfRowLabel {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #6a7b96;
+}
+
+.strategyPerfRowValue {
+  font-size: 12px;
+  line-height: 1.15;
+  font-weight: 800;
+  color: #1e2a3d;
+  font-variant-numeric: tabular-nums;
+}
+
+.strategyPerfRowDetail {
+  font-size: 9px;
+  line-height: 1.4;
+  color: #70819a;
+  font-variant-numeric: tabular-nums;
+}
+
+.strategyPerfDebug {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid rgba(173, 187, 207, 0.18);
+  padding-top: 8px;
+}
+
+.strategyPerfDebug summary {
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 700;
+  color: #50647f;
+  list-style: none;
+}
+
+.strategyPerfDebug summary::-webkit-details-marker {
+  display: none;
+}
+
+.strategyPerfDebugGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+}
+
+.strategyPerfDebugGrid > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 3px 0;
+  border-bottom: 1px solid rgba(173, 187, 207, 0.12);
+  background: transparent;
+  border-radius: 0;
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
+}
+
+.strategyPerfDebugGrid span {
+  font-size: 9px;
+  color: #70819a;
+  white-space: nowrap;
+}
+
+.strategyPerfDebugGrid strong {
+  font-size: 10px;
+  color: #233248;
+  text-align: right;
+  font-weight: 700;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.strategyPerfDebugReason,
+.strategyPerfDebugWarmup {
+  font-size: 10px;
+  line-height: 1.35;
+  color: #6d7e98;
+}
+
+.strategyPerfCompareBlock{
+  display:grid;
+  gap:10px;
+  padding:10px 12px;
+  border-radius:14px;
+  border:1px solid rgba(173, 187, 207, 0.18);
+  background:rgba(246, 249, 253, 0.96);
+}
+
+.strategyPerfCompareTitle{
+  font-size:12px;
+  font-weight:800;
+  color:#233248;
+}
+
+.strategyPerfCompareGrid{
+  display:grid;
+  grid-template-columns:repeat(2, minmax(0, 1fr));
+  gap:12px;
+}
+
+.strategyPerfCompareCol{
+  display:grid;
+  gap:6px;
+}
+
+.strategyPerfCompareColTitle{
+  font-size:11px;
+  font-weight:800;
+  letter-spacing:0.04em;
+  text-transform:uppercase;
+  color:#53657d;
+}
+
+.strategyPerfCompareRow{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  font-size:11px;
+  color:#70819a;
+}
+
+.strategyPerfCompareRow strong{
+  color:#233248;
+  font-weight:800;
+  text-align:right;
+}
+
+.strategyPerfDebugStages {
+  display: grid;
+  gap: 8px;
+}
+
+.strategyPerfDebugStage {
+  display: grid;
+  gap: 4px;
+  padding: 8px 9px;
+  border-radius: 12px;
+  background: rgba(246, 249, 253, 0.96);
+  border: 1px solid rgba(173, 187, 207, 0.18);
+}
+
+.strategyPerfDebugStageTitle {
+  font-size: 11px;
+  font-weight: 700;
+  color: #233248;
+}
+
+.strategyPerfDebugStageMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 10px;
+  color: #70819a;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topbar {
+  position: relative;
+}
+
 .legalExperimentalBadge {
   display: inline-flex;
   align-items: center;
@@ -23580,4 +24157,955 @@ dialog.modal.strategyPickerModal::backdrop{
     box-shadow: 0 0 0 0 rgba(109, 147, 204, 0);
     transform: scale(0.96);
   }
+}
+
+/* =====================================================================
+   2026-04-21 dashboard home pass
+   - bolder dashboard shell
+   - asymmetric board layout
+   ===================================================================== */
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeDashboardDeck{
+  display:grid;
+  grid-template-columns:repeat(12, minmax(0, 1fr));
+  gap:10px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroPanelDashboard{
+  grid-column:span 8;
+  min-height:260px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroAsideDashboard{
+  justify-content:space-between;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeStatRailDashboard{
+  grid-column:span 4;
+  display:grid;
+  grid-template-columns:repeat(2, minmax(0, 1fr));
+  gap:8px;
+  align-content:stretch;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeStatRailDashboard .homeStatCard{
+  min-height:126px;
+  justify-content:space-between;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeDashboardBoard{
+  align-items:stretch;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeDashboardBoard .homePanelHalf{
+  grid-column:span 4;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeDashboardBoard .homePanelRecords,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeDashboardBoard .homePanelCollections{
+  grid-column:span 6;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homePanelSignal .homeSignalList{
+  gap:10px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homePanelSignal .homeSignalItem{
+  min-height:82px;
+  display:flex;
+  align-items:flex-start;
+}
+
+@media (max-width: 1180px){
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .homeDashboardDeck{
+    grid-template-columns:1fr;
+  }
+
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroPanelDashboard,
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .homeStatRailDashboard{
+    grid-column:1 / -1;
+  }
+
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .homeDashboardBoard .homePanelHalf,
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .homeDashboardBoard .homePanelRecords,
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .homeDashboardBoard .homePanelCollections{
+    grid-column:span 1;
+  }
+}
+
+@media (max-width: 720px){
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .homeStatRailDashboard{
+    grid-template-columns:1fr;
+  }
+}
+
+/* home dashboard lean pass */
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeDashboardLean{
+  gap:18px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroPanelLean{
+  display:grid;
+  grid-template-columns:minmax(0, 1fr) 280px;
+  gap:20px;
+  align-items:start;
+  padding:28px 30px;
+  background:linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(247,250,253,0.98) 100%);
+  border:1px solid rgba(165, 179, 199, 0.24);
+  box-shadow:0 18px 44px rgba(33, 52, 76, 0.08);
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroPanelLean .homeHeroTitle{
+  max-width:680px;
+  font-size:clamp(1.92rem, 3vw, 2.64rem);
+  line-height:1.02;
+  letter-spacing:-0.045em;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroPanelLean .homeHeroText{
+  max-width:620px;
+  margin-top:12px;
+  font-size:0.98rem;
+  line-height:1.68;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroPanelLean .homeHeroActions{
+  margin-top:22px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroLeanMeta{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-top:16px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroLeanStats{
+  display:grid;
+  gap:10px;
+  align-content:start;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroLeanStat{
+  display:grid;
+  gap:4px;
+  padding:14px 16px;
+  border-radius:18px;
+  background:rgba(245, 248, 252, 0.94);
+  border:1px solid rgba(165, 179, 199, 0.18);
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroLeanStat .homeStatValue{
+  font-size:1.9rem;
+  line-height:1;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeDashboardQuickGrid{
+  display:grid;
+  grid-template-columns:0.9fr 1.1fr 1fr;
+  gap:16px;
+  align-items:start;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homePanelCompact{
+  padding:22px 22px 20px;
+  border-radius:22px;
+  min-height:100%;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homePanelCompact .homePanelText{
+  font-size:0.9rem;
+  line-height:1.55;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeTaskList{
+  display:grid;
+  gap:12px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeTaskItem{
+  display:grid;
+  grid-template-columns:24px minmax(0, 1fr);
+  gap:12px;
+  align-items:start;
+  padding:12px 0;
+  border-top:1px solid rgba(165, 179, 199, 0.16);
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeTaskItem:first-child{
+  padding-top:0;
+  border-top:none;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeTaskNumber{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:24px;
+  height:24px;
+  border-radius:999px;
+  background:rgba(37, 99, 235, 0.08);
+  color:#315278;
+  font-size:0.78rem;
+  font-weight:700;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeTaskText{
+  color:#294059;
+  font-size:0.93rem;
+  line-height:1.58;
+}
+
+/* record detail modal readability pass */
+.container.mobileRefined.iphonePremium.fluidDesktopShell dialog.modal#recordModal{
+  width:min(860px, calc(100vw - 56px)) !important;
+  max-width:860px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .recordModalBody{
+  display:grid;
+  gap:18px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell dialog.modal#recordModal .modalHead{
+  align-items:flex-start !important;
+  gap:16px !important;
+  padding-bottom:14px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell dialog.modal#recordModal .modalHead .h2{
+  font-size:17px !important;
+  line-height:1.18 !important;
+  font-weight:820 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell dialog.modal#recordModal .modalHead .muted{
+  font-size:11.5px !important;
+  line-height:1.5 !important;
+  max-width:620px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .recordModalTabsWrap{
+  margin-bottom:0 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .recordModalTabs{
+  gap:8px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .recordModalTabs .sectionTab{
+  min-height:38px !important;
+  height:38px !important;
+  padding:0 14px !important;
+  border-radius:12px !important;
+  font-size:11px !important;
+  font-weight:720 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .recordHero{
+  padding:24px 24px 22px !important;
+  border-radius:22px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .recordHeroTop{
+  gap:18px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .recordHeroTitle{
+  font-size:17.5px !important;
+  line-height:1.62 !important;
+  letter-spacing:-0.02em !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .recordHeroMeta{
+  grid-template-columns:repeat(4, minmax(0, 1fr)) !important;
+  gap:12px !important;
+  margin-top:16px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .recordHeroMetaItem{
+  padding:14px 15px !important;
+  border-radius:16px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .recordHeroMetaItem span,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .detailRow .k,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .metaK{
+  font-size:10.5px !important;
+  margin-bottom:5px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .recordHeroMetaItem b,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .recordHeroMetaItem code,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .detailRow .v{
+  font-size:12px !important;
+  line-height:1.55 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .recordCurrentSection .detailGrid{
+  display:grid !important;
+  grid-template-columns:repeat(2, minmax(0, 1fr)) !important;
+  gap:14px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .recordCurrentSection .detailSection{
+  grid-column:1 / -1;
+  margin-top:0 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .detailRow{
+  padding:14px 16px !important;
+  border-radius:16px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .detailNote{
+  padding:18px 20px !important;
+  border-radius:18px !important;
+  font-size:12.5px !important;
+  line-height:1.72 !important;
+  font-weight:650 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .recordSectionHead{
+  margin-bottom:14px !important;
+  gap:16px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .recordSectionTitle{
+  font-size:14px !important;
+  line-height:1.35 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .recordEditPanel,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .recordEditHint,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .recordHistorySection{
+  padding:20px !important;
+  border-radius:22px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell #recordEditSummaryParts{
+  grid-template-columns:repeat(2, minmax(0, 1fr)) !important;
+  gap:14px !important;
+  margin-bottom:14px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell #recordEditSummaryParts .field:first-child{
+  grid-column:1 / -1;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell #recordEditSummaryParts .composerTa{
+  min-height:120px !important;
+  font-size:12.5px !important;
+  line-height:1.68 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .metaInputs{
+  grid-template-columns:1.05fr 1.2fr 0.9fr 0.9fr !important;
+  gap:14px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .revisionGrid{
+  grid-template-columns:repeat(2, minmax(0, 1fr)) !important;
+  gap:12px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .revisionSummary{
+  font-size:12.5px !important;
+  line-height:1.7 !important;
+}
+
+@media (max-width: 860px){
+  .container.mobileRefined.iphonePremium.fluidDesktopShell dialog.modal#recordModal{
+    width:min(calc(100vw - 24px), 680px) !important;
+    max-width:680px !important;
+  }
+
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .recordHeroMeta,
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .recordCurrentSection .detailGrid,
+  .container.mobileRefined.iphonePremium.fluidDesktopShell #recordEditSummaryParts,
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .metaInputs,
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .revisionGrid{
+    grid-template-columns:1fr !important;
+  }
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeFocusActionRow{
+  margin-top:18px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeFlowBlock{
+  display:grid;
+  gap:16px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeFlowSection{
+  display:grid;
+  gap:10px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeFlowSectionTitle{
+  color:#6f8197;
+  font-size:0.74rem;
+  font-weight:700;
+  letter-spacing:0.16em;
+  text-transform:uppercase;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homeFlowList{
+  gap:10px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homePanelUrgentCompact{
+  padding:20px 22px;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .homePanelUrgentCompact .homeEntryList{
+  gap:12px;
+}
+
+@media (max-width: 1180px){
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroPanelLean{
+    grid-template-columns:1fr;
+  }
+
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .homeDashboardQuickGrid{
+    grid-template-columns:1fr;
+  }
+}
+
+@media (max-width: 720px){
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .homeHeroPanelLean{
+    padding:24px 20px;
+  }
+
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .homePanelCompact,
+  .container.mobileRefined.iphonePremium.fluidDesktopShell .homePanelUrgentCompact{
+    padding:18px 16px;
+  }
+}
+
+/* sidebar type reduction */
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarIconBtn,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarSettingsBtn{
+  min-height: 30px !important;
+  height: 30px !important;
+  padding: 0 8px 0 10px !important;
+  gap: 6px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarLabel{
+  font-size: 11.7px !important;
+  font-weight: 650 !important;
+  line-height: 1 !important;
+  letter-spacing: -0.03em !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarIcon{
+  width: 14px !important;
+  height: 14px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceSidebarThreadTitle{
+  font-size: 10.5px !important;
+  font-weight: 700 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceSidebarThreadMeta{
+  font-size: 9.5px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadPackageTitle{
+  font-size: 11px !important;
+  font-weight: 750 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadPackageStamp{
+  font-size: 9.5px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadFolderLabel{
+  font-size: 10.5px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topbar{
+  min-height: 20px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .windowTitlebarStrip{
+  min-height: 22px !important;
+  padding: 4px 12px 0 12px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell[data-window-platform="macos"] .windowTitlebarStrip{
+  padding: 4px 18px 0 18px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topbarInner,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .topbarCompact{
+  display: none !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .serviceContent{
+  padding-top: 0 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .sidebarThreadEmpty{
+  font-size: 10px !important;
+}
+
+/* collection detail readability pass */
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineHero{
+  gap: 14px !important;
+  padding: 18px 18px 16px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineHeroTitle{
+  margin-top: 10px !important;
+  font-size: 23px !important;
+  line-height: 1.16 !important;
+  letter-spacing: -0.045em !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineHeroDesc{
+  margin-top: 10px !important;
+  max-width: 68ch !important;
+  font-size: 12.5px !important;
+  line-height: 1.74 !important;
+  color: #5f6672 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineHeroMeta{
+  margin-top: 14px !important;
+  gap: 7px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineMetaItem{
+  min-height: 28px !important;
+  padding: 0 10px !important;
+  font-size: 10.5px !important;
+  font-weight: 700 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineStatRail{
+  gap: 8px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineStatCard{
+  gap: 4px !important;
+  padding: 12px 12px 11px !important;
+  border-radius: 14px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineStatCard span{
+  font-size: 9.5px !important;
+  letter-spacing: 0.06em !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineStatCard strong{
+  font-size: 20px !important;
+  font-weight: 820 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineStatCard small{
+  font-size: 10.5px !important;
+  line-height: 1.45 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineActionRow{
+  gap: 8px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineActionRow .btn{
+  min-height: 36px !important;
+  padding: 0 12px !important;
+  font-size: 12px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineTrack{
+  padding: 0 16px 16px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineTrack .timelineWrap{
+  padding: 16px 18px !important;
+  border-radius: 18px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineTrack .timeline.timelineEm{
+  gap: 12px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineTrack .timeline.timelineEm .tItem{
+  padding-left: 34px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineTrack .timeline.timelineEm::before{
+  left: 12px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineTrack .timeline.timelineEm .tItem .dot{
+  left: 6px !important;
+  top: 18px !important;
+  width: 12px !important;
+  height: 12px !important;
+  border-width: 3px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineTrack .tDay{
+  margin: 2px 0 -4px 30px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineTrack .tDayPill{
+  height: 24px !important;
+  padding: 0 10px !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineTrack .tCard{
+  padding: 15px 15px 14px !important;
+  border-radius: 16px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineTrack .tCard .title{
+  font-size: 13.5px !important;
+  line-height: 1.62 !important;
+  font-weight: 750 !important;
+  letter-spacing: -0.01em !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineTrack .detailNote{
+  font-size: 12px !important;
+  line-height: 1.72 !important;
+  font-weight: 650 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineTrack .meta{
+  font-size: 10.5px !important;
+  line-height: 1.5 !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineTrack .tag,
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineTrack .chipMini{
+  font-size: 10px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .caseTimelineTrack .actionsRow .btn{
+  min-height: 34px !important;
+  padding: 0 11px !important;
+  font-size: 11.5px !important;
+}
+.strategyModeSwitch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 6px;
+  border: 1px solid rgba(190, 202, 218, 0.58);
+  border-radius: 999px;
+  background: rgba(247, 250, 253, 0.96);
+}
+
+.strategyModeChip {
+  border: 0;
+  background: transparent;
+  color: #7a8798;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 9px 13px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background-color .18s ease, color .18s ease, box-shadow .18s ease;
+}
+
+.strategyModeChip.isActive {
+  background: #ffffff;
+  color: #243447;
+  box-shadow: 0 8px 18px rgba(26, 51, 83, 0.08);
+}
+
+.strategyRecordDraftHint {
+  margin-top: 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #718198;
+}
+
+.strategyRecordDraftActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.strategyRecordDraftEditor {
+  display: grid;
+  gap: 12px;
+}
+
+.strategyRecordDraftTextarea {
+  width: 100%;
+  min-height: 260px;
+  resize: vertical;
+  border: 1px solid rgba(191, 204, 220, 0.74);
+  border-radius: 18px;
+  background: rgba(251, 253, 255, 0.98);
+  padding: 16px 18px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #223245;
+  box-sizing: border-box;
+}
+
+.strategyRecordDraftTextarea:focus {
+  outline: none;
+  border-color: rgba(113, 147, 190, 0.92);
+  box-shadow: 0 0 0 4px rgba(117, 155, 201, 0.12);
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyChatOnlyShell {
+  padding-top: 24px !important;
+}
+
+.container.mobileRefined.iphonePremium.fluidDesktopShell .legalHub.legalHubChatMode .strategyChatThreadOnly {
+  padding-top: 10px !important;
+}
+.strategyModeSwitchUnified {
+  align-items: center;
+  gap: 10px;
+}
+
+.strategyModeSwitchHint {
+  font-size: 11px;
+  line-height: 1.45;
+  color: #7d8798;
+}
+
+.strategyRecordDraftCollectionPrompt {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 13px;
+  border: 1px solid rgba(201, 213, 231, 0.85);
+  border-radius: 14px;
+  background: rgba(246, 249, 253, 0.92);
+}
+
+.strategyRecordDraftCollectionText {
+  font-size: 12px;
+  line-height: 1.55;
+  color: #5f6c82;
+}
+
+.strategyMentionPanel {
+  margin: 10px 0 12px;
+  padding: 8px;
+  border: 1px solid rgba(201, 212, 229, 0.82);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 16px 40px rgba(24, 38, 58, 0.08);
+}
+
+.strategyMentionPanelHead {
+  padding: 2px 6px 8px;
+  font-size: 11px;
+  line-height: 1.45;
+  font-weight: 600;
+  color: #7a8799;
+}
+
+.strategyMentionPanelList {
+  display: grid;
+  gap: 4px;
+}
+
+.strategyMentionOption {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: background-color .16s ease, color .16s ease, transform .16s ease;
+}
+
+.strategyMentionOption:hover,
+.strategyMentionOption.active {
+  background: rgba(237, 243, 250, 0.96);
+}
+
+.strategyMentionOptionName {
+  font-size: 13px;
+  line-height: 1.4;
+  font-weight: 600;
+  color: #243447;
+}
+
+.strategyMentionOptionGroup {
+  flex-shrink: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #7b8798;
+}
+
+.strategyComposerGuideBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 1px solid rgba(205, 216, 231, 0.92);
+  background: rgba(255, 255, 255, 0.96);
+  color: #607086;
+  border-radius: 999px;
+  min-height: 36px;
+  padding: 8px 12px;
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color .16s ease, background-color .16s ease, color .16s ease;
+}
+
+.strategyComposerGuideBtn:hover {
+  border-color: rgba(175, 193, 217, 0.96);
+  background: rgba(244, 248, 253, 0.98);
+  color: #41536a;
+}
+
+.strategyComposerTextareaWrapOnly {
+  position: relative;
+  display: block;
+  min-height: 72px;
+}
+
+.strategyComposerMarkedText {
+  color: #2f6fda;
+  font-weight: inherit;
+}
+
+.strategyComposerTextareaOnly {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  min-height: 72px !important;
+  max-height: 112px !important;
+  padding: 12px 16px !important;
+  font-family: inherit;
+  line-height: 1.55 !important;
+  font-size: 14px !important;
+  letter-spacing: 0 !important;
+  font-weight: 500;
+  border: 0 !important;
+  resize: none;
+  overflow-y: auto;
+  background: transparent !important;
+  color: #1f2937 !important;
+  -webkit-text-fill-color: #1f2937 !important;
+  caret-color: #1f2937;
+}
+
+.strategyComposerTextareaOnly::placeholder {
+  color: #94a3b8 !important;
+  -webkit-text-fill-color: #94a3b8 !important;
+}
+
+.strategyActionPrompt {
+  margin: 10px 0 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(201, 212, 229, 0.82);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 12px 30px rgba(24, 38, 58, 0.06);
+}
+
+.strategyActionPromptHead {
+  margin-bottom: 8px;
+  font-size: 11px;
+  line-height: 1.4;
+  font-weight: 700;
+  color: #6b7788;
+}
+
+.strategyActionPromptRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.strategyActionPromptInput {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid rgba(205, 216, 231, 0.92);
+  border-radius: 12px;
+  background: #fff;
+  color: #1f2937;
+  font-size: 13px;
+  line-height: 1.2;
+  font-weight: 500;
+}
+
+.strategyActionPromptInput:focus {
+  outline: none;
+  border-color: rgba(85, 126, 212, 0.78);
+  box-shadow: 0 0 0 3px rgba(47, 111, 218, 0.10);
+}
+
+.strategyActionPromptBtn {
+  flex-shrink: 0;
+  height: 38px;
+  padding: 0 14px;
+  border: 1px solid rgba(205, 216, 231, 0.92);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.96);
+  color: #334155;
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.strategyActionPromptBtn:hover {
+  border-color: rgba(175, 193, 217, 0.96);
+  background: rgba(244, 248, 253, 0.98);
+}
+
+.strategyInputGuideBody {
+  display: grid;
+  gap: 12px;
+}
+
+.strategyInputGuideItem {
+  padding: 14px 16px;
+  border: 1px solid rgba(226, 233, 243, 0.96);
+  border-radius: 16px;
+  background: rgba(250, 252, 255, 0.96);
+}
+
+.strategyInputGuideToken {
+  font-size: 12px;
+  line-height: 1.3;
+  font-weight: 800;
+  color: #243447;
+  margin-bottom: 6px;
+}
+
+.strategyInputGuideText,
+.strategyInputGuideExample {
+  font-size: 12px;
+  line-height: 1.7;
+  color: #607086;
+}
+
+.strategyInputGuideExample {
+  padding: 2px 2px 0;
 }

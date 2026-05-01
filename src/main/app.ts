@@ -4,7 +4,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog';
 import { uid, nowISO, toLocalInputValue, fromLocalInputValue, safeParseJSON, defaultState, normalizeState, loadState, saveState, wipeAll, STATUSES, ensureRecordV8, sealNewRecord, amendSignedRecord, verifyRecordIntegrity, buildSignedBackupEnvelope, verifyBackupEnvelope, reverifyStateRecords, refreshDeviceSignerInfo, trunc } from '../utils';
 import type { ActorRef, PlaceType, StoreType, Sensitivity, StepItem, CaseItem, RecordItem } from '../engine';
-import { OTHER, casesContainingRecord, addActorToList, buildRecordFromDraft, createCaseWithAdvisors, regenerateCaseAdvisors, buildCaseTimeline, getCaseUpdateCandidates, addRecordsToCase, recordsForCase, classifyRecordsRisk } from '../engine';
+import { OTHER, casesContainingRecord, addActorToList, buildRecordFromDraft, createCaseWithAdvisors, regenerateCaseAdvisors, buildCaseTimeline, getCaseUpdateCandidates, addRecordsToCase, recordsForCase, recordMainActors } from '../engine';
 import { S, setState, ui, toast, runToastAction, log, openConfirm, closeConfirm, openRecordModal, closeRecordModal,  openCaseCreateModal, closeCaseCreateModal, openTimelineModal, closeTimelineModal, openPaperModal, closePaperModal, openPaperPickModal, closePaperPickModal, openCaseUpdateModal, closeCaseUpdateModal, draftRecord, draftRecordEdit, draftCase, draftStep, actorTypeTextFromInternal, actorTypeInternalFromText, getSelectedCase, logs, actorShort, LVS, PLACE_TYPES, STORE_TYPES, UI_OTHER_ACTOR_LABEL, UI_CLASS_ACTOR_LABEL, normalizeActorTypeTextUI, loadRecordEditDraft, resetRecordEditDraft, hasScreenPin, readScreenPin, saveScreenPin, clearScreenPin, normalizeScreenPin, isValidScreenPin, cloneRelationshipGroups, getRelationshipGroups, makeRelationshipActorRef, parseActorChoice } from './state';
 import { ensurePaperStyles, buildPaperPayload, computeCasePaperHash } from './paper';
 import { render as renderView } from './views';
@@ -57,7 +57,151 @@ type StrategyModelDownloadProgress = {
   indeterminate: boolean,
 };
 
+const STRATEGY_SYNTHETIC_CACHE_STORAGE_KEY = 'roosycozy_strategy_synthetic_cache_enabled_v1';
+const STRATEGY_PERF_LAB_STORAGE_KEY = 'roosycozy_strategy_perf_lab_v1';
+const STRATEGY_BACKEND_SETTINGS_STORAGE_KEY = 'roosycozy_strategy_backend_settings_v1';
+
+type StrategyBackendMode = 'cli' | 'llama-server';
+type StrategyLlamaServerConfigDraft = {
+  hyperclovaUrl: string;
+  roosyUrl: string;
+  cachePrompt: boolean;
+  hyperclovaSlot: string;
+  roosySlot: string;
+  startupTimeoutMs: string;
+  requestTimeoutMs: string;
+};
+
+const defaultStrategyLlamaServerConfig = (): StrategyLlamaServerConfigDraft => ({
+  hyperclovaUrl: 'http://127.0.0.1:18081/completion',
+  roosyUrl: 'http://127.0.0.1:18082/completion',
+  cachePrompt: true,
+  hyperclovaSlot: '0',
+  roosySlot: '0',
+  startupTimeoutMs: '90000',
+  requestTimeoutMs: '240000',
+});
+
+const readStrategyBackendSettings = (): { mode: StrategyBackendMode; llamaServer: StrategyLlamaServerConfigDraft } => {
+  const defaults = defaultStrategyLlamaServerConfig();
+  const normalizeStoredLoopback = (hyperclovaUrl: string, roosyUrl: string) => {
+    const bothLoopback = /^https?:\/\/(127\.0\.0\.1|localhost):\d+\/completion$/i.test(hyperclovaUrl)
+      && /^https?:\/\/(127\.0\.0\.1|localhost):\d+\/completion$/i.test(roosyUrl);
+    if (bothLoopback && hyperclovaUrl.localeCompare(roosyUrl, undefined, { sensitivity: 'accent' }) === 0) {
+      return {
+        hyperclovaUrl: defaults.hyperclovaUrl,
+        roosyUrl: defaults.roosyUrl,
+      };
+    }
+    return { hyperclovaUrl, roosyUrl };
+  };
+  try {
+    const raw = window.localStorage.getItem(STRATEGY_BACKEND_SETTINGS_STORAGE_KEY);
+    if (!raw) return { mode: 'cli', llamaServer: defaults };
+    const parsed = JSON.parse(raw) as Partial<{ mode: StrategyBackendMode; llamaServer: Partial<StrategyLlamaServerConfigDraft> }>;
+    const merged = {
+      ...defaults,
+      ...(parsed?.llamaServer || {}),
+      cachePrompt: parsed?.llamaServer?.cachePrompt !== false,
+    };
+    const normalizedEndpoints = normalizeStoredLoopback(
+      String(merged.hyperclovaUrl || '').trim() || defaults.hyperclovaUrl,
+      String(merged.roosyUrl || '').trim() || defaults.roosyUrl,
+    );
+    return {
+      mode: parsed?.mode === 'llama-server' ? 'llama-server' : 'cli',
+      llamaServer: {
+        ...merged,
+        ...normalizedEndpoints,
+        startupTimeoutMs: String(Math.max(90000, Number(String(merged.startupTimeoutMs || defaults.startupTimeoutMs).trim()) || 90000)),
+        requestTimeoutMs: String(Math.max(240000, Number(String(merged.requestTimeoutMs || defaults.requestTimeoutMs).trim()) || 240000)),
+      },
+    };
+  } catch {
+    return { mode: 'cli', llamaServer: defaults };
+  }
+};
+
+const persistStrategyBackendSettings = (settings: { mode: StrategyBackendMode; llamaServer: StrategyLlamaServerConfigDraft }) => {
+  try {
+    window.localStorage.setItem(STRATEGY_BACKEND_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+  } catch {}
+};
+
+const readStrategySyntheticCacheSetting = () => {
+  try {
+    const raw = window.localStorage.getItem(STRATEGY_SYNTHETIC_CACHE_STORAGE_KEY);
+    if (raw == null) return true;
+    return raw !== '0';
+  } catch {
+    return true;
+  }
+};
+
+const persistStrategySyntheticCacheSetting = (enabled: boolean) => {
+  try {
+    window.localStorage.setItem(STRATEGY_SYNTHETIC_CACHE_STORAGE_KEY, enabled ? '1' : '0');
+  } catch {}
+};
+
+const readStrategyPerfLabState = (): StrategyPerfLabState => {
+  try {
+    const raw = window.localStorage.getItem(STRATEGY_PERF_LAB_STORAGE_KEY);
+    if (!raw) return emptyStrategyPerfLabState();
+    const parsed = JSON.parse(raw) as Partial<StrategyPerfLabState>;
+    return {
+      baseline: parsed?.baseline || null,
+      drace: parsed?.drace || null,
+      baselineRuns: Array.isArray(parsed?.baselineRuns) ? parsed!.baselineRuns! : [],
+      draceRuns: Array.isArray(parsed?.draceRuns) ? parsed!.draceRuns! : [],
+      draceWarmup: parsed?.draceWarmup || null,
+      latest: parsed?.latest || null,
+      comparisonWarning: String(parsed?.comparisonWarning || ''),
+    };
+  } catch {
+    return emptyStrategyPerfLabState();
+  }
+};
+
+const persistStrategyPerfLabState = (state: StrategyPerfLabState) => {
+  try {
+    window.localStorage.setItem(STRATEGY_PERF_LAB_STORAGE_KEY, JSON.stringify(state));
+  } catch {}
+};
+
+const resetStrategyPerfLabState = () => {
+  const next = emptyStrategyPerfLabState();
+  (ui as any).strategyPerfLab = next;
+  (ui as any).strategyPerfRunState = emptyStrategyPerfRunState();
+  persistStrategyPerfLabState(next);
+};
+
+type StrategyMentionSuggestion = {
+  groupId: string,
+  memberId: string,
+  name: string,
+  groupLabel: string,
+};
+
 const isWindowsDesktop = () => typeof navigator !== 'undefined' && /Windows/i.test(String(navigator.userAgent || ''));
+
+(ui as any).strategySyntheticCacheEnabled = readStrategySyntheticCacheSetting();
+(ui as any).strategyPerfLab = readStrategyPerfLabState();
+(ui as any).strategyPerfRunState = {
+  status: 'idle',
+  requestedBackend: 'cli',
+  requestedMode: 'Off',
+  actualBackend: '',
+  startedAt: '',
+  finishedAt: '',
+  error: '',
+  cacheApplied: false,
+} as StrategyPerfRunState;
+{
+  const backendSettings = readStrategyBackendSettings();
+  (ui as any).strategyBackendMode = backendSettings.mode;
+  (ui as any).strategyLlamaServerConfig = backendSettings.llamaServer;
+}
 
 const resetScreenPinModalDraft = () => {
   ui.pinEntryDraft = '';
@@ -78,10 +222,30 @@ const focusStrategyChatComposer = () => {
     const input = document.querySelector('.strategyComposerTextareaOnly') as HTMLTextAreaElement | null;
     input?.focus();
     if (input) {
-      const end = input.value.length;
-      input.setSelectionRange(end, end);
+      const caret = Number((ui as any).strategyChatCaret);
+      const nextCaret = Number.isFinite(caret) && caret >= 0 ? Math.min(caret, input.value.length) : input.value.length;
+      input.setSelectionRange(nextCaret, nextCaret);
+      syncStrategyChatComposerMirror(input);
     }
+    (ui as any).strategyChatCaret = -1;
   }, 0);
+};
+
+const focusStrategyActionComposer = () => {
+  window.setTimeout(() => {
+    const input = document.querySelector('.strategyActionPromptInput') as HTMLInputElement | null;
+    input?.focus();
+    input?.select();
+  }, 0);
+};
+
+const syncStrategyChatComposerMirror = (el: HTMLTextAreaElement | null) => {
+  if (!el) return;
+  const wrap = el.closest('.strategyComposerTextareaWrapOnly') as HTMLElement | null;
+  const mirror = wrap?.querySelector('.strategyComposerMirror') as HTMLElement | null;
+  if (!mirror) return;
+  mirror.scrollTop = el.scrollTop;
+  mirror.scrollLeft = el.scrollLeft;
 };
 
 queueMicrotask(() => {
@@ -139,6 +303,7 @@ const syncDialogs = () => {
   if (ui.paperCaseId || ui.paperHash) openPaperModal();
   if (ui.updateCaseId) openCaseUpdateModal();
   if (ui.settingsOpen) openDlg('settingsModal');
+  if ((ui as any).strategyInputGuideOpen) openDlg('strategyInputGuideModal');
   if (ui.updatesNoteOpen) openDlg('updateNotesModal');
   if (ui.classRosterOpen) openDlg('classRosterModal');
   if ((ui as any).simulationPickerOpen) openDlg('simulationPickerModal');
@@ -437,12 +602,18 @@ const computeSimulationResult = (): SimulationResult | null => {
 
 
 type StrategyChatRole = 'assistant' | 'user' | 'system';
+type StrategyChatMode = 'analysis' | 'record';
 type StrategyChatMessage = {
   id: string;
   role: StrategyChatRole;
   content: string;
   ts: string;
   meta?: string;
+  mode?: StrategyChatMode;
+  recordDraft?: boolean;
+  sourceInput?: string;
+  relatedRecordIds?: string[];
+  relatedCollectionTitle?: string;
 };
 
 type StrategyChatInvokeResult = {
@@ -451,6 +622,7 @@ type StrategyChatInvokeResult = {
   runner: string;
   promptChars: number;
   recordsUsed: number;
+  perfMetrics?: StrategyPerfMetrics;
   retrievalQuery?: string;
   evidencePacket?: {
     mode?: string;
@@ -489,6 +661,219 @@ type StrategyChatInvokeResult = {
   };
 };
 
+type StrategyPrewarmInvokeResult = {
+  backendKind: string;
+  ready: boolean;
+  reason: string;
+  hyperclovaEndpoint: string;
+  roosyEndpoint: string;
+};
+
+type StrategyPerfMetrics = {
+  mode: string;
+  runId: string;
+  promptHash: string;
+  caseHash: string;
+  recordsHash: string;
+  modelConfigHash: string;
+  backendKind: string;
+  cacheRequested: boolean;
+  cacheLoaded: boolean;
+  cacheApplied: boolean;
+  requestedMode: string;
+  appliedMode: string;
+  bypassReason: string;
+  totalE2eMs: number;
+  ttftMs: number | null;
+  totalPromptTokens: number;
+  totalOutputTokens: number;
+  e2eTps: number;
+  decodeTps: number;
+  finalStageTps: number;
+  fullDraceAppliedStages: string[];
+  peakMemoryMb: number;
+  stageExecutionSumMs: number;
+  orchestrationOverheadMs: number;
+  promptBuildMs: number;
+  cacheCapabilityMs: number;
+  cachePlanMs: number;
+  cacheLookupMs: number;
+  promptFileWriteMs: number;
+  processSpawnMs: number;
+  stdoutReadMs: number;
+  postprocessMs: number;
+  otherOverheadMs: number;
+  stages: Array<{
+    stageName: string;
+    modelId: string;
+    backendKind: string;
+    runnerPath: string;
+    threads: number;
+    threadsBatch: number;
+    nCtx: number;
+    maxTokens: number;
+    temperature: number;
+    topP: number;
+    repeatPenalty: number;
+    e2eMs: number;
+    ttftMs: number | null;
+    promptTokens: number;
+    outputTokens: number;
+    promptEvalMs: number | null;
+    decodeMs: number | null;
+    e2eTps: number;
+    decodeTps: number;
+    peakMemoryMb: number;
+    processSpawnMs: number;
+    promptFileWriteMs: number;
+    stdoutReadMs: number;
+    postprocessMs: number;
+    cache: {
+      cacheRequested: boolean;
+      cacheLoaded: boolean;
+      cacheEnabled: boolean;
+      cacheSupported: boolean;
+      cacheWarm: boolean;
+      cacheApplied: boolean;
+      syntheticCacheRequested: boolean;
+      syntheticCacheSupported: boolean;
+      syntheticCacheApplied: boolean;
+      cacheModeRequested: string;
+      cacheModeApplied: string;
+      bypassReason: string;
+      draftProvider: string;
+      promptTokenCacheSupported: boolean;
+      promptTokenCacheLoaded: boolean;
+      promptTokenCacheApplied: boolean;
+      promptTokenCacheHitRatio: number;
+      prefixKvSupported: boolean;
+      prefixKvApplied: boolean;
+      prefixReusedTokens: number;
+      prefixTotalTokens: number;
+      prefixReuseRatio: number;
+      kvLoadMs: number;
+      kvSaveMs: number;
+      tokenCacheSupported: boolean;
+      tokenCacheLoaded: boolean;
+      tokenCacheApplied: boolean;
+      tokenVerificationSupported: boolean;
+      tokenCacheLookupMs: number;
+      proposedTokens: number;
+      acceptedTokens: number;
+      rejectedTokens: number;
+      acceptanceRatio: number;
+      verifyBatches: number;
+      rejectedBatches: number;
+      avgProposedBatchSize: number;
+      avgAcceptedBatchSize: number;
+      acceptedTokensPerVerify: number;
+      fallbackTokens: number;
+      fallbackDecodeTokens: number;
+      rendererInsertedTokens: number;
+      llmGeneratedTokens: number;
+      outputTokenReductionRatio: number;
+    };
+  }>;
+  cacheSummary: {
+    backendType: string;
+    cacheRequested: boolean;
+    cacheLoaded: boolean;
+    cacheApplied: boolean;
+    cacheSupported: boolean;
+    cacheWarm: boolean;
+    syntheticCacheRequested: boolean;
+    syntheticCacheSupported: boolean;
+    syntheticCacheApplied: boolean;
+    cacheModeRequested: string;
+    cacheModeApplied: string;
+    bypassReason: string;
+    draftProvider: string;
+    promptTokenCacheSupported: boolean;
+    promptTokenCacheLoaded: boolean;
+    promptTokenCacheApplied: boolean;
+    promptTokenCacheHitRatio: number;
+    prefixKvSupported: boolean;
+    prefixKvApplied: boolean;
+    prefixReusedTokens: number;
+    prefixTotalTokens: number;
+    prefixReuseRatio: number;
+    tokenCacheSupported: boolean;
+    tokenCacheLoaded: boolean;
+    tokenCacheApplied: boolean;
+    tokenVerificationSupported: boolean;
+    proposedTokens: number;
+    acceptedTokens: number;
+    rejectedTokens: number;
+    acceptanceRatio: number;
+    verifyBatches: number;
+    rejectedBatches: number;
+    avgProposedBatchSize: number;
+    avgAcceptedBatchSize: number;
+    acceptedTokensPerVerify: number;
+    fallbackTokens: number;
+    fallbackDecodeTokens: number;
+    rendererInsertedTokens: number;
+    llmGeneratedTokens: number;
+    outputTokenReductionRatio: number;
+  };
+};
+
+type StrategyPerfLabSample = StrategyPerfMetrics & {
+  comparisonKey: string;
+  capturedAt: string;
+  sampleSize: number;
+  e2eP50Ms: number;
+  e2eP95Ms: number;
+  ttftP50Ms: number;
+  ttftP95Ms: number;
+  tpsP50: number;
+  tpsP95: number;
+  peakMemoryP95Mb: number;
+  benchmarkPhase: 'measured' | 'warmup';
+};
+
+type StrategyPerfLabState = {
+  baseline: StrategyPerfLabSample | null;
+  drace: StrategyPerfLabSample | null;
+  baselineRuns: StrategyPerfLabSample[];
+  draceRuns: StrategyPerfLabSample[];
+  draceWarmup: StrategyPerfLabSample | null;
+  latest: StrategyPerfLabSample | null;
+  comparisonWarning?: string;
+};
+
+type StrategyPerfRunState = {
+  status: 'idle' | 'running' | 'succeeded' | 'failed';
+  requestedBackend: string;
+  requestedMode: string;
+  actualBackend: string;
+  startedAt: string;
+  finishedAt: string;
+  error: string;
+  cacheApplied: boolean;
+};
+
+const emptyStrategyPerfLabState = (): StrategyPerfLabState => ({
+  baseline: null,
+  drace: null,
+  baselineRuns: [],
+  draceRuns: [],
+  draceWarmup: null,
+  latest: null,
+  comparisonWarning: '',
+});
+
+const emptyStrategyPerfRunState = (): StrategyPerfRunState => ({
+  status: 'idle',
+  requestedBackend: 'cli',
+  requestedMode: 'Off',
+  actualBackend: '',
+  startedAt: '',
+  finishedAt: '',
+  error: '',
+  cacheApplied: false,
+});
+
 type StrategyThreadPackageState = {
   id: string;
   title: string;
@@ -512,6 +897,9 @@ const STRATEGY_DEFAULT_PROMPT = '이 상황에서 지금 어떤 말부터 꺼내
 const STRATEGY_PROGRESS_MAX = 8;
 const STRATEGY_THREAD_PACKAGE_LIMIT = 24;
 let _strategyProgressListenerBound = false;
+let _strategyBackendPrewarmStarted = false;
+
+const getStrategyChatMode = (): StrategyChatMode => (((ui as any).strategyChatMode === 'record') ? 'record' : 'analysis');
 
 const getStrategyChatMessages = (): StrategyChatMessage[] => {
   const raw = Array.isArray((ui as any).strategyChatMessages) ? (ui as any).strategyChatMessages : [];
@@ -541,6 +929,8 @@ const cloneStrategyChatMessages = (messages = getStrategyChatMessages()): Strate
   content: String(item.content || '').trim(),
   ts: String(item.ts || nowISO()),
   ...(String(item.meta || '').trim() ? { meta: String(item.meta || '').trim() } : {}),
+  ...((((item as any).mode === 'record') ? { mode: 'record' as const } : { mode: 'analysis' as const })),
+  ...((item as any).recordDraft ? { recordDraft: true } : {}),
 }));
 
 const cloneStrategyEvidencePacket = (packet: StrategyChatInvokeResult['evidencePacket'] | null | undefined): StrategyChatInvokeResult['evidencePacket'] | null => {
@@ -637,8 +1027,14 @@ const openStrategyThreadPackage = async (id: string) => {
   if (!pkg) return;
   (ui as any).strategyThreadPackageId = pkg.id;
   (ui as any).strategyChatMessages = cloneStrategyChatMessages(pkg.messages || []);
+  (ui as any).strategyChatMode = (Array.isArray(pkg.messages) && pkg.messages.some((item) => String((item as any).mode || '') === 'record' || !!(item as any).recordDraft))
+    ? 'record'
+    : 'analysis';
   (ui as any).strategyChatInput = '';
+  (ui as any).strategyChatCaret = -1;
   (ui as any).strategyChatError = '';
+  (ui as any).strategyRecordEditMessageId = '';
+  (ui as any).strategyRecordEditDraft = '';
   (ui as any).strategyChatPending = false;
   (ui as any).strategyChatEvidencePacket = cloneStrategyEvidencePacket(pkg.evidencePacket);
   (ui as any).strategyChatRetrievalQuery = String(pkg.retrievalQuery || '').trim();
@@ -651,6 +1047,7 @@ const openStrategyThreadPackage = async (id: string) => {
     : [];
   (ui as any).simulationResult = null;
   markSimulationDirty();
+  closeStrategyMentionMenu();
   S.tab = 'legal' as any;
   (ui as any).legalTab = 'simulation';
   await saveState(S);
@@ -684,6 +1081,66 @@ const clearStrategyChatProgress = () => {
   (ui as any).strategyChatProgressStage = '';
 };
 
+const percentileNumber = (values: number[], p: number) => {
+  const filtered = values.map((v) => Number(v || 0)).filter((v) => v > 0).sort((a, b) => a - b);
+  if (!filtered.length) return 0;
+  const idx = Math.min(filtered.length - 1, Math.max(0, Math.round((filtered.length - 1) * p)));
+  return filtered[idx];
+};
+
+const averageNumber = (values: number[]) => {
+  const filtered = values.map((v) => Number(v || 0)).filter((v) => Number.isFinite(v));
+  if (!filtered.length) return 0;
+  return filtered.reduce((sum, value) => sum + value, 0) / filtered.length;
+};
+
+const buildStrategyPerfStageSignature = (metrics: StrategyPerfMetrics) => (Array.isArray(metrics.stages) ? metrics.stages : [])
+  .map((stage) => [
+    String(stage.stageName || ''),
+    String(stage.modelId || ''),
+    Number(stage.nCtx || 0),
+    Number(stage.maxTokens || 0),
+    Number(stage.threads || 0),
+    Number(stage.temperature || 0),
+    Number(stage.topP || 0),
+    Number(stage.repeatPenalty || 0),
+  ].join(':'))
+  .join('|');
+
+const buildStrategyPerfComparisonKey = (metrics: StrategyPerfMetrics) => [
+  String(metrics.mode || ''),
+  String(metrics.promptHash || ''),
+  String(metrics.caseHash || ''),
+  String(metrics.recordsHash || ''),
+  String(metrics.modelConfigHash || ''),
+  buildStrategyPerfStageSignature(metrics),
+].join('|');
+
+const aggregateStrategyPerfRuns = (runs: StrategyPerfLabSample[]): StrategyPerfLabSample | null => {
+  if (!runs.length) return null;
+  const latest = runs[runs.length - 1];
+  const e2eValues = runs.map((run) => run.totalE2eMs || 0);
+  const ttftValues = runs.map((run) => run.ttftMs || 0);
+  const tpsValues = runs.map((run) => run.e2eTps || 0);
+  const memoryValues = runs.map((run) => run.peakMemoryMb || 0);
+  return {
+    ...latest,
+    totalE2eMs: averageNumber(e2eValues),
+    ttftMs: averageNumber(ttftValues) || null,
+    e2eTps: averageNumber(tpsValues),
+    peakMemoryMb: averageNumber(memoryValues),
+    sampleSize: runs.length,
+    e2eP50Ms: percentileNumber(e2eValues, 0.5),
+    e2eP95Ms: percentileNumber(e2eValues, 0.95),
+    ttftP50Ms: percentileNumber(ttftValues, 0.5),
+    ttftP95Ms: percentileNumber(ttftValues, 0.95),
+    tpsP50: percentileNumber(tpsValues, 0.5),
+    tpsP95: percentileNumber(tpsValues, 0.95),
+    peakMemoryP95Mb: percentileNumber(memoryValues, 0.95),
+    benchmarkPhase: 'measured',
+  };
+};
+
 const formatStrategyRunnerLabel = (runner: unknown) => {
   const raw = String(runner || '').trim();
   const file = raw.split(/[\\/]/).pop() || raw;
@@ -692,7 +1149,163 @@ const formatStrategyRunnerLabel = (runner: unknown) => {
   return file;
 };
 
+const recordStrategyPerfSample = (metrics: StrategyPerfMetrics | null | undefined) => {
+  if (!metrics) return;
+  const sample: StrategyPerfLabSample = {
+    ...metrics,
+    comparisonKey: buildStrategyPerfComparisonKey(metrics),
+    capturedAt: nowISO(),
+    sampleSize: 1,
+    e2eP50Ms: Number(metrics.totalE2eMs || 0),
+    e2eP95Ms: Number(metrics.totalE2eMs || 0),
+    ttftP50Ms: Number(metrics.ttftMs || 0),
+    ttftP95Ms: Number(metrics.ttftMs || 0),
+    tpsP50: Number(metrics.e2eTps || 0),
+    tpsP95: Number(metrics.e2eTps || 0),
+    peakMemoryP95Mb: Number(metrics.peakMemoryMb || 0),
+    benchmarkPhase: 'measured',
+  };
+  const current = (((ui as any).strategyPerfLab || emptyStrategyPerfLabState()) as StrategyPerfLabState);
+  const next: StrategyPerfLabState = {
+    baseline: current.baseline,
+    drace: current.drace,
+    baselineRuns: Array.isArray(current.baselineRuns) ? [...current.baselineRuns] : [],
+    draceRuns: Array.isArray(current.draceRuns) ? [...current.draceRuns] : [],
+    draceWarmup: current.draceWarmup || null,
+    latest: sample,
+    comparisonWarning: '',
+  };
+  const cacheRequested = !!metrics.cacheSummary?.cacheRequested;
+  const cacheApplied = !!metrics.cacheSummary?.cacheApplied;
+  const cacheWarm = !!metrics.cacheSummary?.cacheWarm;
+  const isWarmup = cacheRequested && cacheApplied && !cacheWarm;
+  const currentSideRuns = cacheRequested ? next.draceRuns : next.baselineRuns;
+  const currentSideKey = currentSideRuns[0]?.comparisonKey || (cacheRequested ? next.drace?.comparisonKey : next.baseline?.comparisonKey) || '';
+  if (currentSideKey && currentSideKey !== sample.comparisonKey) {
+    if (cacheRequested) {
+      next.draceRuns = [];
+      next.drace = null;
+      next.draceWarmup = null;
+    } else {
+      next.baselineRuns = [];
+      next.baseline = null;
+    }
+  }
+  const otherKey = cacheRequested ? current.baseline?.comparisonKey : current.drace?.comparisonKey;
+  if (otherKey && otherKey !== sample.comparisonKey) {
+    next.comparisonWarning = '비교 기준 불일치: 같은 입력과 설정으로 다시 측정하세요.';
+  }
+  if (cacheRequested) {
+    if (isWarmup) {
+      next.draceWarmup = { ...sample, benchmarkPhase: 'warmup' };
+    } else {
+      next.draceRuns.push(sample);
+      next.draceRuns = next.draceRuns.slice(-5);
+      next.drace = aggregateStrategyPerfRuns(next.draceRuns);
+    }
+  } else {
+    next.baselineRuns.push(sample);
+    next.baselineRuns = next.baselineRuns.slice(-3);
+    next.baseline = aggregateStrategyPerfRuns(next.baselineRuns);
+  }
+  const baseline = next.baseline;
+  const drace = next.drace;
+  if (
+    baseline &&
+    drace &&
+    baseline.comparisonKey === drace.comparisonKey &&
+    drace.cacheRequested &&
+    !drace.cacheApplied
+  ) {
+    const base = Number(baseline.totalE2eMs || 0);
+    const currentE2e = Number(drace.totalE2eMs || 0);
+    if (base > 0 && currentE2e > base * 1.05) {
+      const overheadDeltaMs = Math.round(currentE2e - base);
+      next.comparisonWarning = 'DRACE cache was requested but not applied. Runtime should match baseline. Instrumentation overhead exceeded 5%.';
+      log('drace regression warning', {
+        baseline_e2e_ms: base,
+        current_e2e_ms: currentE2e,
+        overhead_delta_ms: overheadDeltaMs,
+        stage_execution_sum_ms: drace.stageExecutionSumMs,
+        orchestration_overhead_ms: drace.orchestrationOverheadMs,
+        bypass_reason: drace.bypassReason,
+      });
+    }
+  }
+  (ui as any).strategyPerfLab = next;
+  persistStrategyPerfLabState(next);
+};
+
 const normalizeStrategyModel = (_value: unknown) => 'roosy-hybrid' as const;
+
+const getStrategyBackendMode = (): StrategyBackendMode => (((ui as any).strategySyntheticCacheEnabled !== false) ? 'llama-server' : 'cli');
+
+const maybeStartStrategyBackendPrewarm = (reason = 'startup') => {
+  if (_strategyBackendPrewarmStarted) return;
+  if (getStrategyBackendMode() !== 'llama-server') return;
+  _strategyBackendPrewarmStarted = true;
+  const llamaServer = getStrategyLlamaServerConfig();
+  void invoke('strategy_prewarm_backend', {
+    args: {
+      backendMode: 'llama-server',
+      llamaServer,
+    },
+  })
+    .then((result) => {
+      const prewarm = result as StrategyPrewarmInvokeResult;
+      if (!prewarm?.ready) {
+        _strategyBackendPrewarmStarted = false;
+      }
+      log('strategy backend prewarm', {
+        reason,
+        backendKind: prewarm?.backendKind,
+        ready: prewarm?.ready,
+        result: prewarm,
+      });
+    })
+    .catch((err) => {
+      _strategyBackendPrewarmStarted = false;
+      log('strategy backend prewarm failed', { reason, err });
+    });
+};
+
+const getStrategyLlamaServerConfig = () => {
+  const raw = ((ui as any).strategyLlamaServerConfig || defaultStrategyLlamaServerConfig()) as StrategyLlamaServerConfigDraft;
+  const isManagedLoopbackCompletion = (value: string) => {
+    const trimmed = String(value || '').trim();
+    return /^https?:\/\/(127\.0\.0\.1|localhost):\d+\/completion$/i.test(trimmed);
+  };
+  const normalizeSlot = (value: string) => {
+    const trimmed = String(value || '').trim();
+    if (!trimmed) return null;
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : null;
+  };
+  const normalizeMs = (value: string, fallback: number) => {
+    const parsed = Number(String(value || '').trim());
+    return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
+  };
+  let hyperclovaUrl = String(raw.hyperclovaUrl || '').trim() || defaultStrategyLlamaServerConfig().hyperclovaUrl;
+  let roosyUrl = String(raw.roosyUrl || '').trim() || defaultStrategyLlamaServerConfig().roosyUrl;
+  if (
+    hyperclovaUrl.localeCompare(roosyUrl, undefined, { sensitivity: 'accent' }) === 0
+    && isManagedLoopbackCompletion(hyperclovaUrl)
+  ) {
+    hyperclovaUrl = defaultStrategyLlamaServerConfig().hyperclovaUrl;
+    roosyUrl = defaultStrategyLlamaServerConfig().roosyUrl;
+  }
+  const hyperclovaSlot = normalizeSlot(raw.hyperclovaSlot);
+  const roosySlot = normalizeSlot(raw.roosySlot);
+  return {
+    hyperclovaUrl,
+    roosyUrl,
+    cachePrompt: raw.cachePrompt !== false,
+    hyperclovaSlot: isManagedLoopbackCompletion(hyperclovaUrl) ? 0 : hyperclovaSlot,
+    roosySlot: isManagedLoopbackCompletion(roosyUrl) ? 0 : roosySlot,
+    startupTimeoutMs: Math.max(90000, normalizeMs(raw.startupTimeoutMs, 90000)),
+    requestTimeoutMs: Math.max(240000, normalizeMs(raw.requestTimeoutMs, 240000)),
+  };
+};
 
 const getStrategyChatModel = () => {
   const next = normalizeStrategyModel((ui as any).strategyChatModel);
@@ -730,7 +1343,12 @@ const ensureStrategyChatProgressListener = () => {
   });
 };
 
-const appendStrategyChatMessage = (role: StrategyChatRole, content: string, meta = '') => {
+const appendStrategyChatMessage = (
+  role: StrategyChatRole,
+  content: string,
+  meta = '',
+  extras: Partial<Pick<StrategyChatMessage, 'mode' | 'recordDraft' | 'sourceInput' | 'relatedRecordIds' | 'relatedCollectionTitle'>> = {},
+) => {
   const safeContent = String(content || '').trim();
   if (!safeContent) return null;
   const msg: StrategyChatMessage = {
@@ -739,17 +1357,36 @@ const appendStrategyChatMessage = (role: StrategyChatRole, content: string, meta
     content: safeContent,
     ts: nowISO(),
     meta: String(meta || '').trim(),
+    mode: extras.mode === 'record' ? 'record' : 'analysis',
+    ...(extras.recordDraft ? { recordDraft: true } : {}),
+    ...(extras.sourceInput ? { sourceInput: String(extras.sourceInput || '') } : {}),
+    ...(Array.isArray(extras.relatedRecordIds) ? { relatedRecordIds: extras.relatedRecordIds.map((id) => String(id || '').trim()).filter(Boolean) } : {}),
+    ...(extras.relatedCollectionTitle ? { relatedCollectionTitle: String(extras.relatedCollectionTitle || '') } : {}),
   };
   getStrategyChatMessages().push(msg);
   syncActiveStrategyThreadPackage();
   return msg;
 };
 
+const updateStrategyChatMessage = (messageId: string, updater: (msg: StrategyChatMessage) => StrategyChatMessage) => {
+  const messages = getStrategyChatMessages();
+  const idx = messages.findIndex((item) => String(item.id || '') === String(messageId || '').trim());
+  if (idx < 0) return null;
+  const next = updater({ ...messages[idx] });
+  messages[idx] = next;
+  syncActiveStrategyThreadPackage();
+  return next;
+};
+
 const clearStrategyChat = () => {
   (ui as any).strategyChatMessages = [];
   (ui as any).strategyChatInput = '';
+  (ui as any).strategyChatCaret = -1;
   (ui as any).strategyChatError = '';
+  (ui as any).strategyRecordEditMessageId = '';
+  (ui as any).strategyRecordEditDraft = '';
   closeStrategyChatModelMenu();
+  closeStrategyMentionMenu();
   (ui as any).strategyChatPending = false;
   (ui as any).strategyChatPendingStartedAt = '';
   (ui as any).strategyChatEvidencePacket = null;
@@ -874,11 +1511,614 @@ const getStrategySelectedRecords = (): RecordItem[] => {
   return getSimulationBaseRecords().filter((record: any) => allowed.has(String(record.id || ''))) as RecordItem[];
 };
 
-const buildStrategyNote = () => {
+const normalizeStrategySearchText = (value: string) =>
+  String(value || '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const normalizeStrategyActorName = (value: string) =>
+  String(value || '')
+    .replace(/[()[\]{}]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const stripStrategyActorParticles = (value: string) =>
+  String(value || '')
+    .replace(/(에게는|에게도|에게서|한테는|한테도|으로는|으로도|에서만|에서|에게|한테|께서|께는|께도|으로|로는|로도|와는|과는|이는|가는|은|는|이|가|을|를|와|과|도)$/u, '')
+    .trim();
+
+const strategyActorNameKey = (value: string) => normalizeStrategyActorName(value).toLowerCase();
+const strategyActorCanonicalKey = (value: string) =>
+  stripStrategyActorParticles(
+    normalizeStrategyActorName(value)
+    .replace(/^(당사자|상대방|관련자|참여자|학생|보호자|학부모|교사|선생님)\s*/u, '')
+  )
+    .replace(/\s+/g, '')
+    .toLowerCase();
+const strategyActorNamesMatch = (left: string, right: string) => {
+  const leftKey = strategyActorNameKey(left);
+  const rightKey = strategyActorNameKey(right);
+  if (!leftKey || !rightKey) return false;
+  if (leftKey === rightKey) return true;
+  const leftCanonical = strategyActorCanonicalKey(left);
+  const rightCanonical = strategyActorCanonicalKey(right);
+  if (!leftCanonical || !rightCanonical) return false;
+  if (leftCanonical === rightCanonical) return true;
+  if (leftCanonical.length < 2 || rightCanonical.length < 2) return false;
+  return leftCanonical.includes(rightCanonical) || rightCanonical.includes(leftCanonical);
+};
+const strategyActorRefKey = (actor: Partial<ActorRef> | null | undefined) =>
+  [
+    String(actor?.type || '').trim(),
+    String(actor?.name || '').trim(),
+    String((actor as any)?.groupId || '').trim(),
+    String((actor as any)?.groupLabel || '').trim(),
+  ].join('::').toLowerCase();
+
+const getStrategyMentionDirectory = (): StrategyMentionSuggestion[] =>
+  getRelationshipGroups().flatMap((group) =>
+    (Array.isArray(group.members) ? group.members : [])
+      .map((member) => ({
+        groupId: String(group.id || '').trim(),
+        memberId: String(member?.id || '').trim(),
+        name: String(member?.name || '').trim(),
+        groupLabel: String(group.title || '').trim(),
+      }))
+      .filter((item) => item.groupId && item.memberId && item.name)
+  );
+
+const STRATEGY_STRUCTURED_MENTION_RE = /(^|[\s(])@([0-9A-Za-z가-힣._-]{1,24})\(([^()\n]{1,40})\)/gu;
+const STRATEGY_BARE_MENTION_RE = /(^|[\s(])@([0-9A-Za-z가-힣._-]{1,24})(?!\()/gu;
+const STRATEGY_ACTION_MARK_RE = /#([^#\n][^#\n]{0,320})#/gu;
+
+const stripStrategyMentionsForPrompt = (value: string) =>
+  String(value || '')
+    .replace(STRATEGY_STRUCTURED_MENTION_RE, (_all, prefix, name) => `${prefix}${name}`)
+    .replace(STRATEGY_BARE_MENTION_RE, (_all, prefix, name) => `${prefix}${name}`);
+
+const extractStrategyActionNotes = (value: string) => {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const match of String(value || '').matchAll(STRATEGY_ACTION_MARK_RE)) {
+    const note = String(match[1] || '').replace(/\s+/g, ' ').trim();
+    const key = note.toLowerCase();
+    if (!note || seen.has(key)) continue;
+    seen.add(key);
+    out.push(note);
+  }
+  return out;
+};
+
+const stripStrategyInputForPrompt = (value: string) =>
+  stripStrategyMentionsForPrompt(value)
+    .replace(STRATEGY_ACTION_MARK_RE, (_all, note) => `${String(note || '').trim()}`)
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const extractStrategyMentionNames = (value: string) => {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const push = (raw: string) => {
+    const name = normalizeStrategyActorName(raw);
+    const key = strategyActorNameKey(name);
+    if (!name || seen.has(key)) return;
+    seen.add(key);
+    out.push(name);
+  };
+  for (const match of String(value || '').matchAll(STRATEGY_STRUCTURED_MENTION_RE)) {
+    push(String(match[2] || ''));
+  }
+  for (const match of String(value || '').matchAll(STRATEGY_BARE_MENTION_RE)) {
+    push(String(match[2] || ''));
+  }
+  return out;
+};
+
+const resolveStrategyMentionedActors = (value: string): ActorRef[] => {
+  const directory = getStrategyMentionDirectory();
+  const out: ActorRef[] = [];
+  const seen = new Set<string>();
+  const push = (actor: ActorRef | null) => {
+    if (!actor) return;
+    const key = strategyActorRefKey(actor);
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    out.push(actor);
+  };
+
+  for (const match of String(value || '').matchAll(STRATEGY_STRUCTURED_MENTION_RE)) {
+    const name = String(match[2] || '');
+    const groupKey = normalizeStrategySearchText(String(match[3] || ''));
+    const picked = directory.find((item) =>
+      strategyActorNamesMatch(item.name, name)
+      && normalizeStrategySearchText(item.groupLabel) === groupKey
+    );
+    if (picked) push(makeRelationshipActorRef(picked.groupId, picked.memberId));
+  }
+
+  for (const match of String(value || '').matchAll(STRATEGY_BARE_MENTION_RE)) {
+    const name = String(match[2] || '');
+    const exactMatches = directory.filter((item) => strategyActorNamesMatch(item.name, name));
+    if (exactMatches.length === 1) {
+      push(makeRelationshipActorRef(exactMatches[0].groupId, exactMatches[0].memberId));
+    }
+  }
+
+  return out;
+};
+
+const findActiveStrategyMention = (value: string, caret: number) => {
+  const safeValue = String(value || '');
+  const safeCaret = Math.max(0, Math.min(Number.isFinite(caret) ? caret : safeValue.length, safeValue.length));
+  const before = safeValue.slice(0, safeCaret);
+  const atIndex = before.lastIndexOf('@');
+  if (atIndex < 0) return null;
+  const prefix = atIndex > 0 ? before.slice(atIndex - 1, atIndex) : ' ';
+  if (prefix && !/[\s(]/.test(prefix)) return null;
+  const segment = before.slice(atIndex, safeCaret);
+  if (!segment.startsWith('@')) return null;
+  if (/\s/.test(segment) || segment.includes('(') || segment.includes(')')) return null;
+  const query = segment.slice(1);
+  if (!/^[0-9A-Za-z가-힣._-]*$/u.test(query)) return null;
+  return {
+    start: atIndex,
+    end: safeCaret,
+    query: normalizeStrategyActorName(query),
+  };
+};
+
+const getStrategyMentionSuggestions = (query: string): StrategyMentionSuggestion[] => {
+  const normalizedQuery = normalizeStrategySearchText(query);
+  const unique = new Map<string, StrategyMentionSuggestion>();
+  for (const item of getStrategyMentionDirectory()) {
+    const key = `${item.groupId}::${item.memberId}`;
+    if (!normalizedQuery) {
+      unique.set(key, item);
+      continue;
+    }
+    const hay = [
+      normalizeStrategySearchText(item.name),
+      normalizeStrategySearchText(item.groupLabel),
+      normalizeStrategySearchText(`${item.name} ${item.groupLabel}`),
+    ];
+    if (hay.some((value) => value.includes(normalizedQuery))) {
+      unique.set(key, item);
+    }
+  }
+  return Array.from(unique.values())
+    .sort((a, b) => {
+      const aStarts = normalizeStrategySearchText(a.name).startsWith(normalizedQuery) ? 1 : 0;
+      const bStarts = normalizeStrategySearchText(b.name).startsWith(normalizedQuery) ? 1 : 0;
+      if (bStarts !== aStarts) return bStarts - aStarts;
+      const groupCmp = a.groupLabel.localeCompare(b.groupLabel, 'ko');
+      if (groupCmp !== 0) return groupCmp;
+      return a.name.localeCompare(b.name, 'ko');
+    })
+    .slice(0, 7);
+};
+
+const closeStrategyMentionMenu = () => {
+  (ui as any).strategyMentionOpen = false;
+  (ui as any).strategyMentionQuery = '';
+  (ui as any).strategyMentionStart = -1;
+  (ui as any).strategyMentionEnd = -1;
+  (ui as any).strategyMentionSelectedIndex = 0;
+  (ui as any).strategyMentionSuggestions = [];
+};
+
+const closeStrategyActionPrompt = () => {
+  (ui as any).strategyActionPromptOpen = false;
+  (ui as any).strategyActionDraft = '';
+};
+
+const openStrategyActionPrompt = (caret: number) => {
+  (ui as any).strategyChatCaret = caret;
+  closeStrategyMentionMenu();
+  (ui as any).strategyActionPromptOpen = true;
+  (ui as any).strategyActionDraft = '';
+  render();
+  focusStrategyActionComposer();
+};
+
+const applyStrategyActionPrompt = () => {
+  const liveDraft = document.querySelector<HTMLInputElement>('[data-action="draft-strategy-action"]');
+  if (liveDraft) {
+    (ui as any).strategyActionDraft = String(liveDraft.value || '');
+  }
+  const note = String((ui as any).strategyActionDraft || '').replace(/\s+/g, ' ').trim();
+  if (!note) {
+    toast('대응 내용을 입력해 주세요');
+    focusStrategyActionComposer();
+    return;
+  }
+  const input = String((ui as any).strategyChatInput || '');
+  const caret = Math.max(0, Math.min(Number((ui as any).strategyChatCaret || input.length), input.length));
+  const token = `#${note}# `;
+  (ui as any).strategyChatInput = `${input.slice(0, caret)}${token}${input.slice(caret)}`;
+  (ui as any).strategyChatCaret = caret + token.length;
+  closeStrategyActionPrompt();
+  render();
+  focusStrategyChatComposer();
+};
+
+const syncStrategyMentionState = (value: string, caret: number) => {
+  const active = findActiveStrategyMention(value, caret);
+  (ui as any).strategyChatCaret = caret;
+  if (!active) {
+    closeStrategyMentionMenu();
+    return;
+  }
+  const suggestions = getStrategyMentionSuggestions(active.query);
+  if (!suggestions.length) {
+    closeStrategyMentionMenu();
+    return;
+  }
+  (ui as any).strategyMentionOpen = true;
+  (ui as any).strategyMentionQuery = active.query;
+  (ui as any).strategyMentionStart = active.start;
+  (ui as any).strategyMentionEnd = active.end;
+  (ui as any).strategyMentionSuggestions = suggestions;
+  const currentIndex = Number((ui as any).strategyMentionSelectedIndex || 0);
+  (ui as any).strategyMentionSelectedIndex = Math.max(0, Math.min(currentIndex, suggestions.length - 1));
+};
+
+const applyStrategyMentionSuggestion = (suggestion: StrategyMentionSuggestion) => {
+  const input = String((ui as any).strategyChatInput || '');
+  const start = Number((ui as any).strategyMentionStart);
+  const end = Number((ui as any).strategyMentionEnd);
+  if (start < 0 || end < start) return;
+  const mentionText = `@${suggestion.name}(${suggestion.groupLabel}) `;
+  const nextValue = `${input.slice(0, start)}${mentionText}${input.slice(end)}`;
+  (ui as any).strategyChatInput = nextValue;
+  (ui as any).strategyChatCaret = start + mentionText.length;
+  closeStrategyMentionMenu();
+  render();
+  focusStrategyChatComposer();
+};
+
+const strategyMentionSuggestionsKey = (suggestions: StrategyMentionSuggestion[]) =>
+  suggestions.map((item) => `${item.groupId}::${item.memberId}`).join('|');
+
+const STRATEGY_STOP_NAMES = new Set(['오늘', '점심시간', '쉬는시간', '싸웠어', '싸움', '다툼', '문제', '상황']);
+
+const extractStrategyPeopleFromInput = (value: string) => {
+  const replaced = stripStrategyInputForPrompt(value)
+    .replace(/이랑|랑|하고| 및 /g, '|')
+    .replace(/와\s+/g, '|')
+    .replace(/과\s+/g, '|')
+    .replace(/[()"'`]/g, ' ');
+  const people: string[] = [];
+  const seen = new Set<string>();
+  for (const chunk of replaced.split('|')) {
+    const candidate = String(chunk || '')
+      .trim()
+      .split(/\s+/)
+      .map((part) => part.replace(/^[^0-9A-Za-z가-힣]+|[^0-9A-Za-z가-힣]+$/g, '').trim())
+      .find(Boolean) || '';
+    const normalized = stripStrategyActorParticles(candidate);
+    const compact = normalizeStrategySearchText(normalized);
+    if (!compact || STRATEGY_STOP_NAMES.has(compact)) continue;
+    if (seen.has(compact)) continue;
+    seen.add(compact);
+    people.push(normalized);
+    if (people.length >= 3) break;
+  }
+  return people;
+};
+
+const extractStrategyTimeHintFromInput = (value: string) => {
+  const text = stripStrategyInputForPrompt(value);
+  if (!text) return '';
+  if (text.includes('오늘') && text.includes('점심시간')) return '오늘 점심시간';
+  if (text.includes('오늘') && text.includes('쉬는시간')) return '오늘 쉬는시간';
+  if (text.includes('오늘')) return '오늘';
+  if (text.includes('점심시간')) return '점심시간';
+  if (text.includes('쉬는시간')) return '쉬는시간';
+  const explicit = text.match(/(\d{1,2}\s*시(?:\s*\d{1,2}\s*분)?(?:경)?)|(\d{1,2}:\d{2})/);
+  return explicit ? explicit[0].replace(/\s+/g, ' ').trim() : '';
+};
+
+const extractStrategyPlaceHintFromInput = (value: string) => {
+  const text = stripStrategyInputForPrompt(value);
+  for (const place of ['교실', '복도', '운동장', '급식실', '강당', '화장실', '교문', '버스', '메신저', '온라인']) {
+    if (text.includes(place)) return place;
+  }
+  if (text.includes('점심시간') || text.includes('쉬는시간')) return '교내 장소 미상';
+  return '';
+};
+
+const tokenizeStrategySearchText = (value: string) =>
+  Array.from(new Set(
+    normalizeStrategySearchText(
+      stripStrategyInputForPrompt(value)
+        .replace(/이랑|랑|하고| 및 /g, ' ')
+        .replace(/와\s+/g, ' ')
+        .replace(/과\s+/g, ' ')
+    )
+      .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+      .split(/\s+/)
+      .map((item) => item.trim())
+      .filter((item) => item.length >= 2)
+  ));
+
+const buildStrategyRecordSearchBlob = (record: any) => {
+  const actorBits = [
+    ...(Array.isArray(record?.actors)
+      ? record.actors.flatMap((actor: any) => [String(actor?.type || ''), String(actor?.name || '')])
+      : []),
+    ...(Array.isArray(record?.related)
+      ? record.related.flatMap((actor: any) => [String(actor?.type || ''), String(actor?.name || '')])
+      : []),
+  ];
+  const summary = [
+    String(record?.summaryText || ''),
+    String(record?.summary || ''),
+    String(record?.title || ''),
+    String(record?.note || ''),
+    String(record?.memo || ''),
+    String(record?.place || ''),
+    String(record?.placeDetail || ''),
+    String(record?.placeOther || ''),
+    String(record?.storeType || ''),
+    String(record?.channel || ''),
+    ...actorBits,
+  ].join(' ');
+  const normalized = normalizeStrategySearchText(summary);
+  return `${normalized} ${normalized.replace(/\s+/g, '')}`.trim();
+};
+
+const summarizeStrategyRecordForNote = (record: any) => {
+  const actors = Array.isArray(record?.actors)
+    ? record.actors
+        .map((actor: any) => String(actor?.name || '').trim())
+        .filter(Boolean)
+        .slice(0, 2)
+        .join(' · ')
+    : '';
+  const summary = String(record?.summaryText || record?.summary || record?.title || '').replace(/\s+/g, ' ').trim();
+  return `${actors || '관련 인물 미상'} | ${summary.slice(0, 72) || '요약 없음'}`;
+};
+
+const mergeStrategyRecords = (...groups: RecordItem[][]) => {
+  const seen = new Set<string>();
+  const merged: RecordItem[] = [];
+  for (const group of groups) {
+    for (const record of group || []) {
+      const id = String((record as any)?.id || '').trim();
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      merged.push(record);
+    }
+  }
+  return merged;
+};
+
+const findStrategyRelatedRecords = (input: string, limit = 5): RecordItem[] => {
+  const tokens = tokenizeStrategySearchText(input);
+  if (!tokens.length) return [];
+  const normalizedInput = normalizeStrategySearchText(stripStrategyInputForPrompt(input));
+  const mentionedActors = resolveStrategyMentionedActors(input);
+  const people = Array.from(new Set([
+    ...mentionedActors.map((actor) => normalizeStrategyActorName(actor.name)),
+    ...extractStrategyPeopleFromInput(input),
+  ].filter(Boolean)));
+  const placeHint = normalizeStrategySearchText(extractStrategyPlaceHintFromInput(input));
+  const timeHint = normalizeStrategySearchText(extractStrategyTimeHintFromInput(input));
+  const recs = Object.values(S.records || {})
+    .map((record) => ensureRecordV8(record as any) as any)
+    .filter(Boolean);
+
+  return recs
+    .map((record: any) => {
+      const blob = buildStrategyRecordSearchBlob(record);
+      const actorPool = [
+        ...recordMainActors(record),
+        ...(Array.isArray(record?.related) ? record.related : []),
+      ].map((actor: any) => ({
+        type: actor?.type || '기타',
+        name: String(actor?.name || '').trim(),
+        groupId: String(actor?.groupId || '').trim(),
+        groupLabel: String(actor?.groupLabel || '').trim(),
+      }));
+      const explicitActorMatchCount = mentionedActors.filter((actor) =>
+        actorPool.some((candidate) =>
+          strategyActorRefKey(candidate) === strategyActorRefKey(actor)
+          || (
+            strategyActorNamesMatch(candidate.name, actor.name)
+            && (!String(actor.groupLabel || '').trim()
+              || normalizeStrategySearchText(candidate.groupLabel) === normalizeStrategySearchText(String(actor.groupLabel || '')))
+          )
+        )
+      ).length;
+      const actorNameMatchCount = people.filter((name) =>
+        actorPool.some((candidate) => strategyActorNamesMatch(candidate.name, name))
+      ).length;
+      const actorMatchCount = mentionedActors.length ? explicitActorMatchCount : actorNameMatchCount;
+      let score = 0;
+      let matched = 0;
+      for (const token of tokens) {
+        if (!blob.includes(token)) continue;
+        matched += 1;
+        score += token.length >= 4 ? 3 : 2;
+      }
+      if (matched >= 2) score += 2;
+      if (actorMatchCount > 0) score += actorMatchCount * (mentionedActors.length ? 7 : 5);
+      if (people.length >= 2 && actorMatchCount >= 2) score += 4;
+      if (mentionedActors.length > 0 && actorMatchCount === 0) score -= 6;
+      else if (people.length > 0 && actorMatchCount === 0) score -= 3;
+      if (placeHint && blob.includes(placeHint)) score += 2;
+      if (timeHint && blob.includes(timeHint)) score += 1;
+      if (/(싸웠|다퉜|갈등|언쟁|민원|폭행|욕설|울음|분리)/.test(normalizedInput) && /(싸움|갈등|언쟁|민원|폭행|욕설|울음|분리)/.test(blob)) {
+        score += 2;
+      }
+      return { record, score, actorMatchCount };
+    })
+    .filter((item) => {
+      if (!people.length) return item.score >= 2;
+      if (item.actorMatchCount > 0) return item.score >= 1;
+      return item.score >= 6;
+    })
+    .sort((a, b) => {
+      if (b.actorMatchCount !== a.actorMatchCount) return b.actorMatchCount - a.actorMatchCount;
+      if (b.score !== a.score) return b.score - a.score;
+      return String((b.record as any)?.ts || '').localeCompare(String((a.record as any)?.ts || ''));
+    })
+    .slice(0, limit)
+    .map((item) => item.record as RecordItem);
+};
+
+const findStrategyCollectionSuggestionRecords = (input: string, limit = 8): RecordItem[] => {
+  const mentionedActors = resolveStrategyMentionedActors(input);
+  const people = Array.from(new Set([
+    ...mentionedActors.map((actor) => normalizeStrategyActorName(actor.name)),
+    ...extractStrategyPeopleFromInput(input),
+    ...extractStrategyMentionNames(input),
+  ].filter(Boolean)));
+  if (!people.length && !mentionedActors.length) return [];
+
+  const recs = Object.values(S.records || {})
+    .map((record) => ensureRecordV8(record as any) as any)
+    .filter(Boolean);
+
+  return recs
+    .map((record: any) => {
+      const actorPool = [
+        ...recordMainActors(record),
+        ...(Array.isArray(record?.related) ? record.related : []),
+      ].map((actor: any) => ({
+        type: actor?.type || '기타',
+        name: String(actor?.name || '').trim(),
+        groupId: String(actor?.groupId || '').trim(),
+        groupLabel: String(actor?.groupLabel || '').trim(),
+      }));
+      const explicitActorMatchCount = mentionedActors.filter((actor) =>
+        actorPool.some((candidate) =>
+          strategyActorRefKey(candidate) === strategyActorRefKey(actor)
+          || (
+            strategyActorNamesMatch(candidate.name, actor.name)
+            && (!String(actor.groupLabel || '').trim()
+              || normalizeStrategySearchText(candidate.groupLabel) === normalizeStrategySearchText(String(actor.groupLabel || '')))
+          )
+        )
+      ).length;
+      const actorNameMatchCount = people.filter((name) =>
+        actorPool.some((candidate) => strategyActorNamesMatch(candidate.name, name))
+      ).length;
+      const actorMatchCount = mentionedActors.length ? explicitActorMatchCount : actorNameMatchCount;
+      const blob = buildStrategyRecordSearchBlob(record);
+      const keywordBonus = people.filter((name) => {
+        const compact = strategyActorCanonicalKey(name);
+        return compact && blob.includes(compact);
+      }).length;
+      return { record, actorMatchCount, keywordBonus };
+    })
+    .filter((item) => item.actorMatchCount > 0 || item.keywordBonus > 0)
+    .sort((a, b) => {
+      if (b.actorMatchCount !== a.actorMatchCount) return b.actorMatchCount - a.actorMatchCount;
+      if (b.keywordBonus !== a.keywordBonus) return b.keywordBonus - a.keywordBonus;
+      return String((b.record as any)?.ts || '').localeCompare(String((a.record as any)?.ts || ''));
+    })
+    .slice(0, limit)
+    .map((item) => item.record as RecordItem);
+};
+
+const buildStrategySuggestedCollectionTitle = (sourceInput: string, relatedRecords: RecordItem[]) => {
+  const trimmed = stripStrategyInputForPrompt(sourceInput).replace(/\s+/g, ' ').trim();
+  if (trimmed) {
+    return `${trimmed.slice(0, 28)} 컬렉션`;
+  }
+  const first = relatedRecords[0] as any;
+  const base = String(first?.summaryText || first?.summary || first?.title || '관련 기록').replace(/\s+/g, ' ').trim();
+  return `${base.slice(0, 24) || '관련 기록'} 컬렉션`;
+};
+
+const isStrategyBroadActorName = (value: string) => {
+  const normalized = String(value || '').replace(/\s+/g, ' ').trim();
+  if (!normalized) return true;
+  if (normalized.length <= 1) return true;
+  if (/^[A-Za-z가-힣]$/.test(normalized)) return true;
+  if (/^(학생|당사자|관련자|보호자|학부모|교사|상대방)\s*[A-Z가-힣0-9]?$/.test(normalized)) return true;
+  if (/^(당사자\s*)?(학생|관련자|보호자|학부모|교사)\s*[A-Z]$/i.test(normalized)) return true;
+  return false;
+};
+
+const buildStrategySuggestedActors = (records: RecordItem[], sourceInput = '') => {
+  const seen = new Set<string>();
+  const actors: ActorRef[] = [];
+  const mentionedActors = resolveStrategyMentionedActors(sourceInput);
+  const preferredNames = extractStrategyPeopleFromInput(sourceInput);
+  const allActors = records.flatMap((record: any) => recordMainActors(record));
+
+  for (const actor of mentionedActors) {
+    const key = strategyActorRefKey(actor);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    actors.push({
+      type: actor.type || '기타',
+      name: String(actor.name || '').trim(),
+      ...(String((actor as any)?.groupId || '').trim() ? { groupId: String((actor as any).groupId).trim() } : {}),
+      ...(String((actor as any)?.groupLabel || '').trim() ? { groupLabel: String((actor as any).groupLabel).trim() } : {}),
+    });
+  }
+
+  for (const preferredName of preferredNames) {
+    const matched = allActors.find((actor: any) => strategyActorNamesMatch(String(actor?.name || ''), preferredName));
+    if (!matched) continue;
+    const name = String(matched?.name || '').trim();
+    if (!name || isStrategyBroadActorName(name)) continue;
+    const key = strategyActorRefKey(matched);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    actors.push({
+      type: matched?.type || '기타',
+      name,
+      ...(String((matched as any)?.groupId || '').trim() ? { groupId: String((matched as any).groupId).trim() } : {}),
+      ...(String((matched as any)?.groupLabel || '').trim() ? { groupLabel: String((matched as any).groupLabel).trim() } : {}),
+    });
+  }
+
+  const frequency = new Map<string, { actor: any; count: number }>();
+  for (const actor of allActors) {
+    const name = String(actor?.name || '').trim();
+    if (!name || isStrategyBroadActorName(name)) continue;
+    const key = strategyActorRefKey(actor);
+    const current = frequency.get(key);
+    if (current) current.count += 1;
+    else frequency.set(key, { actor, count: 1 });
+  }
+
+  const sortedFrequentActors = Array.from(frequency.values())
+    .sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      return String(a.actor?.name || '').localeCompare(String(b.actor?.name || ''));
+    })
+    .map((item) => item.actor);
+
+  for (const actor of sortedFrequentActors) {
+    if (actors.length >= 6) break;
+      const name = String(actor?.name || '').trim();
+      if (!name || isStrategyBroadActorName(name)) continue;
+      const key = strategyActorRefKey(actor);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      actors.push({
+        type: actor?.type || '기타',
+        name,
+        ...(String(actor?.groupId || '').trim() ? { groupId: String(actor.groupId).trim() } : {}),
+        ...(String(actor?.groupLabel || '').trim() ? { groupLabel: String(actor.groupLabel).trim() } : {}),
+      });
+  }
+  return actors;
+};
+
+const buildStrategyNote = (contextRecords: RecordItem[] = [], mode: StrategyChatMode = getStrategyChatMode(), sourceInput = '') => {
   const draft = ensureSimulationDraft();
   const result = ((ui as any).simulationResult || null) as any;
   const selectedCaseId = String((ui as any).simulationCaseId || '').trim();
   const selectedCase = selectedCaseId && S.cases[selectedCaseId] ? S.cases[selectedCaseId] : null;
+  const mentionedActors = resolveStrategyMentionedActors(sourceInput);
+  const actionNotes = extractStrategyActionNotes(sourceInput);
   const presetLabel = draft.scenarioPreset === 'shield' ? '완화형' : draft.scenarioPreset === 'assertive' ? '단호형' : '균형형';
   const goalLabel = draft.goal === 'document' ? '기록 축적' : draft.goal === 'escalate' ? '공유·제출 강화' : '상황 안정';
   const lines = [
@@ -894,6 +2134,22 @@ const buildStrategyNote = () => {
       `추천 행동: ${String(result.recommendedAction || '').trim() || '미계산'}`,
     );
   }
+  if (contextRecords.length) {
+    lines.push(`참고 기록: ${contextRecords.length}개`);
+    contextRecords.slice(0, 3).forEach((record) => {
+      lines.push(`- ${summarizeStrategyRecordForNote(record)}`);
+    });
+  }
+  if (mentionedActors.length) {
+    lines.push(`관계관리에서 지정한 주체: ${mentionedActors.map((actor) => actorShort(actor)).join(', ')}`);
+  }
+  if (actionNotes.length) {
+    lines.push(`사용자가 #로 표시한 직접 조치: ${actionNotes.join(' / ')}`);
+    lines.push('직접 조치는 [내 대응 메모]에 우선 반영하고, 시간 흐름과 분리해서 적어주세요.');
+  }
+  if (mode === 'record') {
+    lines.push('현재 요청은 통합 기록 생성 흐름으로 처리합니다. 관련 기록이 있으면 기록 초안에 함께 반영합니다.');
+  }
   return lines.join('\n');
 };
 
@@ -908,50 +2164,77 @@ const sendStrategyAgentMessage = async (overrideMessage?: string) => {
       return;
     }
   }
-  const records = getStrategySelectedRecords();
-  if (!records.length) {
-    toast('먼저 AI 민원 법무팀 에이전트에 연결할 기록을 1개 이상 붙여주세요');
+  const selectedRecords = getStrategySelectedRecords();
+  const rawInput = String((overrideMessage ?? (ui as any).strategyChatInput) || '').trim();
+  const relatedRecords = rawInput ? findStrategyRelatedRecords(rawInput, 6) : [];
+  const collectionCandidateRecords = rawInput ? findStrategyCollectionSuggestionRecords(rawInput, 10) : [];
+  const records = mergeStrategyRecords(selectedRecords, relatedRecords);
+  const mode = getStrategyChatMode();
+  (ui as any).strategyChatMode = mode;
+
+  if (mode === 'record' && !rawInput) {
+    toast('상황을 입력하면 기록 초안을 만들어드릴게요');
     return;
   }
-
-  if (!(ui as any).simulationResult || (ui as any).simulationDirty) {
-    const next = computeSimulationResult();
-    if (next) {
-      (ui as any).simulationResult = next;
-      (ui as any).simulationDirty = false;
-    }
-  }
-
-  const rawInput = String((overrideMessage ?? (ui as any).strategyChatInput) || '').trim();
-  const message = rawInput || STRATEGY_DEFAULT_PROMPT;
+  const message = mode === 'record' ? stripStrategyInputForPrompt(rawInput) : (stripStrategyInputForPrompt(rawInput) || STRATEGY_DEFAULT_PROMPT);
   const selectedCaseId = String((ui as any).simulationCaseId || '').trim();
   const caseItem = selectedCaseId && S.cases[selectedCaseId] ? S.cases[selectedCaseId] as CaseItem : null;
+  const currentCaseRecordIds = new Set(
+    Array.isArray(caseItem?.recordIds)
+      ? (caseItem!.recordIds as string[]).map((id) => String(id || '').trim()).filter(Boolean)
+      : []
+  );
+  const suggestedCollectionRecords = mergeStrategyRecords(relatedRecords, collectionCandidateRecords).filter((record) => {
+    const recordId = String((record as any)?.id || '').trim();
+    if (!recordId) return false;
+    if (!currentCaseRecordIds.size) return true;
+    return !currentCaseRecordIds.has(recordId);
+  });
   const history = getStrategyChatMessages().slice(-8).map((item) => ({
     role: item.role,
     content: String(item.content || '').trim(),
   })).filter((item) => item.content);
 
-  appendStrategyChatMessage('user', message);
+  appendStrategyChatMessage('user', message, '', { mode });
   (ui as any).strategyChatInput = '';
+  (ui as any).strategyChatCaret = -1;
   (ui as any).strategyChatError = '';
+  (ui as any).strategyRecordEditMessageId = '';
+  (ui as any).strategyRecordEditDraft = '';
+  closeStrategyMentionMenu();
   closeStrategyChatModelMenu();
   (ui as any).strategyChatPending = true;
   (ui as any).strategyChatPendingStartedAt = nowISO();
+  (ui as any).strategyPerfRunState = {
+    status: 'running',
+    requestedBackend: getStrategyBackendMode(),
+    requestedMode: (ui as any).strategySyntheticCacheEnabled !== false ? 'FullDRACE' : 'Off',
+    actualBackend: '',
+    startedAt: nowISO(),
+    finishedAt: '',
+    error: '',
+    cacheApplied: false,
+  } as StrategyPerfRunState;
   clearStrategyChatProgress();
-  appendStrategyChatProgress('준비', 'AI 민원 법무팀 에이전트 요청을 접수했어요.', false);
+  appendStrategyChatProgress('준비', mode === 'record' ? 'AI 민원 법무팀 에이전트 기록 초안 요청을 접수했어요.' : 'AI 민원 법무팀 에이전트 요청을 접수했어요.', false);
   render();
 
   try {
-    const maxTokens = 720;
+    const maxTokens = 920;
+    const shouldSuggestCollection = suggestedCollectionRecords.length >= 2;
     const result = await invoke('strategy_agent_chat', {
       args: {
         caseItem,
         records: records.map((record) => ensureRecordV8(record) as any),
         message,
+        mode,
         model: selectedModel,
-        strategyNote: buildStrategyNote(),
+        strategyNote: buildStrategyNote(records, mode, rawInput),
         conversation: history,
         maxTokens,
+        syntheticCacheEnabled: !!(ui as any).strategySyntheticCacheEnabled,
+        backendMode: getStrategyBackendMode(),
+        llamaServer: getStrategyBackendMode() === 'llama-server' ? getStrategyLlamaServerConfig() : null,
       },
     }) as StrategyChatInvokeResult;
 
@@ -959,15 +2242,45 @@ const sendStrategyAgentMessage = async (overrideMessage?: string) => {
     if (!answer) throw new Error('모델이 빈 응답을 반환했어요.');
     (ui as any).strategyChatEvidencePacket = result?.evidencePacket || null;
     (ui as any).strategyChatRetrievalQuery = String(result?.retrievalQuery || '').trim();
+    recordStrategyPerfSample(result?.perfMetrics || null);
+    (ui as any).strategyPerfRunState = {
+      status: 'succeeded',
+      requestedBackend: getStrategyBackendMode(),
+      requestedMode: (ui as any).strategySyntheticCacheEnabled !== false ? 'FullDRACE' : 'Off',
+      actualBackend: String(result?.perfMetrics?.backendKind || ''),
+      startedAt: String((ui as any).strategyPerfRunState?.startedAt || ''),
+      finishedAt: nowISO(),
+      error: '',
+      cacheApplied: !!result?.perfMetrics?.cacheSummary?.cacheApplied,
+    } as StrategyPerfRunState;
     appendStrategyChatMessage(
       'assistant',
       answer,
-      `ROOSY-Hybrid · ${formatStrategyRunnerLabel(result.runner)} · 근거 ${String(result.recordsUsed || records.length)}개`
+      `AI 법무팀 · 통합 기록 생성 · 참고 ${String(result.recordsUsed || records.length)}개`,
+      {
+        mode: 'record',
+        recordDraft: true,
+        sourceInput: rawInput,
+        relatedRecordIds: shouldSuggestCollection
+          ? suggestedCollectionRecords.map((record) => String((record as any)?.id || '').trim()).filter(Boolean)
+          : [],
+        relatedCollectionTitle: shouldSuggestCollection ? buildStrategySuggestedCollectionTitle(rawInput, suggestedCollectionRecords) : '',
+      }
     );
-    toast('AI 민원 법무팀 에이전트 답변이 도착했어요');
+    toast('기록 초안이 도착했어요');
   } catch (err) {
     const messageText = String((err as any)?.message || err || 'AI 민원 법무팀 에이전트 모델 호출에 실패했어요.');
     (ui as any).strategyChatError = messageText;
+    (ui as any).strategyPerfRunState = {
+      status: 'failed',
+      requestedBackend: getStrategyBackendMode(),
+      requestedMode: (ui as any).strategySyntheticCacheEnabled !== false ? 'FullDRACE' : 'Off',
+      actualBackend: '',
+      startedAt: String((ui as any).strategyPerfRunState?.startedAt || ''),
+      finishedAt: nowISO(),
+      error: messageText,
+      cacheApplied: false,
+    } as StrategyPerfRunState;
     appendStrategyChatProgress('오류', messageText, false);
     appendStrategyChatMessage('assistant', `AI 민원 법무팀 에이전트를 실행하지 못했어요.\n${messageText}`, '실행 오류');
     toast('AI 민원 법무팀 에이전트 실행 실패');
@@ -975,9 +2288,129 @@ const sendStrategyAgentMessage = async (overrideMessage?: string) => {
   } finally {
     (ui as any).strategyChatPending = false;
     (ui as any).strategyChatPendingStartedAt = '';
+    closeStrategyMentionMenu();
     render();
   }
 };
+
+const openStrategyRecordDraftEditor = (messageId: string) => {
+  const message = getStrategyChatMessages().find((item) => String(item.id || '') === String(messageId || '').trim());
+  if (!message) return;
+  (ui as any).strategyRecordEditMessageId = message.id;
+  (ui as any).strategyRecordEditDraft = String(message.content || '');
+  render();
+};
+
+const closeStrategyRecordDraftEditor = () => {
+  (ui as any).strategyRecordEditMessageId = '';
+  (ui as any).strategyRecordEditDraft = '';
+};
+
+const saveStrategyRecordDraftEdit = (messageId: string) => {
+  const nextContent = String((ui as any).strategyRecordEditDraft || '').trim();
+  if (!nextContent) return toast('수정한 기록 초안 내용을 입력해주세요');
+  updateStrategyChatMessage(messageId, (msg) => ({
+    ...msg,
+    content: nextContent,
+    mode: 'record',
+    recordDraft: true,
+  }));
+  closeStrategyRecordDraftEditor();
+  render();
+  toast('기록 초안을 반영했어요');
+};
+
+const saveStrategyRecordDraftToArchive = (messageId: string) => {
+  const message = getStrategyChatMessages().find((item) => String(item.id || '') === String(messageId || '') && item.role === 'assistant');
+  if (!message) return toast('저장할 기록 초안을 찾지 못했어요');
+  const raw = String((ui as any).strategyRecordEditMessageId === messageId ? (ui as any).strategyRecordEditDraft : message.content || '').trim();
+  if (!raw) return toast('저장할 기록 초안이 비어 있어요');
+
+  const allRecords = Object.values(S.records || {}).map((record: any) => ensureRecordV8(record as any) as RecordItem);
+  const contextRecords = (Array.isArray((message as any).relatedRecordIds) ? (message as any).relatedRecordIds : [])
+    .map((id: string) => allRecords.find((record) => String((record as any)?.id || '').trim() === String(id || '').trim()))
+    .filter(Boolean) as RecordItem[];
+  const { summaryText } = applyStrategyRecordDraftToComposer(raw, {
+    sourceInput: String((message as any).sourceInput || '').trim(),
+    contextRecords,
+  });
+  if (summaryText.length < 4) {
+    return toast('기록 내용이 충분하지 않아 저장할 초안을 다시 확인해주세요');
+  }
+  (draftRecord as any).signerLabel = String((draftRecord as any).signerLabel || '').trim() || '기기 봉인서명';
+  (draftRecord as any).sealReason = String((draftRecord as any).sealReason || '').trim() || 'AI 기록모드 초안 저장';
+  closeStrategyRecordDraftEditor();
+  openSignatureModal('create');
+  render();
+};
+
+const createStrategyCollectionFromSuggestion = async (messageId: string) => {
+  const message = getStrategyChatMessages().find((item) => String(item.id || '') === String(messageId || '').trim() && item.role === 'assistant') as any;
+  if (!message) return toast('컬렉션을 만들 기록 초안을 찾지 못했어요');
+  const relatedIds = Array.isArray(message.relatedRecordIds)
+    ? message.relatedRecordIds.map((id: string) => String(id || '').trim()).filter(Boolean)
+    : [];
+  const allRecords = Object.values(S.records || {}).map((record: any) => ensureRecordV8(record as any) as RecordItem);
+  const relatedRecords = relatedIds
+    .map((id: string) => allRecords.find((record: RecordItem) => String((record as any)?.id || '').trim() === String(id || '').trim()))
+    .filter(Boolean)
+    .map((record: any) => ensureRecordV8(record as any) as RecordItem);
+  if (!relatedRecords.length) return toast('연결할 관련 기록을 찾지 못했어요');
+  if (!(await openConfirm('관련 기록이 있어 컬렉션을 생성할 수 있어요. 지금 컬렉션을 만들까요?'))) return;
+
+  const sourceInput = String(message.sourceInput || '').trim();
+  const title = String(message.relatedCollectionTitle || '').trim() || buildStrategySuggestedCollectionTitle(sourceInput, relatedRecords);
+  const actors = buildStrategySuggestedActors(relatedRecords, sourceInput);
+  const makeId = () => `case-${(typeof crypto !== 'undefined' && 'randomUUID' in crypto) ? crypto.randomUUID() : Math.random().toString(36).slice(2)}`;
+  const exactRecordIds = relatedRecords
+    .map((record: RecordItem) => String((record as any)?.id || '').trim())
+    .filter(Boolean);
+  if (!exactRecordIds.length) return toast('컬렉션으로 묶을 관련 기록이 없어요');
+
+  const nextCase: CaseItem = {
+    id: makeId(),
+    title,
+    actors,
+    onlyMainActor: actors.length === 1,
+    sensFilter: 'any',
+    status: '진행중',
+    createdAt: nowISO(),
+    steps: [],
+    query: sourceInput,
+    timeFrom: '',
+    timeTo: '',
+    maxResults: Math.max(exactRecordIds.length, 24),
+    recordIds: exactRecordIds,
+    scoreByRecordId: Object.fromEntries(exactRecordIds.map((id: string) => [id, 1])),
+    componentsByRecordId: {},
+  };
+  nextCase.advisors = await regenerateCaseAdvisors(nextCase, allRecords);
+
+  S.cases[nextCase.id] = nextCase;
+  (ui as any).simulationCaseId = nextCase.id;
+  (ui as any).simulationSelectedRecordIds = Array.isArray(nextCase.recordIds) ? nextCase.recordIds.slice(0, 12) : [];
+  (ui as any).simulationDirty = true;
+  await saveState(S);
+  render();
+  toast('관련 기록으로 컬렉션을 만들었어요');
+};
+
+let _boundStrategyCollectionSuggestionAction = false;
+const bindStrategyCollectionSuggestionAction = () => {
+  if (_boundStrategyCollectionSuggestionAction || typeof document === 'undefined') return;
+  _boundStrategyCollectionSuggestionAction = true;
+  document.addEventListener('click', async (event) => {
+    const target = event.target as HTMLElement | null;
+    const button = target?.closest?.('[data-action="create-strategy-record-collection"]') as HTMLElement | null;
+    if (!button) return;
+    event.preventDefault();
+    const messageId = String(button.getAttribute('data-id') || '').trim();
+    if (!messageId) return;
+    await createStrategyCollectionFromSuggestion(messageId);
+  });
+};
+
+bindStrategyCollectionSuggestionAction();
 
 const autoResizeContentProofArea = (el: HTMLTextAreaElement | null) => {
   if (!el) return;
@@ -991,6 +2424,7 @@ const autoResizeStrategyChatArea = (el: HTMLTextAreaElement | null) => {
   el.style.height = 'auto';
   const next = Math.max(34, Math.min((el.scrollHeight || 0) + 4, 164));
   el.style.height = `${next}px`;
+  syncStrategyChatComposerMirror(el);
 };
 
 let _boundStrategyChatDockedComposer = false;
@@ -1193,6 +2627,111 @@ function buildSummaryFromDraftParts(draft: any) {
   return { parts, text: joined };
 }
 
+const STRATEGY_RECORD_SECTION_MAP: Record<string, keyof ReturnType<typeof getDraftSummaryParts>> = {
+  '상황 요약': 'overview',
+  '배경 흐름': 'background',
+  '핵심 포인트': 'issues',
+  '관련 자료': 'evidenceList',
+  '내 대응 메모': 'teacherActions',
+  '추가 메모': 'other',
+};
+
+type ParsedStrategyRecordDraft = {
+  raw: string;
+  metadata: {
+    ts: string;
+    actor: string;
+    related: string;
+    placeChannel: string;
+    storeType: string;
+    lv: string;
+  };
+  parts: ReturnType<typeof getDraftSummaryParts>;
+};
+
+function parseStrategyRecordDraftText(raw: string): ParsedStrategyRecordDraft {
+  const text = String(raw || '').replace(/\r/g, '').trim();
+  const sections = new Map<string, string[]>();
+  let current = '';
+  for (const line of text.split('\n')) {
+    const trimmed = line.trim();
+    const sectionMatch = trimmed.match(/^\[(.+?)\]\s*$/);
+    if (sectionMatch) {
+      current = sectionMatch[1].trim();
+      if (!sections.has(current)) sections.set(current, []);
+      continue;
+    }
+    if (!current) current = '상황 요약';
+    if (!sections.has(current)) sections.set(current, []);
+    sections.get(current)!.push(line);
+  }
+
+  const infoLines = (sections.get('기록 기본정보') || [])
+    .map((line) => line.trim().replace(/^-+\s*/, ''))
+    .filter(Boolean);
+  const metadataMap = new Map<string, string>();
+  infoLines.forEach((line) => {
+    const match = line.match(/^([^:：]+)\s*[:：]\s*(.+)$/);
+    if (!match) return;
+    metadataMap.set(match[1].trim(), match[2].trim());
+  });
+
+  const readSection = (label: keyof typeof STRATEGY_RECORD_SECTION_MAP | '상황 요약') => {
+    const lines = (sections.get(label) || []).join('\n').trim();
+    return lines;
+  };
+
+  const fallbackOverview = text && !sections.size ? text : ((sections.get('상황 요약') || []).join('\n').trim() || text);
+
+  return {
+    raw: text,
+    metadata: {
+      ts: metadataMap.get('기록 시각') || metadataMap.get('시각') || '',
+      actor: metadataMap.get('주체') || '',
+      related: metadataMap.get('상대방') || '',
+      placeChannel: metadataMap.get('위치/채널') || metadataMap.get('위치') || '',
+      storeType: metadataMap.get('자료 형태') || metadataMap.get('보관형태') || metadataMap.get('채널') || '',
+      lv: metadataMap.get('민감도') || '',
+    },
+    parts: {
+      overview: fallbackOverview,
+      background: readSection('배경 흐름'),
+      issues: readSection('핵심 포인트'),
+      evidenceList: readSection('관련 자료'),
+      teacherActions: readSection('내 대응 메모'),
+      other: readSection('추가 메모'),
+    },
+  };
+}
+
+const splitStrategyActorNames = (value: string) => String(value || '')
+  .replace(/^(당사자|주체|상대방)\s*/g, '')
+  .split(/\s*[·,\/|]\s*/)
+  .map((item) => item.trim())
+  .filter(Boolean);
+
+const inferStrategyPlaceFromContextRecords = (records: RecordItem[]) => {
+  const counts = new Map<string, number>();
+  for (const record of records as any[]) {
+    const place = String(record?.placeOther || '').trim() || String(record?.place || '').trim();
+    if (!place || /미상/.test(place)) continue;
+    counts.set(place, (counts.get(place) || 0) + 1);
+  }
+  return Array.from(counts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([place]) => place)[0] || '';
+};
+
+const normalizeStrategyDraftTs = (value: string) => {
+  const text = String(value || '').trim();
+  if (!text) return toLocalInputValue(nowISO());
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(text)) return toLocalInputValue(text);
+  const normalized = text.replace(/\./g, '-').replace(/\//g, '-').replace(/\s+/g, ' ').trim();
+  const direct = normalized.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})$/);
+  if (direct) return `${direct[1]}-${direct[2]}-${direct[3]}T${direct[4]}:${direct[5]}`;
+  return toLocalInputValue(nowISO());
+};
+
 function getPendingDraftActor(draft: any): ActorRef | null {
   const groupedActor = makeRelationshipActorRef(String(draft.actorGroupId || ''), String(draft.actorMemberId || ''));
   if (groupedActor) return groupedActor;
@@ -1372,6 +2911,11 @@ type FocusedSimulationFieldState = {
   end: number | null;
 };
 
+type FocusedStrategyChatFieldState = {
+  start: number | null;
+  end: number | null;
+};
+
 function captureFocusedSimulationFieldState(): FocusedSimulationFieldState | null {
   const active = document.activeElement as HTMLInputElement | null;
   if (!active) return null;
@@ -1401,16 +2945,43 @@ function restoreFocusedSimulationFieldState(state: FocusedSimulationFieldState |
   }, 0);
 }
 
+function captureFocusedStrategyChatFieldState(): FocusedStrategyChatFieldState | null {
+  const active = document.activeElement as HTMLTextAreaElement | null;
+  if (!active) return null;
+  if (active.dataset.action !== 'draft-strategy-chat' || active.dataset.field !== 'input') return null;
+  return {
+    start: typeof active.selectionStart === 'number' ? active.selectionStart : null,
+    end: typeof active.selectionEnd === 'number' ? active.selectionEnd : null,
+  };
+}
+
+function restoreFocusedStrategyChatFieldState(state: FocusedStrategyChatFieldState | null) {
+  if (!state) return;
+  window.setTimeout(() => {
+    const el = document.querySelector('[data-action="draft-strategy-chat"][data-field="input"]') as HTMLTextAreaElement | null;
+    if (!el) return;
+    el.focus({ preventScroll: true });
+    const valueLength = String(el.value || '').length;
+    const start = state.start == null ? valueLength : Math.max(0, Math.min(state.start, valueLength));
+    const end = state.end == null ? start : Math.max(start, Math.min(state.end, valueLength));
+    try {
+      el.setSelectionRange(start, end);
+    } catch {}
+  }, 0);
+}
+
 const render = () => {
   captureTransientUI();
   const scrollState = captureRenderScrollState();
   const focusedSimulationFieldState = captureFocusedSimulationFieldState();
+  const focusedStrategyChatFieldState = captureFocusedStrategyChatFieldState();
   _isRerendering = true;
   renderView();
   bindWindowDragRegionFallback();
   syncDialogs();
   restoreRenderScrollState(scrollState);
   restoreFocusedSimulationFieldState(focusedSimulationFieldState);
+  restoreFocusedStrategyChatFieldState(focusedStrategyChatFieldState);
   updateRecordComposerUI();
   updateRecordEditUI();
   updateContentProofUI();
@@ -1423,7 +2994,7 @@ const render = () => {
 const SR = async () => { await saveState(S); render(); };
 const toastUndo = (msg: string, undo: () => Promise<void>) => toast(msg, { label: '되돌리기', onClick: undo });
 const flash = (id: string) => { ui.flashStepId = id; ui.flashStepTimer && clearTimeout(ui.flashStepTimer); ui.flashStepTimer = window.setTimeout(() => (ui.flashStepId = null, render()), 1800); };
-const mustCase = (msg = '컬렉션을 먼저 선택하세요') => { const c = getSelectedCase(); if (!c) toast(msg); return c; };
+const mustCase = (msg = '기록묶음을 먼저 선택하세요') => { const c = getSelectedCase(); if (!c) toast(msg); return c; };
 const openUpdate = (caseId: string) => (
   ui.updateCaseId = caseId,
   ui.qUpdate = '',
@@ -1459,76 +3030,6 @@ async function refreshUpdateCandidates(caseId: string) {
 }
 
 
-const ACTIVE_RISK_MODEL_VERSION = 'risk-hash-logreg-syn3000-v1';
-
-function sameRisk(a: any, b: any) {
-  if (!a || !b) return false;
-  const aProb = Array.isArray(a.probs) ? a.probs.map((x: any) => Number(x).toFixed(4)).join('|') : '';
-  const bProb = Array.isArray(b.probs) ? b.probs.map((x: any) => Number(x).toFixed(4)).join('|') : '';
-  return (
-    Number(a.label) === Number(b.label) &&
-    String(a.labelText || '') === String(b.labelText || '') &&
-    Number(a.confidence || 0).toFixed(4) === Number(b.confidence || 0).toFixed(4) &&
-    aProb === bProb &&
-    String(a.modelVersion || '') === String(b.modelVersion || '')
-  );
-}
-
-async function classifyOneRecord(record: any) {
-  try {
-    const [pred] = await classifyRecordsRisk([ensureRecordV8(record) as any]);
-    if (!pred) return ensureRecordV8(record) as any;
-    return {
-      ...(ensureRecordV8(record) as any),
-      risk: {
-        ...pred,
-        scoredAt: nowISO(),
-      },
-    };
-  } catch (e) {
-    log('risk classify failed', e);
-    return ensureRecordV8(record) as any;
-  }
-}
-
-async function refreshRiskPredictionsOnState(force = true) {
-  const records = (S.records || []).map((r) => ensureRecordV8(r) as any);
-  if (!records.length) return false;
-
-  const targets = force
-    ? records
-    : records.filter((r) => !r?.risk || String(r.risk.modelVersion || '') !== ACTIVE_RISK_MODEL_VERSION);
-
-  if (!targets.length) return false;
-
-  try {
-    const preds = await classifyRecordsRisk(targets as any);
-    const byId = new Map<string, any>();
-    targets.forEach((r, i) => {
-      const pred = preds[i];
-      if (pred) {
-        byId.set(String(r.id), {
-          ...pred,
-          scoredAt: nowISO(),
-        });
-      }
-    });
-
-    let changed = false;
-    S.records = records.map((r) => {
-      const nextRisk = byId.get(String(r.id));
-      if (!nextRisk) return r;
-      if (!sameRisk((r as any).risk, nextRisk)) changed = true;
-      return { ...r, risk: nextRisk };
-    }) as any;
-    return changed;
-  } catch (e) {
-    log('risk refresh failed', e);
-    return false;
-  }
-}
-
-
 /* ---------- defaults (draft) ---------- */
 const DEFAULT_RECORD = () => ({
   intake: '상담', actorTypeText: '당사자', actorType: '학생', actorNameChoice: OTHER, actorNameOther: '', actors: [],
@@ -1541,6 +3042,103 @@ const DEFAULT_RECORD = () => ({
   summaryOverview: '', summaryBackground: '', summaryIssues: '', summaryEvidenceList: '', summaryTeacherActions: '', summaryOther: '',
   signerLabel: '기기 봉인서명', sealReason: ''
 });
+
+const seedStrategyRecordDraftDefaultsFromRecords = (records: RecordItem[]) => {
+  const first = records[0] ? ensureRecordV8(records[0]) as any : null;
+  const actorSeed = first
+    ? (Array.isArray(first.actors) && first.actors.length
+      ? JSON.parse(JSON.stringify(first.actors))
+      : (first.actor?.name ? [{ type: first.actor.type, name: first.actor.name }] : []))
+    : [];
+  const relatedSeed = first && Array.isArray(first.related) ? JSON.parse(JSON.stringify(first.related)) : [];
+  return {
+    actors: actorSeed,
+    related: relatedSeed,
+    ts: first?.ts ? toLocalInputValue(String(first.ts)) : toLocalInputValue(nowISO()),
+    placeText: String(first?.place || '온라인'),
+    place: (first?.place || '온라인') as PlaceType,
+    placeOther: String(first?.placeOther || ''),
+    storeTypeText: String(first?.storeType || '전화'),
+    storeType: (first?.storeType || '전화') as StoreType,
+    storeOther: String(first?.storeOther || ''),
+    lvText: String(first?.lv || 'LV2'),
+    lv: (first?.lv || 'LV2') as Sensitivity,
+  };
+};
+
+const applyStrategyRecordDraftToComposer = (raw: string, opts?: { sourceInput?: string; contextRecords?: RecordItem[] }) => {
+  const parsed = parseStrategyRecordDraftText(raw);
+  const selectedRecords = getStrategySelectedRecords();
+  const mergedContextRecords = mergeStrategyRecords(selectedRecords, Array.isArray(opts?.contextRecords) ? opts!.contextRecords! : []);
+  const defaults = seedStrategyRecordDraftDefaultsFromRecords(mergedContextRecords);
+  Object.assign(draftRecord, DEFAULT_RECORD(), defaults);
+
+  draftRecord.summaryOverview = parsed.parts.overview;
+  draftRecord.summaryBackground = parsed.parts.background;
+  draftRecord.summaryIssues = parsed.parts.issues;
+  draftRecord.summaryEvidenceList = parsed.parts.evidenceList;
+  draftRecord.summaryTeacherActions = parsed.parts.teacherActions;
+  draftRecord.summaryOther = parsed.parts.other;
+
+  if (parsed.metadata.ts) draftRecord.ts = normalizeStrategyDraftTs(parsed.metadata.ts);
+  const inferredPlace = parsed.metadata.placeChannel
+    || inferStrategyPlaceFromContextRecords(mergedContextRecords)
+    || extractStrategyPlaceHintFromInput(String(opts?.sourceInput || raw));
+  if (inferredPlace) {
+    draftRecord.placeText = inferredPlace;
+    draftRecord.place = (PLACE_TYPES as any).includes(inferredPlace as any) ? inferredPlace as any : '기타' as any;
+    draftRecord.placeOther = draftRecord.place === '기타' ? inferredPlace : '';
+  }
+  if (parsed.metadata.storeType) {
+    draftRecord.storeTypeText = parsed.metadata.storeType;
+    draftRecord.storeType = (STORE_TYPES as any).includes(parsed.metadata.storeType as any) ? parsed.metadata.storeType as any : '기타' as any;
+    draftRecord.storeOther = draftRecord.storeType === '기타' ? parsed.metadata.storeType : '';
+  }
+  if (parsed.metadata.lv && (LVS as any).includes(parsed.metadata.lv as any)) {
+    draftRecord.lvText = parsed.metadata.lv;
+    draftRecord.lv = parsed.metadata.lv as any;
+  }
+
+  const sourceInput = String(opts?.sourceInput || raw);
+  const actionNotes = extractStrategyActionNotes(sourceInput);
+  const mentionedActors = resolveStrategyMentionedActors(sourceInput);
+  const inferredPeople = extractStrategyPeopleFromInput(sourceInput);
+  const actorNames = splitStrategyActorNames(parsed.metadata.actor);
+  if (mentionedActors.length) {
+    draftRecord.actors = addActorToList([], mentionedActors[0]);
+  } else if (actorNames.length) {
+    draftRecord.actors = actorNames.reduce((acc, name) => addActorToList(acc, { type: '학생' as any, name }), [] as ActorRef[]);
+  } else if (inferredPeople.length) {
+    draftRecord.actors = addActorToList([], { type: '학생' as any, name: inferredPeople[0] });
+  }
+  const relatedNames = splitStrategyActorNames(parsed.metadata.related);
+  if (mentionedActors.length > 1) {
+    draftRecord.related = mentionedActors.slice(1).reduce((acc, actor) => addActorToList(acc, actor), [] as ActorRef[]);
+  } else if (relatedNames.length) {
+    draftRecord.related = relatedNames.reduce((acc, name) => addActorToList(acc, { type: '학부모' as any, name }), [] as ActorRef[]);
+  } else if (inferredPeople.length > 1) {
+    draftRecord.related = inferredPeople.slice(1).reduce((acc, name) => addActorToList(acc, { type: '학생' as any, name }), [] as ActorRef[]);
+  }
+
+  if (actionNotes.length) {
+    const currentTeacherActions = String(draftRecord.summaryTeacherActions || '').trim();
+    const missingActionNotes = actionNotes.filter((note) => !currentTeacherActions.includes(note));
+    if (!currentTeacherActions) {
+      draftRecord.summaryTeacherActions = actionNotes
+        .map((note, index) => `${index + 1}. ${note}`)
+        .join('\n');
+    } else if (missingActionNotes.length) {
+      draftRecord.summaryTeacherActions = [
+        currentTeacherActions,
+        ...missingActionNotes.map((note, index) => `${index + 1}. ${note}`),
+      ].join('\n');
+    }
+  }
+
+  const summaryPack = buildSummaryFromDraftParts(draftRecord as any);
+  draftRecord.summary = summaryPack.text || parsed.raw;
+  return { parsed, summaryText: summaryPack.text };
+};
 const DEFAULT_CASE = () => ({
   title: '', query: '', timeFrom: '', timeTo: '', maxResults: 80, actors: [],
   onlyMainActor: false,
@@ -1661,8 +3259,7 @@ function bindEvents() {
       reason: String((draftRecord as any).sealReason || '').trim() || '초기 기록 봉인',
     });
 
-    const sealedWithRisk = await classifyOneRecord(sealed);
-    S.records.unshift(sealedWithRisk as any);
+    S.records.unshift(sealed as any);
     const sel = getSelectedCase();
     if (sel) S.cases[sel.id] = await addRecordsToCase(sel, S.records, [sealed.id]);
     await saveState(S);
@@ -1731,9 +3328,8 @@ function bindEvents() {
       reason: String((draftRecordEdit as any).sealReason || '').trim() || '기록 정정 및 재봉인',
     });
 
-    const amendedWithRisk = await classifyOneRecord(amended);
-    S.records[idx] = amendedWithRisk as any;
-    ui.viewRecordId = amendedWithRisk.id;
+    S.records[idx] = amended as any;
+    ui.viewRecordId = amended.id;
     ui.recordEditId = null;
     ui.recordModalTab = 'history';
     ui.recEditRelatedOpen = false;
@@ -1748,7 +3344,7 @@ function bindEvents() {
 
     const amendVerify = verifyRecordIntegrity(amended as any) as any;
     toast(`정정 봉인 완료 ✅ ${amendVerify.trusted ? '기기서명 확인' : '재봉인 저장됨'}`);
-    log('record amended', amendedWithRisk.id, amendVerify.verificationStatus);
+    log('record amended', amended.id, amendVerify.verificationStatus);
   };
 
   const click: Record<string, (btn: HTMLElement) => void | Promise<void>> = {
@@ -1766,10 +3362,13 @@ function bindEvents() {
 
     tab: async (btn) => {
       const rawTab = String(btn.dataset.tab || '').trim();
-      const nextTab = (rawTab === 'cases' ? 'cases' : rawTab === 'legal' ? 'legal' : rawTab === 'home' ? 'home' : 'records') as any;
+      const nextTab = (rawTab === 'cases' || rawTab === 'records' ? 'cases' : rawTab === 'legal' ? 'legal' : 'home') as any;
       S.tab = nextTab;
       if (nextTab === 'records') ui.evidenceTab = ui.evidenceTab || 'write';
-      if (nextTab === 'cases') ui.caseTab = ui.caseTab || 'create';
+      if (nextTab === 'cases') {
+        if (rawTab === 'records') ui.caseTab = 'records' as any;
+        else ui.caseTab = (ui.caseTab === 'list' || ui.caseTab === 'proof' || ui.caseTab === 'records') ? ui.caseTab : 'records';
+      }
       await saveState(S); log(`tab -> ${S.tab}`); render();
     },
 
@@ -1789,7 +3388,16 @@ function bindEvents() {
     },
     'switch-case-tab': (btn) => {
       const raw = String(btn.dataset.caseTab || '').trim();
-      const next = raw === 'list' ? 'list' : raw === 'proof' ? 'proof' : 'create';
+      if (raw === 'create') {
+        S.tab = 'cases' as any;
+        ui.caseTab = 'list' as any;
+        ui.caseCreateOpen = true;
+        render();
+        openCaseCreateModal();
+        log('case create modal open (legacy tab route)');
+        return;
+      }
+      const next = raw === 'list' ? 'list' : raw === 'proof' ? 'proof' : 'records';
       ui.caseTab = next as any;
       S.tab = 'cases' as any;
       render();
@@ -1808,9 +3416,22 @@ function bindEvents() {
       } else {
         reseedSimulationSelection(false);
       }
-      S.tab = 'legal' as any;
+      S.tab = 'home' as any;
       render();
       log('legal tab ->', next);
+    },
+    'set-legal-agent-mode': (btn) => {
+      const next = String(btn.dataset.mode || '').trim() === 'record' ? 'record' : 'analysis';
+      const current = getStrategyChatMode();
+      if (current !== next && next === 'analysis') {
+        clearStrategyChat();
+      }
+      (ui as any).strategyChatMode = next;
+      closeStrategyMentionMenu();
+      closeStrategyRecordDraftEditor();
+      render();
+      focusStrategyChatComposer();
+      toast(next === 'record' ? '기록모드로 전환했어요' : '분석모드로 전환했어요');
     },
     'open-simulation-picker': () => {
       closeStrategyChatModelMenu();
@@ -1946,6 +3567,53 @@ function bindEvents() {
       if ((ui as any).strategyChatPending) return;
       await sendStrategyAgentMessage();
     },
+    'open-strategy-input-guide': () => {
+      (ui as any).strategyInputGuideOpen = true;
+      render();
+    },
+    'close-strategy-input-guide': () => {
+      (ui as any).strategyInputGuideOpen = false;
+      closeDlg('strategyInputGuideModal');
+      render();
+    },
+    'pick-strategy-mention': (btn) => {
+      const groupId = String(btn.dataset.groupId || '').trim();
+      const memberId = String(btn.dataset.memberId || '').trim();
+      const name = String(btn.dataset.name || '').trim();
+      const groupLabel = String(btn.dataset.groupLabel || '').trim();
+      if (!groupId || !memberId || !name) return;
+      applyStrategyMentionSuggestion({ groupId, memberId, name, groupLabel });
+    },
+    'draft-strategy-action': (btn) => {
+      (ui as any).strategyActionDraft = String((btn as HTMLInputElement | null)?.value || '');
+    },
+    'apply-strategy-action': () => {
+      applyStrategyActionPrompt();
+    },
+    'close-strategy-action': () => {
+      closeStrategyActionPrompt();
+      render();
+      focusStrategyChatComposer();
+    },
+    'edit-strategy-record-draft': (btn) => {
+      const messageId = String(btn.dataset.id || '').trim();
+      if (!messageId) return;
+      openStrategyRecordDraftEditor(messageId);
+    },
+    'cancel-edit-strategy-record-draft': () => {
+      closeStrategyRecordDraftEditor();
+      render();
+    },
+    'save-edit-strategy-record-draft': (btn) => {
+      const messageId = String(btn.dataset.id || '').trim();
+      if (!messageId) return;
+      saveStrategyRecordDraftEdit(messageId);
+    },
+    'save-strategy-record-draft': (btn) => {
+      const messageId = String(btn.dataset.id || '').trim();
+      if (!messageId) return;
+      saveStrategyRecordDraftToArchive(messageId);
+    },
     'download-strategy-models': async () => {
       if ((ui as any).strategyModelDownloadPending) return;
       await downloadStrategyModels();
@@ -1959,6 +3627,63 @@ function bindEvents() {
       (ui as any).strategyChatModelMenuOpen = !(ui as any).strategyChatModelMenuOpen;
       render();
       log('strategy model menu', (ui as any).strategyChatModelMenuOpen ? 'open' : 'close');
+    },
+    'toggle-strategy-synthetic-cache': () => {
+      const next = !((ui as any).strategySyntheticCacheEnabled !== false);
+      (ui as any).strategySyntheticCacheEnabled = next;
+      persistStrategySyntheticCacheSetting(next);
+      if (next) maybeStartStrategyBackendPrewarm('toggle_on');
+      render();
+      toast(next ? 'Synthetic Token Cache를 켰어요' : 'Synthetic Token Cache를 껐어요');
+    },
+    'toggle-strategy-backend-mode': () => {
+      const current = getStrategyBackendMode();
+      const next: StrategyBackendMode = current === 'llama-server' ? 'cli' : 'llama-server';
+      const draft = {
+        ...defaultStrategyLlamaServerConfig(),
+        ...(((ui as any).strategyLlamaServerConfig || defaultStrategyLlamaServerConfig()) as StrategyLlamaServerConfigDraft),
+      };
+      (ui as any).strategyBackendMode = next;
+      (ui as any).strategyLlamaServerConfig = draft;
+      persistStrategyBackendSettings({
+        mode: next,
+        llamaServer: draft,
+      });
+      render();
+      toast(next === 'llama-server' ? 'llama-server backend로 전환했어요' : 'CLI backend로 전환했어요');
+    },
+    'toggle-strategy-perf-panel': () => {
+      (ui as any).strategyPerfCollapsed = !((ui as any).strategyPerfCollapsed === true);
+      render();
+    },
+    'reset-strategy-perf-lab': () => {
+      resetStrategyPerfLabState();
+      render();
+      toast('실험용 지표를 초기화했어요');
+    },
+    'save-strategy-backend-settings': () => {
+      const mode = getStrategyBackendMode();
+      const llamaServer = getStrategyLlamaServerConfig();
+      if (mode === 'llama-server' && (!llamaServer.hyperclovaUrl || !llamaServer.roosyUrl)) {
+        toast('llama-server endpoint를 모두 입력해주세요');
+        return;
+      }
+      (ui as any).strategyBackendMode = mode;
+      (ui as any).strategyLlamaServerConfig = {
+        ...defaultStrategyLlamaServerConfig(),
+        ...llamaServer,
+        hyperclovaSlot: llamaServer.hyperclovaSlot == null ? '' : String(llamaServer.hyperclovaSlot),
+        roosySlot: llamaServer.roosySlot == null ? '' : String(llamaServer.roosySlot),
+        startupTimeoutMs: String(llamaServer.startupTimeoutMs),
+        requestTimeoutMs: String(llamaServer.requestTimeoutMs),
+      };
+      persistStrategyBackendSettings({
+        mode,
+        llamaServer: (ui as any).strategyLlamaServerConfig,
+      });
+      if (mode === 'llama-server') maybeStartStrategyBackendPrewarm('settings_save');
+      render();
+      toast(mode === 'llama-server' ? 'llama-server backend 설정을 저장했어요' : 'CLI backend 설정으로 저장했어요');
     },
     'select-strategy-model': (btn) => {
       const next = normalizeStrategyModel(btn.dataset.model || '');
@@ -2185,7 +3910,7 @@ function bindEvents() {
       updateClassRosterCountUI();
     },
 
-    'open-case-create': () => (S.tab = 'cases' as any, ui.caseTab = 'create', ui.caseCreateOpen = false, render(), void saveState(S), log('case create section open')),
+    'open-case-create': () => (S.tab = 'cases' as any, ui.caseTab = 'list', ui.caseCreateOpen = true, render(), openCaseCreateModal(), void saveState(S), log('case create modal open')),
     'close-case-create': () => (closeCaseCreateModal(), render(), log('case create modal close')),
 
     'saved-close': () => closeDlg('savedModal'),
@@ -2221,11 +3946,11 @@ function bindEvents() {
         log('backup save failed', e);
       }
     },
-'load-sample': async () => {
+    'load-sample': async () => {
       if (!(await openConfirm('샘플 데이터를 불러올까요?(현재 데이터는 샘플로 덮어써집니다)'))) return;
       try {
         const pack = await loadSamplePackJSON();
-        const next = normalizeState(pack as any); next.tab = 'records'; next.selectedCaseId = null;
+        const next = normalizeState(pack as any); next.tab = 'cases'; next.selectedCaseId = null;
         setState(next); await saveState(S); syncDraftDefaults(); render(); toast('샘플 데이터를 불러왔어요 ✅'); log('sample loaded');
       } catch (e) { log('sample load failed', e); toast('샘플 불러오기에 실패했어요'); }
     },
@@ -2307,7 +4032,7 @@ function bindEvents() {
       await wipeAll();
       setState(defaultState());
       (S as any).tab = 'cases';
-      ui.caseTab = 'create';
+      ui.caseTab = 'records';
       ui.evidenceTab = 'write';
       ui.settingsOpen = false;
       syncDraftDefaults();
@@ -2444,7 +4169,7 @@ function bindEvents() {
       const id = btn.dataset.id; if (!id) return;
       const r = S.records.find((x) => x.id === id); if (!r) return;
       const holders = casesContainingRecord(r, S.cases);
-      if (holders.length) return void (toast(`컬렉션 ${holders.length}개에 포함된 기록이라 삭제할 수 없어요.`), log('delete-record blocked (in cases)', id));
+      if (holders.length) return void (toast(`기록묶음 ${holders.length}개에 포함된 기록이라 삭제할 수 없어요.`), log('delete-record blocked (in cases)', id));
       if (!(await openConfirm('이 기록을 삭제할까요?'))) return;
       S.records = S.records.filter((x) => x.id !== id); await SR();
       toastUndo('기록 삭제됨', async () => (S.records.unshift(r), await SR(), toast('복구 완료')));
@@ -2454,7 +4179,7 @@ function bindEvents() {
     'remove-record-from-case': async (btn) => {
       const c = mustCase(); if (!c) return;
       const id = btn.dataset.id; if (!id) return;
-      if (!(await openConfirm('이 기록을 이 컬렉션에서 뺄까요? (기록 자체가 삭제되진 않아요)'))) return;
+      if (!(await openConfirm('이 기록을 이 기록묶음에서 뺄까요? (기록 자체가 삭제되진 않아요)'))) return;
       
       const prevIds = (c.recordIds || []).slice();
       c.recordIds = prevIds.filter((x) => x !== id);
@@ -2497,14 +4222,14 @@ function bindEvents() {
       const query = String(draftCase.query || '').trim();
 
       if (!title) {
-        // 제목이 비어있으면 "{주체} {요약(키워드)} 컬렉션" 포맷으로 생성
+        // 제목이 비어있으면 "{주체} {요약(키워드)} 기록묶음" 포맷으로 생성
         const mainActor = draftCase.actors[0];
         const actorName = mainActor ? actorShort(mainActor) : '미정';
         
         // 요약이 너무 길면 잘라서 사용
         const shortQuery = query.length > 12 ? query.slice(0, 12) + '...' : query;
         
-        title = `${actorName} ${shortQuery} 컬렉션`.replace(/\s+/g, ' ').trim();
+        title = `${actorName} ${shortQuery} 기록묶음`.replace(/\s+/g, ' ').trim();
       }
 
       const { caseItem, error, pickedCount } = await createCaseWithAdvisors({
@@ -2522,7 +4247,7 @@ function bindEvents() {
       if (error) return toast(error);
       const c = caseItem!; S.cases[c.id] = c; S.selectedCaseId = c.id; S.tab = 'cases'; ui.caseTab = 'list';
       Object.assign(draftCase, DEFAULT_CASE()); await SR(); closeCaseCreateModal(); render();
-      setText('caseCreatedMsg', `“${String(c.title || '').trim() || '컬렉션'}” 생성됨`);
+      setText('caseCreatedMsg', `“${String(c.title || '').trim() || '기록묶음'}” 생성됨`);
       setText('caseCreatedSub', pickedCount ? `AI가 기록 ${pickedCount}개를 모았어요.` : 'AI가 포함할 기록을 찾지 못했어요.');
       openDlg('caseCreatedModal'); window.setTimeout(() => closeDlg('caseCreatedModal'), 2000);
       toast('생성 완료 ✅'); log('case created', c.id);
@@ -2531,16 +4256,16 @@ function bindEvents() {
     'select-case': async (btn) => { const id = btn.dataset.id; if (!id || !S.cases[id]) return; S.selectedCaseId = id; S.tab = 'cases'; ui.caseTab = 'list'; await SR(); log('case selected', id); },
     'clear-case': async () => { S.selectedCaseId = null; ui.qTimeline = ''; ui.caseTab = 'list'; await SR(); log('case cleared'); },
 
-    'open-paper-picker': () => { if (!Object.keys(S.cases || {}).length) return toast('먼저 컬렉션을 만들어주세요'); S.tab = 'cases' as any; ui.caseTab = 'proof' as any; ui.paperPickOpen = false; ui.paperPickQuery = ''; render(); void saveState(S); log('content proof section open'); },
+    'open-paper-picker': () => { if (!Object.keys(S.cases || {}).length) return toast('먼저 기록묶음을 만들어주세요'); S.tab = 'cases' as any; ui.caseTab = 'proof' as any; ui.paperPickOpen = false; ui.paperPickQuery = ''; render(); void saveState(S); log('content proof section open'); },
     'close-paper-picker': () => (closePaperPickModal(), render(), log('paper picker close')),
     'pick-paper-case': async (btn) => { const id = String(btn.dataset.id || '').trim(); const c = id ? (S.cases[id] ?? null) : null; if (!c) return; ui.paperCaseId = c.id; ui.paperHash = await computeCasePaperHash(c); ensureContentProofDraft(); closePaperPickModal(); render(); openPaperModal(); log('content proof open (picker)', c.id); },
-    'paper-open-case-create': () => { closePaperPickModal(); S.tab = 'cases' as any; ui.caseTab = 'create'; ui.caseCreateOpen = false; render(); void saveState(S); log('case create section open (from paper picker)'); },
+    'paper-open-case-create': () => { closePaperPickModal(); S.tab = 'cases' as any; ui.caseTab = 'list'; ui.caseCreateOpen = true; render(); openCaseCreateModal(); void saveState(S); log('case create modal open (from paper picker)'); },
 
     'open-paper': async () => { const c = mustCase(); if (!c) return; ui.paperCaseId = c.id; ui.caseTab = 'proof' as any; S.tab = 'cases' as any; render(); log('content proof tab open', c.id); },
     'pick-proof-case': async (btn) => { const id = String(btn.dataset.id || '').trim(); if (!id || !S.cases[id]) return; S.selectedCaseId = id; ui.paperCaseId = id; ui.caseTab = 'proof' as any; await saveState(S); render(); log('proof case picked', id); },
     'open-paper-preview': async () => {
       const c = (ui.paperCaseId && S.cases[ui.paperCaseId]) ? S.cases[ui.paperCaseId] : null;
-      if (!c) return toast('먼저 컬렉션 목록에서 항목을 선택하세요');
+      if (!c) return toast('먼저 기록묶음 목록에서 항목을 선택하세요');
       ui.paperCaseId = c.id;
       ui.paperHash = await computeCasePaperHash(c);
       ensureContentProofDraft();
@@ -2571,7 +4296,7 @@ function bindEvents() {
     'open-case-update': () => { const c = mustCase(); if (c) (openUpdate(c.id), log('case update modal open', c.id)); },
     'close-case-update': () => (closeCaseUpdateModal(), render()),
     'apply-case-update': async () => {
-      const c = ui.updateCaseId ? S.cases[ui.updateCaseId] ?? null : null; if (!c) return toast('컬렉션을 찾을 수 없어요');
+      const c = ui.updateCaseId ? S.cases[ui.updateCaseId] ?? null : null; if (!c) return toast('기록묶음을 찾을 수 없어요');
       const ids = (ui.updatePickIds || []).slice();
       // fallback (혹시 state가 비어있을 때)
       if (!ids.length) {
@@ -2584,9 +4309,9 @@ function bindEvents() {
     },
     'delete-case': async (btn) => {
       const id = btn.dataset.id; if (!id || !S.cases[id]) return;
-      if (!(await openConfirm('이 컬렉션을 삭제할까요?'))) return;
+      if (!(await openConfirm('이 기록묶음을 삭제할까요?'))) return;
       const deleted = S.cases[id]; delete S.cases[id]; if (S.selectedCaseId === id) S.selectedCaseId = null;
-      await SR(); toastUndo('컬렉션 삭제됨', async () => (S.cases[deleted.id] = deleted, await SR(), toast('복구 완료'))); log('case deleted', id);
+      await SR(); toastUndo('기록묶음 삭제됨', async () => (S.cases[deleted.id] = deleted, await SR(), toast('복구 완료'))); log('case deleted', id);
     },
 
     'add-step': async () => {
@@ -2828,6 +4553,29 @@ function bindEvents() {
       else if (field === 'confirm') ui.pinSettingsConfirmDraft = next;
       return;
     }
+    if (action === 'draft-strategy-backend-settings') {
+      const draft = (((ui as any).strategyLlamaServerConfig || defaultStrategyLlamaServerConfig()) as StrategyLlamaServerConfigDraft);
+      if (field === 'mode') {
+        (ui as any).strategyBackendMode = v === 'llama-server' ? 'llama-server' : 'cli';
+      } else if (field === 'hyperclovaUrl') {
+        draft.hyperclovaUrl = v;
+      } else if (field === 'roosyUrl') {
+        draft.roosyUrl = v;
+      } else if (field === 'hyperclovaSlot') {
+        draft.hyperclovaSlot = String(v || '').replace(/[^\d]/g, '');
+      } else if (field === 'roosySlot') {
+        draft.roosySlot = String(v || '').replace(/[^\d]/g, '');
+      } else if (field === 'startupTimeoutMs') {
+        draft.startupTimeoutMs = String(v || '').replace(/[^\d]/g, '');
+      } else if (field === 'requestTimeoutMs') {
+        draft.requestTimeoutMs = String(v || '').replace(/[^\d]/g, '');
+      } else if (field === 'cachePrompt') {
+        draft.cachePrompt = v === 'true';
+      }
+      (ui as any).strategyLlamaServerConfig = draft;
+      render();
+      return;
+    }
     if (action === 'draft-record-filters') {
       if (field === 'actor') ui.recFilterActorDraft = v;
       else if (field === 'place') ui.recFilterPlaceDraft = v;
@@ -2862,7 +4610,32 @@ function bindEvents() {
       return;
     }
     if (action === 'draft-strategy-chat') {
+      const prevMentionOpen = !!(ui as any).strategyMentionOpen;
+      const prevMentionKey = strategyMentionSuggestionsKey(
+        Array.isArray((ui as any).strategyMentionSuggestions)
+          ? ((ui as any).strategyMentionSuggestions as StrategyMentionSuggestion[])
+          : []
+      );
       (ui as any).strategyChatInput = v;
+      if (el instanceof HTMLTextAreaElement) {
+        syncStrategyMentionState(v, el.selectionStart ?? v.length);
+        const nextMentionOpen = !!(ui as any).strategyMentionOpen;
+        const nextMentionKey = strategyMentionSuggestionsKey(
+          Array.isArray((ui as any).strategyMentionSuggestions)
+            ? ((ui as any).strategyMentionSuggestions as StrategyMentionSuggestion[])
+            : []
+        );
+        if (
+          prevMentionOpen !== nextMentionOpen
+          || prevMentionKey !== nextMentionKey
+        ) {
+          render();
+        }
+      }
+      return;
+    }
+    if (action === 'draft-strategy-record-edit') {
+      (ui as any).strategyRecordEditDraft = v;
       return;
     }
     if (action === 'draft-simulation') {
@@ -2910,27 +4683,94 @@ function bindEvents() {
     if (action === 'draft-record-edit') updateRecordEditUI();
   };
 
-  const watch = '[data-action="draft-record"],[data-action="draft-record-edit"],[data-action="draft-case"],[data-action="draft-step"],[data-action="draft-record-filters"],[data-action="draft-update-filters"],[data-action="toggle-update-pick"],[data-action="search-timeline"],[data-action="search-paper-cases"],[data-action="search-update-candidates"],[data-action="draft-screen-pin"],[data-action="draft-pin-settings"],[data-action="draft-content-proof"],[data-action="draft-simulation"],[data-action="draft-strategy-chat"]';
+  const watch = '[data-action="draft-record"],[data-action="draft-record-edit"],[data-action="draft-case"],[data-action="draft-step"],[data-action="draft-record-filters"],[data-action="draft-update-filters"],[data-action="toggle-update-pick"],[data-action="search-timeline"],[data-action="search-paper-cases"],[data-action="search-update-candidates"],[data-action="draft-screen-pin"],[data-action="draft-pin-settings"],[data-action="draft-strategy-backend-settings"],[data-action="draft-content-proof"],[data-action="draft-simulation"],[data-action="draft-strategy-chat"],[data-action="draft-strategy-action"],[data-action="draft-strategy-record-edit"]';
   const isSimulationImeField = (el: HTMLElement | null) => !!el && el.dataset.action === 'draft-simulation' && (el.dataset.field === 'evidenceFilter' || el.dataset.field === 'pickerQuery');
+  const isStrategyChatImeField = (el: HTMLElement | null) => !!el && el.dataset.action === 'draft-strategy-chat' && el.dataset.field === 'input';
   document.addEventListener('input', (e) => {
     const el = (e.target as HTMLElement | null)?.closest<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(watch);
     if (!el) return;
     if (isSimulationImeField(el) && 'isComposing' in e && (e as InputEvent).isComposing) return;
+    if (isStrategyChatImeField(el) && 'isComposing' in e && (e as InputEvent).isComposing) {
+      (ui as any).strategyChatInput = (el as HTMLTextAreaElement).value;
+      return;
+    }
     handle(el);
   });
   document.addEventListener('compositionend', (e) => {
     const el = (e.target as HTMLElement | null)?.closest<HTMLInputElement | HTMLTextAreaElement>('[data-action="draft-simulation"][data-field="evidenceFilter"],[data-action="draft-simulation"][data-field="pickerQuery"]');
     if (el) handle(el);
   });
-  document.addEventListener('change', (e) => { const el = (e.target as HTMLElement | null)?.closest<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>('[data-action="draft-record"],[data-action="draft-record-edit"],[data-action="draft-case"],[data-action="draft-step"],[data-action="draft-record-filters"],[data-action="draft-update-filters"],[data-action="toggle-update-pick"],[data-action="draft-screen-pin"],[data-action="draft-pin-settings"],[data-action="draft-content-proof"],[data-action="draft-simulation"],[data-action="draft-strategy-chat"]'); el && handle(el); });
+  document.addEventListener('compositionstart', (e) => {
+    const el = (e.target as HTMLElement | null)?.closest<HTMLTextAreaElement>('[data-action="draft-strategy-chat"][data-field="input"]');
+    if (!el) return;
+    el.closest('.strategyComposerTextareaWrapOnly')?.classList.add('isComposing');
+  });
+  document.addEventListener('compositionend', (e) => {
+    const el = (e.target as HTMLElement | null)?.closest<HTMLTextAreaElement>('[data-action="draft-strategy-chat"][data-field="input"]');
+    if (!el) return;
+    el.closest('.strategyComposerTextareaWrapOnly')?.classList.remove('isComposing');
+    handle(el);
+  });
+  document.addEventListener('change', (e) => { const el = (e.target as HTMLElement | null)?.closest<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>('[data-action="draft-record"],[data-action="draft-record-edit"],[data-action="draft-case"],[data-action="draft-step"],[data-action="draft-record-filters"],[data-action="draft-update-filters"],[data-action="toggle-update-pick"],[data-action="draft-screen-pin"],[data-action="draft-pin-settings"],[data-action="draft-strategy-backend-settings"],[data-action="draft-content-proof"],[data-action="draft-simulation"],[data-action="draft-strategy-chat"],[data-action="draft-strategy-action"],[data-action="draft-strategy-record-edit"]'); el && handle(el); });
 
   document.addEventListener('keydown', (e) => {
     const el = (e.target as HTMLElement | null)?.closest<HTMLTextAreaElement>('[data-action="draft-strategy-chat"][data-field="input"]');
     if (!el) return;
+    if (!('isComposing' in e) || !(e as KeyboardEvent).isComposing) {
+      syncStrategyMentionState(el.value, el.selectionStart ?? el.value.length);
+    }
+    const mentionOpen = !!(ui as any).strategyMentionOpen;
+    const mentionSuggestions = Array.isArray((ui as any).strategyMentionSuggestions) ? ((ui as any).strategyMentionSuggestions as StrategyMentionSuggestion[]) : [];
+    if (mentionOpen && mentionSuggestions.length) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const dir = e.key === 'ArrowDown' ? 1 : -1;
+        const currentIndex = Number((ui as any).strategyMentionSelectedIndex || 0);
+        const nextIndex = (currentIndex + dir + mentionSuggestions.length) % mentionSuggestions.length;
+        (ui as any).strategyMentionSelectedIndex = nextIndex;
+        render();
+        focusStrategyChatComposer();
+        return;
+      }
+      if ((e.key === 'Enter' && !e.shiftKey) || e.key === 'Tab') {
+        e.preventDefault();
+        const selectedIndex = Math.max(0, Math.min(Number((ui as any).strategyMentionSelectedIndex || 0), mentionSuggestions.length - 1));
+        applyStrategyMentionSuggestion(mentionSuggestions[selectedIndex]);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeStrategyMentionMenu();
+        render();
+        focusStrategyChatComposer();
+        return;
+      }
+    }
+    if (e.key === '#') {
+      e.preventDefault();
+      openStrategyActionPrompt(el.selectionStart ?? el.value.length);
+      return;
+    }
     if (e.key !== 'Enter' || e.shiftKey) return;
     if ('isComposing' in e && (e as KeyboardEvent).isComposing) return;
     e.preventDefault();
     void sendStrategyAgentMessage();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    const el = (e.target as HTMLElement | null)?.closest<HTMLInputElement>('[data-action="draft-strategy-action"]');
+    if (!el) return;
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      applyStrategyActionPrompt();
+      return;
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeStrategyActionPrompt();
+      render();
+      focusStrategyChatComposer();
+    }
   });
 
   document.addEventListener('input', (e) => {
@@ -2938,6 +4778,39 @@ function bindEvents() {
     if (!el) return;
     autoResizeStrategyChatArea(el);
     queueStrategyChatDockedComposerSync();
+  });
+
+  document.addEventListener('scroll', (e) => {
+    const el = (e.target as HTMLElement | null)?.closest?.('[data-action="draft-strategy-chat"][data-field="input"]') as HTMLTextAreaElement | null;
+    if (!el) return;
+    syncStrategyChatComposerMirror(el);
+  }, true);
+
+  document.addEventListener('focusin', (e) => {
+    const el = (e.target as HTMLElement | null)?.closest?.('[data-action="draft-strategy-chat"][data-field="input"]') as HTMLTextAreaElement | null;
+    if (!el) return;
+    syncStrategyChatComposerMirror(el);
+  });
+
+  document.addEventListener('click', (e) => {
+    const target = e.target as HTMLElement | null;
+    if (target?.closest?.('.strategyMentionPanel') || target?.closest?.('[data-action="draft-strategy-chat"][data-field="input"]')) {
+      const field = target.closest?.('[data-action="draft-strategy-chat"][data-field="input"]') as HTMLTextAreaElement | null;
+      if (field) {
+        syncStrategyMentionState(field.value, field.selectionStart ?? field.value.length);
+      }
+      return;
+    }
+    if ((ui as any).strategyMentionOpen) {
+      closeStrategyMentionMenu();
+      render();
+    }
+  });
+
+  document.addEventListener('input', (e) => {
+    const el = (e.target as HTMLElement | null)?.closest<HTMLTextAreaElement>('[data-action="draft-strategy-record-edit"][data-field="content"]');
+    if (!el) return;
+    autoResizeStrategyChatArea(el);
   });
 
   document.addEventListener('input', (e) => {
@@ -3074,13 +4947,14 @@ export function initApp() {
 
   // ✅ 앱 실행 시 첫 화면: 홈
   (S as any).tab = 'home' as any; S.tab = 'home' as any; render();
+  window.setTimeout(() => {
+    maybeStartStrategyBackendPrewarm('app_init');
+  }, 160);
 
   (async () => {
     try {
       await refreshDeviceSignerInfo();
       setState(await reverifyStateRecords(await loadState()));
-      const riskChanged = await refreshRiskPredictionsOnState(true);
-      if (riskChanged) await saveState(S);
       log('state loaded');
     }
     catch (e) { log('load failed', e); setState(defaultState()); }

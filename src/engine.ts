@@ -1,5 +1,5 @@
 // src/engine.ts
-import { rustClassifyRecordsRisk, rustGenerateAdvisorsForCase, rustRankRecordsForCase } from './engine_rust';
+import { rustGenerateAdvisorsForCase, rustRankRecordsForCase } from './engine_rust';
 
 /* -------------------- Types -------------------- */
 
@@ -247,14 +247,6 @@ export async function rankRecordsForCase(
 export const regenerateCaseAdvisors = (c: CaseItem, records: RecordItem[]) =>
   rustGenerateAdvisorsForCase(records, c);
 
-export async function classifyRecordsRisk(records: RecordItem[]): Promise<RecordRisk[]> {
-  if (!Array.isArray(records) || !records.length) return [];
-  return rustClassifyRecordsRisk(records);
-}
-
-export function complaintRiskText(label: ComplaintRiskLabel): '평범' | '경고' | '위험' {
-  return label === 2 ? '위험' : label === 1 ? '경고' : '평범';
-}
 
 /* -------------------- builders -------------------- */
 
