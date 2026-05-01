@@ -55,7 +55,7 @@ export const ui = {
   strategyChatMode: 'record' as 'analysis' | 'record',
   strategyChatModel: 'roosy-hybrid' as 'roosy-hybrid',
   strategySyntheticCacheEnabled: true,
-  strategyBackendMode: 'cli' as 'cli' | 'llama-server',
+  strategyBackendMode: 'llama-server' as 'llama-server',
   strategyLlamaServerConfig: {
     hyperclovaUrl: 'http://127.0.0.1:18081/completion',
     roosyUrl: 'http://127.0.0.1:18082/completion',
@@ -77,8 +77,8 @@ export const ui = {
   } as any,
   strategyPerfRunState: {
     status: 'idle',
-    requestedBackend: 'cli',
-    requestedMode: 'Off',
+    requestedBackend: 'llama-server',
+    requestedMode: 'FullDRACE',
     actualBackend: '',
     startedAt: '',
     finishedAt: '',

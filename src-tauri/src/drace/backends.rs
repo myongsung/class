@@ -382,8 +382,6 @@ pub fn detect_backend_runtime(
         .filter(|value| !value.is_empty())
     });
 
-  let wants_llama_server = matches!(explicit_backend.as_deref(), Some("llama-server") | Some("server"))
-    || (hyperclova_url.is_some() && roosy_url.is_some());
   let wants_native = matches!(explicit_backend.as_deref(), Some("native"));
   let native_verifier_disabled = env_flag("ROOSYCOZY_DISABLE_NATIVE_VERIFIER");
   let native_verifier_opt_in = !native_verifier_disabled
@@ -410,63 +408,40 @@ pub fn detect_backend_runtime(
     };
   }
 
-  if wants_llama_server {
-    let mut hyperclova_url =
+  let llama_server = if let Some(mut override_config) = llama_server_override {
+    override_config.hyperclova_url =
       hyperclova_url.unwrap_or_else(|| DEFAULT_LLAMA_SERVER_HYPERCLOVA_URL.to_string());
-    let mut roosy_url = roosy_url.unwrap_or_else(|| DEFAULT_LLAMA_SERVER_ROOSY_URL.to_string());
-    if hyperclova_url.eq_ignore_ascii_case(&roosy_url) && is_loopback_completion_url(&hyperclova_url) {
-      hyperclova_url = DEFAULT_LLAMA_SERVER_HYPERCLOVA_URL.to_string();
-      roosy_url = DEFAULT_LLAMA_SERVER_ROOSY_URL.to_string();
+    override_config.roosy_url =
+      roosy_url.unwrap_or_else(|| DEFAULT_LLAMA_SERVER_ROOSY_URL.to_string());
+    override_config.startup_timeout_ms = override_config.startup_timeout_ms.max(90_000);
+    override_config.request_timeout_ms = override_config.request_timeout_ms.max(240_000);
+    override_config
+  } else {
+    LlamaServerConfig {
+      hyperclova_url: hyperclova_url.unwrap_or_else(|| DEFAULT_LLAMA_SERVER_HYPERCLOVA_URL.to_string()),
+      roosy_url: roosy_url.unwrap_or_else(|| DEFAULT_LLAMA_SERVER_ROOSY_URL.to_string()),
+      cache_prompt: !env_flag("ROOSYCOZY_LLAMA_SERVER_DISABLE_CACHE_PROMPT"),
+      startup_timeout_ms: env_u64("ROOSYCOZY_LLAMA_SERVER_STARTUP_TIMEOUT_MS", 90_000),
+      request_timeout_ms: env_u64("ROOSYCOZY_LLAMA_SERVER_REQUEST_TIMEOUT_MS", 240_000),
+      hyperclova_slot: env_u32_opt("ROOSYCOZY_LLAMA_SERVER_HYPERCLOVA_SLOT"),
+      roosy_slot: env_u32_opt("ROOSYCOZY_LLAMA_SERVER_ROOSY_SLOT"),
     }
-    let llama_server = if let Some(mut override_config) = llama_server_override {
-      override_config.hyperclova_url = hyperclova_url.clone();
-      override_config.roosy_url = roosy_url.clone();
-      override_config.startup_timeout_ms = override_config.startup_timeout_ms.max(90_000);
-      override_config.request_timeout_ms = override_config.request_timeout_ms.max(240_000);
-      override_config
-    } else {
-      LlamaServerConfig {
-        hyperclova_url,
-        roosy_url,
-        cache_prompt: !env_flag("ROOSYCOZY_LLAMA_SERVER_DISABLE_CACHE_PROMPT"),
-        startup_timeout_ms: env_u64("ROOSYCOZY_LLAMA_SERVER_STARTUP_TIMEOUT_MS", 90_000),
-        request_timeout_ms: env_u64("ROOSYCOZY_LLAMA_SERVER_REQUEST_TIMEOUT_MS", 240_000),
-        hyperclova_slot: env_u32_opt("ROOSYCOZY_LLAMA_SERVER_HYPERCLOVA_SLOT"),
-        roosy_slot: env_u32_opt("ROOSYCOZY_LLAMA_SERVER_ROOSY_SLOT"),
-      }
-    };
-    return BackendRuntime {
-      capabilities: BackendCapabilities {
-        backend_kind: BackendKind::LlamaServer,
-        supports_resident: true,
-        supports_prompt_token_cache: false,
-        supports_prompt_cache: true,
-        supports_prefix_kv_cache: true,
-        supports_token_verification: true,
-        supports_batch_verification: true,
-        supports_speculative_decode: false,
-        supports_synthetic_token_cache: true,
-        supports_mmap_cache_pack: false,
-        supports_resident_model: true,
-      },
-      llama_server: Some(llama_server),
-    };
-  }
+  };
 
   BackendRuntime {
     capabilities: BackendCapabilities {
-      backend_kind: BackendKind::CliSidecar,
-      supports_resident: false,
+      backend_kind: BackendKind::LlamaServer,
+      supports_resident: true,
       supports_prompt_token_cache: false,
-      supports_prompt_cache: false,
-      supports_prefix_kv_cache: false,
-      supports_token_verification: false,
-      supports_batch_verification: false,
+      supports_prompt_cache: true,
+      supports_prefix_kv_cache: true,
+      supports_token_verification: true,
+      supports_batch_verification: true,
       supports_speculative_decode: false,
-      supports_synthetic_token_cache: false,
+      supports_synthetic_token_cache: true,
       supports_mmap_cache_pack: false,
-      supports_resident_model: false,
+      supports_resident_model: true,
     },
-    llama_server: None,
+    llama_server: Some(llama_server),
   }
 }

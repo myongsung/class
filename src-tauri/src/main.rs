@@ -250,9 +250,8 @@ fn windows_shared_root() -> PathBuf {
 }
 
 #[cfg(target_os = "windows")]
-fn windows_sidecar_required_files() -> [&'static str; 3] {
+fn windows_sidecar_required_files() -> [&'static str; 2] {
     [
-        "llama-sidecar-x86_64-pc-windows-msvc.exe",
         "llama.dll",
         "mtmd.dll",
     ]
@@ -294,22 +293,6 @@ fn windows_install_needs_repair(app: &AppHandle) -> bool {
         .chain(windows_msvc_runtime_files().iter())
         .any(|name| !sidecar_dir.join(name).exists())
         || !windows_runtime_marker_path(&sidecar_dir).exists()
-}
-
-#[cfg(target_os = "windows")]
-fn find_runtime_sidecar_candidate(root: &Path) -> Option<PathBuf> {
-    for candidate in [
-        "llama-sidecar-x86_64-pc-windows-msvc.exe",
-        "llama-sidecar.exe",
-        "llama-cli.exe",
-    ] {
-        if let Some(path) = find_path_recursively(root, &|path| {
-            path.is_file() && path.file_name().and_then(|x| x.to_str()) == Some(candidate)
-        }) {
-            return Some(path);
-        }
-    }
-    None
 }
 
 #[cfg(target_os = "windows")]
@@ -363,8 +346,6 @@ fn download_windows_runtime_to_appdata(sidecar_dir: &Path) -> Result<(), String>
     download_release_zip(WINDOWS_RUNTIME_URL, &zip_path)?;
     extract_release_zip(&zip_path, &extract_dir)?;
 
-    let runtime_exe = find_runtime_sidecar_candidate(&extract_dir)
-        .ok_or_else(|| "다운로드한 AI 런타임 안에서 실행 파일을 찾지 못했어요.".to_string())?;
     let runtime_server = find_runtime_llama_server_candidate(&extract_dir)
         .ok_or_else(|| "다운로드한 AI 런타임 안에서 llama-server.exe를 찾지 못했어요.".to_string())?;
     let runtime_dlls = collect_runtime_dlls(&extract_dir);
@@ -383,8 +364,6 @@ fn download_windows_runtime_to_appdata(sidecar_dir: &Path) -> Result<(), String>
     }
 
     fs::create_dir_all(sidecar_dir).map_err(|e| format!("공용 AI 런타임 폴더를 만들지 못했어요: {}", e))?;
-    let target_exe = sidecar_dir.join("llama-sidecar-x86_64-pc-windows-msvc.exe");
-    fs::copy(&runtime_exe, &target_exe).map_err(|e| format!("AI 실행 파일을 공용 폴더로 복사하지 못했어요: {}", e))?;
     let target_server = sidecar_dir.join("llama-server.exe");
     fs::copy(&runtime_server, &target_server)
         .map_err(|e| format!("resident llama-server를 공용 폴더로 복사하지 못했어요: {}", e))?;
@@ -497,7 +476,7 @@ fn validate_extracted_release(extract_dir: &Path) -> Result<(PathBuf, Option<Pat
         for required in windows_sidecar_required_files() {
             if !extracted_sidecar.join(required).exists() {
                 return Err(format!(
-                    "업데이트 압축 파일 안에 필요한 sidecar 파일이 빠져 있어요: {}",
+                    "업데이트 압축 파일 안에 필요한 resident runtime 파일이 빠져 있어요: {}",
                     required
                 ));
             }
@@ -632,7 +611,7 @@ fn check_and_update(app: AppHandle) -> Result<String, String> {
                 false,
             )?;
             ensure_windows_runtime_cache(&app)?;
-            Ok("프로그램 파일을 복구했어요. sidecar를 다시 채워 넣었으니 지금 바로 AI 채팅을 다시 시도해보세요.".to_string())
+            Ok("프로그램 파일을 복구했어요. resident llama-server runtime을 다시 채워 넣었으니 지금 바로 AI 채팅을 다시 시도해보세요.".to_string())
         }
     }
 }

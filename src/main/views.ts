@@ -1377,7 +1377,7 @@ export function render() {
   const isCasesListView = currentTab === 'cases' && activeCaseTab === 'list';
   const showCaseSide = isCasesListView && !!selected && !HIDE_CASE_ACTIONS_AND_GUIDES;
   const platform = windowPlatform();
-  const strategySyntheticCacheEnabled = (ui as any).strategySyntheticCacheEnabled !== false;
+  const strategySyntheticCacheEnabled = true;
   const perfLab = (((ui as any).strategyPerfLab || { baseline: null, drace: null, baselineRuns: [], draceRuns: [], draceWarmup: null, latest: null, comparisonWarning: '' }) as any);
   const baselinePerf = perfLab.baseline;
   const dracePerf = perfLab.drace;
@@ -1385,8 +1385,8 @@ export function render() {
   const latestPerf = perfLab.latest;
   const perfRunState = (((ui as any).strategyPerfRunState || {
     status: 'idle',
-    requestedBackend: 'cli',
-    requestedMode: 'Off',
+    requestedBackend: 'llama-server',
+    requestedMode: 'FullDRACE',
     actualBackend: '',
     startedAt: '',
     finishedAt: '',
@@ -1394,19 +1394,12 @@ export function render() {
     cacheApplied: false,
   }) as any);
   const comparisonWarning = String((perfLab as any).comparisonWarning || '').trim();
-  const baselineRunsCount = Array.isArray(perfLab?.baselineRuns) ? perfLab.baselineRuns.length : 0;
   const draceRunsCount = Array.isArray(perfLab?.draceRuns) ? perfLab.draceRuns.length : 0;
-  const requestedBackendType = strategySyntheticCacheEnabled ? 'llama-server' : 'cli';
-  const requestedCacheMode = strategySyntheticCacheEnabled ? 'FullDRACE' : 'Off';
-  const activePerf = strategySyntheticCacheEnabled
-    ? (dracePerf || warmupPerf || latestPerf || baselinePerf)
-    : (baselinePerf || latestPerf || dracePerf || warmupPerf);
-  const activePerfLabel = strategySyntheticCacheEnabled
-    ? (dracePerf ? 'DRaCE 최근 측정값' : baselinePerf ? 'Baseline 최근 측정값' : '측정 대기')
-    : (baselinePerf ? 'Baseline 최근 측정값' : dracePerf ? 'DRaCE 최근 측정값' : '측정 대기');
-  const currentRunsCount = strategySyntheticCacheEnabled
-    ? (draceRunsCount || (warmupPerf ? 1 : 0))
-    : baselineRunsCount;
+  const requestedBackendType = 'llama-server';
+  const requestedCacheMode = 'FullDRACE';
+  const activePerf = dracePerf || warmupPerf || latestPerf || baselinePerf;
+  const activePerfLabel = dracePerf ? 'Resident 최근 측정값' : warmupPerf ? 'Resident warmup' : latestPerf ? '최근 실행값' : '측정 대기';
+  const currentRunsCount = draceRunsCount || (warmupPerf ? 1 : 0);
   const activePerfIsWarmup = !!(activePerf && activePerf.benchmarkPhase === 'warmup');
   const perfNumber = (value: number | undefined | null) => Number(value || 0);
   const perfRowHtml = (
@@ -1482,28 +1475,20 @@ export function render() {
   };
   const debugStageRows = Array.isArray(activePerf?.stages) ? activePerf.stages : [];
   const perfCollapsed = !!(ui as any).strategyPerfCollapsed;
-  const perfTitle = !activePerf
-    ? '기본 모드'
-    : !activePerf.cacheRequested
-      ? '기본 모드'
-      : activePerf.cacheApplied
-        ? '기본 모드 vs 캐시 모드'
-        : '기본 모드 vs 캐시 요청(우회됨)';
-  const sameComparisonKey = baselinePerf && dracePerf && baselinePerf.comparisonKey === dracePerf.comparisonKey;
-  const comparisonReady = !!(baselinePerf && dracePerf && sameComparisonKey);
+  const perfTitle = activePerf?.cacheApplied ? 'Resident Cache Mode' : 'Resident Cache Requested';
+  const sameComparisonKey = false;
+  const comparisonReady = false;
   const comparisonStatus = comparisonWarning
     ? comparisonWarning
-    : comparisonReady
-      ? `비교 준비 완료 · 기본 ${baselineRunsCount}회 / 캐시 ${draceRunsCount}회`
-      : activePerfIsWarmup
-        ? `캐시 warmup 완료 · 기본 ${baselineRunsCount}회 / 캐시 측정 ${draceRunsCount}회 · 다음 실행부터 평균 비교`
+    : activePerfIsWarmup
+      ? `Resident warmup 완료 · 측정 ${draceRunsCount}회 · 다음 실행부터 안정화된 수치를 볼 수 있어요`
       : perfRunState.status === 'running'
-        ? `측정 진행 중 · 기본 ${baselineRunsCount}회 / 캐시 ${draceRunsCount}회`
+        ? `Resident 측정 진행 중 · 샘플 ${currentRunsCount}회`
         : perfRunState.status === 'succeeded' && !activePerf
-          ? `최근 실행 완료 · 측정값이 아직 저장되지 않았어요 · 기본 ${baselineRunsCount}회 / 캐시 ${draceRunsCount}회`
+          ? `최근 실행 완료 · 측정값이 아직 저장되지 않았어요 · 샘플 ${currentRunsCount}회`
         : perfRunState.status === 'failed'
-          ? `최근 실행 실패 · 기본 ${baselineRunsCount}회 / 캐시 ${draceRunsCount}회`
-          : `비교 대기 · 기본 ${baselineRunsCount}회 / 캐시 ${draceRunsCount}회`;
+          ? `최근 실행 실패 · 샘플 ${currentRunsCount}회`
+          : `Resident 비교 준비 중 · 샘플 ${currentRunsCount}회`;
   const baselineFinalStage = sameComparisonKey && baselinePerf?.stages?.length ? baselinePerf.stages[baselinePerf.stages.length - 1] : null;
   const draceFinalStage = sameComparisonKey && dracePerf?.stages?.length ? dracePerf.stages[dracePerf.stages.length - 1] : null;
   const compactCompareText = (
@@ -1524,16 +1509,14 @@ export function render() {
         ? '최근 실행 실패'
         : '측정 대기';
   const perfPendingDetail = perfRunState.status === 'running'
-    ? `${strategySyntheticCacheEnabled ? '캐시 모드' : '기본 모드'} 실행 중이에요. 완료되면 같은 입력 기준으로 비교를 시작합니다`
+      ? 'Resident 캐시 실행 중이에요. 완료되면 이번 실행 수치를 바로 반영합니다'
     : activePerfIsWarmup
       ? '이 수치는 warmup 실행이에요. 평균 비교에는 제외되고, 다음 캐시 실행부터 비교 표본으로 쌓입니다'
     : perfRunState.status === 'succeeded' && !activePerf
       ? '최근 실행은 끝났지만 측정 payload가 저장되지 않았어요. 같은 입력으로 한 번 더 실행해 확인해보세요'
     : perfRunState.status === 'failed'
       ? `최근 실행이 실패했어요. ${String(perfRunState.error || '').trim() || '마지막 오류를 확인한 뒤 같은 입력으로 다시 실행해주세요'}`
-      : strategySyntheticCacheEnabled
-        ? '캐시 모드 실행이 끝나면 같은 입력 기준으로 기본/캐시 비교를 시작합니다'
-        : '기본 모드 실행이 끝나면 같은 입력 기준으로 기본/캐시 비교를 시작합니다';
+      : 'Resident 캐시 실행이 끝나면 최신 지표를 여기에 바로 표시합니다';
   const perfHeaderHtml = `
     <div class="strategyPerfPanel ${perfCollapsed ? 'isCollapsed' : ''}" aria-label="실험용 지표 측정기">
       <div class="strategyPerfHeader">
@@ -1575,44 +1558,32 @@ export function render() {
           activePerf ? perfCompactMs(activePerf, activePerf.totalE2eMs, activePerf.e2eP50Ms) : '—',
           !activePerf
             ? perfPendingDetail
-            :
-          comparisonReady
-            ? compactCompareText('완료', perfCompactMs(baselinePerf, baselinePerf.totalE2eMs, baselinePerf.e2eP50Ms), perfCompactMs(dracePerf, dracePerf.totalE2eMs, dracePerf.e2eP50Ms), perfDeltaText(baselinePerf.totalE2eMs, dracePerf.totalE2eMs))
-            : `현재값 ${perfSeconds(activePerf?.totalE2eMs)} · p95 ${perfSeconds(activePerf?.e2eP95Ms)} · 같은 입력으로 양쪽을 다시 실행하면 비교합니다`
+            : `현재값 ${perfSeconds(activePerf?.totalE2eMs)} · p95 ${perfSeconds(activePerf?.e2eP95Ms)} · resident warm/hit 상태에 따라 달라집니다`
         )}
         ${perfRowHtml(
           'TTFT',
           activePerf ? perfCompactMs(activePerf, activePerf.ttftMs, activePerf.ttftP50Ms) : '—',
           !activePerf
             ? perfPendingDetail
-            :
-          comparisonReady
-            ? compactCompareText('첫 응답', perfCompactMs(baselinePerf, baselinePerf.ttftMs, baselinePerf.ttftP50Ms), perfCompactMs(dracePerf, dracePerf.ttftMs, dracePerf.ttftP50Ms), perfDeltaText(baselinePerf.ttftMs, dracePerf.ttftMs))
-            : `현재값 ${perfSeconds(activePerf?.ttftMs)} · p95 ${perfSeconds(activePerf?.ttftP95Ms)} · 같은 입력으로 양쪽을 다시 실행하면 비교합니다`
+            : `현재값 ${perfSeconds(activePerf?.ttftMs)} · p95 ${perfSeconds(activePerf?.ttftP95Ms)} · resident 준비 상태가 영향을 줍니다`
         )}
         ${perfRowHtml(
           'Peak WS',
           activePerf ? perfCompactMb(activePerf, activePerf.peakMemoryMb, activePerf.peakMemoryP95Mb) : '—',
           !activePerf
             ? perfPendingDetail
-            :
-          comparisonReady
-            ? compactCompareText('메모리', perfCompactMb(baselinePerf, baselinePerf.peakMemoryMb, baselinePerf.peakMemoryP95Mb), perfCompactMb(dracePerf, dracePerf.peakMemoryMb, dracePerf.peakMemoryP95Mb), perfDeltaText(baselinePerf.peakMemoryMb, dracePerf.peakMemoryMb))
-            : `현재값 ${Math.round(perfNumber(activePerf?.peakMemoryMb))}MB · p95 ${Math.round(perfNumber(activePerf?.peakMemoryP95Mb))}MB · 같은 입력으로 양쪽을 다시 실행하면 비교합니다`
+            : `현재값 ${Math.round(perfNumber(activePerf?.peakMemoryMb))}MB · p95 ${Math.round(perfNumber(activePerf?.peakMemoryP95Mb))}MB · resident 메모리 사용량입니다`
         )}
         ${perfRowHtml(
           'Final TPS',
           activePerf ? `${perfCompactTps(activePerf, activePerf.finalStageTps, activePerf.tpsP50)} TPS` : '—',
           !activePerf
             ? perfPendingDetail
-            :
-          comparisonReady
-            ? compactCompareText('최종 단계', `${Number(baselinePerf.finalStageTps || 0).toFixed(1)} TPS`, `${Number(dracePerf.finalStageTps || 0).toFixed(1)} TPS`, perfDeltaText(baselinePerf.finalStageTps, dracePerf.finalStageTps, true))
-            : `E2E ${Number(activePerf?.e2eTps || 0).toFixed(1)} TPS · Decode ${Number(activePerf?.decodeTps || 0).toFixed(1)} TPS · 같은 입력으로 양쪽을 다시 실행하면 비교합니다`
+            : `E2E ${Number(activePerf?.e2eTps || 0).toFixed(1)} TPS · Decode ${Number(activePerf?.decodeTps || 0).toFixed(1)} TPS · final 단계 기준입니다`
         )}
       </div>
       ${comparisonWarning ? `<div class="strategyPerfDebugReason">${esc(comparisonWarning)}</div>` : ''}
-      ${debugCache?.backendType === 'cli' ? `<div class="strategyPerfDebugReason">CLI backend does not support persistent Prefix KV Cache or Synthetic Token Cache verification.</div>` : ''}
+      ${debugCache?.backendType !== 'llama-server' ? `<div class="strategyPerfDebugReason">resident llama-server가 아직 준비되지 않았어요. 현재 실행 backend와 bypass reason을 함께 확인해주세요.</div>` : ''}
       <details class="strategyPerfDebug" ${debugCache ? 'open' : ''}>
         <summary>DRaCE Debug Panel</summary>
         <div class="strategyPerfDebugGrid">
@@ -1733,33 +1704,29 @@ export function render() {
   const headerToolsHtml = `
     <div class="topbarTools" aria-label="헤더 도구">
       ${perfHeaderHtml}
-      <button
-        type="button"
-        class="strategyCacheToggle ${strategySyntheticCacheEnabled ? 'isOn' : ''}"
-        data-action="toggle-strategy-synthetic-cache"
-        aria-pressed="${strategySyntheticCacheEnabled ? 'true' : 'false'}"
-        title="Synthetic Token Cache"
+      <div
+        class="strategyCacheToggle isOn isLocked"
+        aria-label="Resident cache mode"
+        title="Resident Cache Mode"
       >
         <span class="strategyCacheToggleLabel">캐싱</span>
         <span class="strategyCacheToggleTrack" aria-hidden="true">
           <span class="strategyCacheToggleThumb"></span>
         </span>
-      </button>
+      </div>
     </div>
   `;
   const topNavHtml = `
-    <button
-      type="button"
-      class="strategyCacheToggle ${strategySyntheticCacheEnabled ? 'isOn' : ''}"
-      data-action="toggle-strategy-synthetic-cache"
-      aria-pressed="${strategySyntheticCacheEnabled ? 'true' : 'false'}"
-      title="Synthetic Token Cache"
+    <div
+      class="strategyCacheToggle isOn isLocked"
+      aria-label="Resident cache mode"
+      title="Resident Cache Mode"
     >
       <span class="strategyCacheToggleLabel">캐싱</span>
       <span class="strategyCacheToggleTrack" aria-hidden="true">
         <span class="strategyCacheToggleThumb"></span>
       </span>
-    </button>
+    </div>
   `;
 
   const casesMainHtml = renderCasesMain(selected);
@@ -2001,7 +1968,7 @@ function renderRestoreModal() {
 
 function renderSettingsModal() {
   const pinReady = hasScreenPin();
-  const backendMode = ((ui as any).strategySyntheticCacheEnabled !== false) ? 'llama-server' : 'cli';
+  const backendMode = 'llama-server';
   const llamaServer = ((ui as any).strategyLlamaServerConfig || {
     hyperclovaUrl: 'http://127.0.0.1:18081/completion',
     roosyUrl: 'http://127.0.0.1:18082/completion',
@@ -2070,9 +2037,9 @@ function renderSettingsModal() {
         <div class="settingsBackendHead">
           <div>
             <div class="settingsActionTitle">추론 백엔드</div>
-            <div class="muted">캐싱을 켜면 llama-server resident endpoint를 사용하고, 끄면 CLI baseline으로 동작합니다.</div>
+            <div class="muted">이제 앱은 resident llama-server만 사용합니다. endpoint와 cache_prompt 설정만 관리하면 됩니다.</div>
           </div>
-          <span class="settingsPinBadge ${backendMode === 'llama-server' ? 'ready' : ''}">${backendMode === 'llama-server' ? '캐싱 ON · llama-server' : '캐싱 OFF · CLI'}</span>
+          <span class="settingsPinBadge ready">resident llama-server only</span>
         </div>
 
         <div class="settingsBackendFields">
@@ -2150,7 +2117,7 @@ function renderSettingsModal() {
         <div class="rowInline settingsBackendActions">
           ${H.btn('가속 서버 설정 저장', 'save-strategy-backend-settings', '', 'btn primary')}
         </div>
-        <div class="muted settingsBackendHint">llama-server 연결이 실패하면 자동으로 CLI fallback이 허용되며, 실험 패널에는 cache_applied=false와 bypass reason이 함께 표시됩니다. backend 선택은 캐싱 토글이 대신합니다.</div>
+        <div class="muted settingsBackendHint">resident llama-server가 준비되지 않으면 실행은 실패로 남기고, 실험 패널에는 cache_applied=false와 bypass reason이 함께 표시됩니다.</div>
       </div>
 
       <div class="muted" style="margin-top:12px; font-size:12px">삭제 전에는 현재 데이터를 꼭 백업해 두는 편이 안전합니다.</div>

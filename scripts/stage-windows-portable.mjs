@@ -11,16 +11,10 @@ const supportRoot = resolve(portableRoot, 'RoosyCozy');
 const sidecarRoot = resolve(supportRoot, 'sidecar');
 const resourcesRoot = resolve(supportRoot, 'resources');
 const modelSourceRoot = resolve(repoRoot, 'src-tauri', 'resources', 'models');
-const canonicalSidecarPath = resolve(repoRoot, 'src-tauri', 'binaries', 'llama-sidecar-x86_64-pc-windows-msvc.exe');
 const canonicalServerPath = resolve(repoRoot, 'src-tauri', 'binaries', 'llama-server.exe');
 const runtimeDirCandidates = [
   resolve(repoRoot, 'src-tauri', 'binaries', 'windows-x64'),
   resolve(repoRoot, 'src-tauri', 'binaries')
-];
-const sidecarExecutableCandidates = [
-  'llama-sidecar-x86_64-pc-windows-msvc.exe',
-  'llama-sidecar.exe',
-  'llama-cli.exe'
 ];
 const residentServerCandidates = ['llama-server.exe', 'llama-server'];
 const requiredDlls = [
@@ -71,12 +65,6 @@ function main() {
   mkdirSync(sidecarRoot, { recursive: true });
   mkdirSync(resourcesRoot, { recursive: true });
   copyFileSync(executablePath, resolve(portableRoot, 'roosycozy.exe'));
-
-  const sidecarExe = existsSync(canonicalSidecarPath) ? canonicalSidecarPath : resolveCandidateFile(sidecarExecutableCandidates);
-  if (!sidecarExe) {
-    throw new Error('Windows sidecar 실행 파일을 찾지 못했어요. 먼저 runtime bundle을 준비해주세요.');
-  }
-  copyFileSync(sidecarExe, resolve(sidecarRoot, 'llama-sidecar-x86_64-pc-windows-msvc.exe'));
 
   const residentServer = existsSync(canonicalServerPath) ? canonicalServerPath : resolveCandidateFile(residentServerCandidates);
   if (!residentServer) {

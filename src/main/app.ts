@@ -61,7 +61,7 @@ const STRATEGY_SYNTHETIC_CACHE_STORAGE_KEY = 'roosycozy_strategy_synthetic_cache
 const STRATEGY_PERF_LAB_STORAGE_KEY = 'roosycozy_strategy_perf_lab_v1';
 const STRATEGY_BACKEND_SETTINGS_STORAGE_KEY = 'roosycozy_strategy_backend_settings_v1';
 
-type StrategyBackendMode = 'cli' | 'llama-server';
+type StrategyBackendMode = 'llama-server';
 type StrategyLlamaServerConfigDraft = {
   hyperclovaUrl: string;
   roosyUrl: string;
@@ -97,8 +97,8 @@ const readStrategyBackendSettings = (): { mode: StrategyBackendMode; llamaServer
   };
   try {
     const raw = window.localStorage.getItem(STRATEGY_BACKEND_SETTINGS_STORAGE_KEY);
-    if (!raw) return { mode: 'cli', llamaServer: defaults };
-    const parsed = JSON.parse(raw) as Partial<{ mode: StrategyBackendMode; llamaServer: Partial<StrategyLlamaServerConfigDraft> }>;
+    if (!raw) return { mode: 'llama-server', llamaServer: defaults };
+    const parsed = JSON.parse(raw) as Partial<{ mode: string; llamaServer: Partial<StrategyLlamaServerConfigDraft> }>;
     const merged = {
       ...defaults,
       ...(parsed?.llamaServer || {}),
@@ -109,7 +109,7 @@ const readStrategyBackendSettings = (): { mode: StrategyBackendMode; llamaServer
       String(merged.roosyUrl || '').trim() || defaults.roosyUrl,
     );
     return {
-      mode: parsed?.mode === 'llama-server' ? 'llama-server' : 'cli',
+      mode: 'llama-server',
       llamaServer: {
         ...merged,
         ...normalizedEndpoints,
@@ -118,29 +118,26 @@ const readStrategyBackendSettings = (): { mode: StrategyBackendMode; llamaServer
       },
     };
   } catch {
-    return { mode: 'cli', llamaServer: defaults };
+    return { mode: 'llama-server', llamaServer: defaults };
   }
 };
 
 const persistStrategyBackendSettings = (settings: { mode: StrategyBackendMode; llamaServer: StrategyLlamaServerConfigDraft }) => {
   try {
-    window.localStorage.setItem(STRATEGY_BACKEND_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+    window.localStorage.setItem(STRATEGY_BACKEND_SETTINGS_STORAGE_KEY, JSON.stringify({
+      mode: 'llama-server',
+      llamaServer: settings.llamaServer,
+    }));
   } catch {}
 };
 
 const readStrategySyntheticCacheSetting = () => {
-  try {
-    const raw = window.localStorage.getItem(STRATEGY_SYNTHETIC_CACHE_STORAGE_KEY);
-    if (raw == null) return true;
-    return raw !== '0';
-  } catch {
-    return true;
-  }
+  return true;
 };
 
 const persistStrategySyntheticCacheSetting = (enabled: boolean) => {
   try {
-    window.localStorage.setItem(STRATEGY_SYNTHETIC_CACHE_STORAGE_KEY, enabled ? '1' : '0');
+    window.localStorage.setItem(STRATEGY_SYNTHETIC_CACHE_STORAGE_KEY, '1');
   } catch {}
 };
 
@@ -189,8 +186,8 @@ const isWindowsDesktop = () => typeof navigator !== 'undefined' && /Windows/i.te
 (ui as any).strategyPerfLab = readStrategyPerfLabState();
 (ui as any).strategyPerfRunState = {
   status: 'idle',
-  requestedBackend: 'cli',
-  requestedMode: 'Off',
+  requestedBackend: 'llama-server',
+  requestedMode: 'FullDRACE',
   actualBackend: '',
   startedAt: '',
   finishedAt: '',
@@ -865,8 +862,8 @@ const emptyStrategyPerfLabState = (): StrategyPerfLabState => ({
 
 const emptyStrategyPerfRunState = (): StrategyPerfRunState => ({
   status: 'idle',
-  requestedBackend: 'cli',
-  requestedMode: 'Off',
+  requestedBackend: 'llama-server',
+  requestedMode: 'FullDRACE',
   actualBackend: '',
   startedAt: '',
   finishedAt: '',
@@ -1238,11 +1235,10 @@ const recordStrategyPerfSample = (metrics: StrategyPerfMetrics | null | undefine
 
 const normalizeStrategyModel = (_value: unknown) => 'roosy-hybrid' as const;
 
-const getStrategyBackendMode = (): StrategyBackendMode => (((ui as any).strategySyntheticCacheEnabled !== false) ? 'llama-server' : 'cli');
+const getStrategyBackendMode = (): StrategyBackendMode => 'llama-server';
 
 const maybeStartStrategyBackendPrewarm = (reason = 'startup') => {
   if (_strategyBackendPrewarmStarted) return;
-  if (getStrategyBackendMode() !== 'llama-server') return;
   _strategyBackendPrewarmStarted = true;
   const llamaServer = getStrategyLlamaServerConfig();
   void invoke('strategy_prewarm_backend', {
@@ -3629,28 +3625,25 @@ function bindEvents() {
       log('strategy model menu', (ui as any).strategyChatModelMenuOpen ? 'open' : 'close');
     },
     'toggle-strategy-synthetic-cache': () => {
-      const next = !((ui as any).strategySyntheticCacheEnabled !== false);
-      (ui as any).strategySyntheticCacheEnabled = next;
-      persistStrategySyntheticCacheSetting(next);
-      if (next) maybeStartStrategyBackendPrewarm('toggle_on');
+      (ui as any).strategySyntheticCacheEnabled = true;
+      persistStrategySyntheticCacheSetting(true);
+      maybeStartStrategyBackendPrewarm('toggle_on');
       render();
-      toast(next ? 'Synthetic Token Cache를 켰어요' : 'Synthetic Token Cache를 껐어요');
+      toast('이제 Resident Cache Mode만 사용해요');
     },
     'toggle-strategy-backend-mode': () => {
-      const current = getStrategyBackendMode();
-      const next: StrategyBackendMode = current === 'llama-server' ? 'cli' : 'llama-server';
       const draft = {
         ...defaultStrategyLlamaServerConfig(),
         ...(((ui as any).strategyLlamaServerConfig || defaultStrategyLlamaServerConfig()) as StrategyLlamaServerConfigDraft),
       };
-      (ui as any).strategyBackendMode = next;
+      (ui as any).strategyBackendMode = 'llama-server';
       (ui as any).strategyLlamaServerConfig = draft;
       persistStrategyBackendSettings({
-        mode: next,
+        mode: 'llama-server',
         llamaServer: draft,
       });
       render();
-      toast(next === 'llama-server' ? 'llama-server backend로 전환했어요' : 'CLI backend로 전환했어요');
+      toast('Resident llama-server backend로 고정했어요');
     },
     'toggle-strategy-perf-panel': () => {
       (ui as any).strategyPerfCollapsed = !((ui as any).strategyPerfCollapsed === true);
@@ -3664,7 +3657,7 @@ function bindEvents() {
     'save-strategy-backend-settings': () => {
       const mode = getStrategyBackendMode();
       const llamaServer = getStrategyLlamaServerConfig();
-      if (mode === 'llama-server' && (!llamaServer.hyperclovaUrl || !llamaServer.roosyUrl)) {
+      if (!llamaServer.hyperclovaUrl || !llamaServer.roosyUrl) {
         toast('llama-server endpoint를 모두 입력해주세요');
         return;
       }
@@ -3681,9 +3674,9 @@ function bindEvents() {
         mode,
         llamaServer: (ui as any).strategyLlamaServerConfig,
       });
-      if (mode === 'llama-server') maybeStartStrategyBackendPrewarm('settings_save');
+      maybeStartStrategyBackendPrewarm('settings_save');
       render();
-      toast(mode === 'llama-server' ? 'llama-server backend 설정을 저장했어요' : 'CLI backend 설정으로 저장했어요');
+      toast('llama-server backend 설정을 저장했어요');
     },
     'select-strategy-model': (btn) => {
       const next = normalizeStrategyModel(btn.dataset.model || '');
@@ -4556,7 +4549,7 @@ function bindEvents() {
     if (action === 'draft-strategy-backend-settings') {
       const draft = (((ui as any).strategyLlamaServerConfig || defaultStrategyLlamaServerConfig()) as StrategyLlamaServerConfigDraft);
       if (field === 'mode') {
-        (ui as any).strategyBackendMode = v === 'llama-server' ? 'llama-server' : 'cli';
+        (ui as any).strategyBackendMode = 'llama-server';
       } else if (field === 'hyperclovaUrl') {
         draft.hyperclovaUrl = v;
       } else if (field === 'roosyUrl') {

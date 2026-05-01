@@ -582,10 +582,8 @@ const STRATEGY_MODEL_ROOSY_FILENAME: &str = "hyperclovax_roosy_Q4_K_M.gguf";
 const STRATEGY_MODEL_ROOSY_RESOURCE_PATH: &str = "models/hyperclovax_roosy_Q4_K_M.gguf";
 const STRATEGY_MODEL_DEFAULT_URL: &str = "https://github.com/myongsung/roosycozy-models/releases/download/model_v1/HyperCLOVAX-SEED-Text-Instruct-0.5B-q4_0.gguf";
 const STRATEGY_MODEL_ROOSY_DEFAULT_URL: &str = "https://github.com/myongsung/roosycozy-models2/releases/download/model/hyperclovax_roosy_Q4_K_M.gguf";
-const STRATEGY_SIDECAR_STEM: &str = "llama-sidecar";
 const STRATEGY_LLAMA_SERVER_STEM: &str = "llama-server";
 const STRATEGY_PROGRESS_EVENT: &str = "strategy-chat-progress";
-const STRATEGY_CHAT_TIMEOUT_SECS: u64 = 90;
 const STRATEGY_LEGAL_RAG_JSON: &str = include_str!("../legal/kr_school_guidance_laws_rag_expanded.json");
 const STRATEGY_LEGAL_RAG_JSONL: &str = include_str!("../legal/kr_school_guidance_laws_rag_expanded_flat.jsonl");
 const STRATEGY_RECORD_TEMPLATE_JSON: &str = include_str!("../legal/record_mode_template_ko.json");
@@ -593,42 +591,20 @@ const STRATEGY_RECORD_TEMPLATE_JSON: &str = include_str!("../legal/record_mode_t
 const STRATEGY_CREATE_NO_WINDOW: u32 = 0x08000000;
 
 #[cfg(target_os = "windows")]
-const STRATEGY_SIDECAR_GENERIC_FILENAME: &str = "llama-sidecar.exe";
-#[cfg(target_os = "windows")]
 const STRATEGY_LLAMA_SERVER_GENERIC_FILENAME: &str = "llama-server.exe";
-#[cfg(not(target_os = "windows"))]
-const STRATEGY_SIDECAR_GENERIC_FILENAME: &str = STRATEGY_SIDECAR_STEM;
 #[cfg(not(target_os = "windows"))]
 const STRATEGY_LLAMA_SERVER_GENERIC_FILENAME: &str = STRATEGY_LLAMA_SERVER_STEM;
 
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-const STRATEGY_SIDECAR_FILENAME: &str = "llama-sidecar-aarch64-apple-darwin";
-#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
 const STRATEGY_LLAMA_SERVER_FILENAME: &str = "llama-server-aarch64-apple-darwin";
-#[cfg(all(target_os = "macos", target_arch = "x86_64"))]
-const STRATEGY_SIDECAR_FILENAME: &str = "llama-sidecar-x86_64-apple-darwin";
 #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
 const STRATEGY_LLAMA_SERVER_FILENAME: &str = "llama-server-x86_64-apple-darwin";
 #[cfg(all(target_os = "windows", target_arch = "x86_64"))]
-const STRATEGY_SIDECAR_FILENAME: &str = "llama-sidecar-x86_64-pc-windows-msvc.exe";
-#[cfg(all(target_os = "windows", target_arch = "x86_64"))]
 const STRATEGY_LLAMA_SERVER_FILENAME: &str = "llama-server-x86_64-pc-windows-msvc.exe";
-#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-const STRATEGY_SIDECAR_FILENAME: &str = "llama-sidecar-x86_64-unknown-linux-gnu";
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 const STRATEGY_LLAMA_SERVER_FILENAME: &str = "llama-server-x86_64-unknown-linux-gnu";
 #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
-const STRATEGY_SIDECAR_FILENAME: &str = "llama-sidecar-aarch64-unknown-linux-gnu";
-#[cfg(all(target_os = "linux", target_arch = "aarch64"))]
 const STRATEGY_LLAMA_SERVER_FILENAME: &str = "llama-server-aarch64-unknown-linux-gnu";
-#[cfg(not(any(
-  all(target_os = "macos", target_arch = "aarch64"),
-  all(target_os = "macos", target_arch = "x86_64"),
-  all(target_os = "windows", target_arch = "x86_64"),
-  all(target_os = "linux", target_arch = "x86_64"),
-  all(target_os = "linux", target_arch = "aarch64")
-)))]
-const STRATEGY_SIDECAR_FILENAME: &str = "llama-sidecar";
 #[cfg(not(any(
   all(target_os = "macos", target_arch = "aarch64"),
   all(target_os = "macos", target_arch = "x86_64"),
@@ -1402,23 +1378,7 @@ fn strategy_backend_runtime(app: Option<&AppHandle>, opts: Option<&StrategyChatO
     } else {
       (false, String::new())
     };
-  let actual_capabilities = if matches!(runtime.capabilities.backend_kind, BackendKind::LlamaServer) && !llama_server_available {
-    BackendCapabilities {
-      backend_kind: BackendKind::CliSidecar,
-      supports_resident: false,
-      supports_prompt_token_cache: false,
-      supports_prompt_cache: false,
-      supports_prefix_kv_cache: false,
-      supports_token_verification: false,
-      supports_batch_verification: false,
-      supports_speculative_decode: false,
-      supports_synthetic_token_cache: false,
-      supports_mmap_cache_pack: false,
-      supports_resident_model: false,
-    }
-  } else {
-    runtime.capabilities.clone()
-  };
+  let actual_capabilities = runtime.capabilities.clone();
   let manager = DraceCacheManager::global();
   manager.configure_backend(actual_capabilities.clone());
   StrategyBackendRuntime {
@@ -1446,7 +1406,7 @@ pub fn prewarm_strategy_backend(
         BackendKind::Native => "native".to_string(),
       },
       ready: false,
-      reason: "cache_disabled_or_cli_mode".to_string(),
+      reason: "unsupported_backend_mode".to_string(),
       hyperclova_endpoint: String::new(),
       roosy_endpoint: String::new(),
     };
@@ -1468,7 +1428,7 @@ pub fn prewarm_strategy_backend(
     strategy_prewarm_known_static_prefixes_for_model(STRATEGY_MODEL_ROOSY_ID, app, config);
   }
   StrategyBackendPrewarmResult {
-    backend_kind: if ready { "llama-server".to_string() } else { "cli".to_string() },
+    backend_kind: "llama-server".to_string(),
     ready,
     reason,
     hyperclova_endpoint,
@@ -1555,7 +1515,7 @@ fn strategy_cache_bypass_reason(cache_requested: bool) -> String {
   if !cache_requested {
     return "cache disabled".to_string();
   }
-  "CLI backend does not support persistent Prefix KV Cache, and Synthetic Token Cache verification is unavailable".to_string()
+  "resident llama-server가 아직 PrefixKV 또는 Synthetic verification을 적용할 준비가 되지 않았어요.".to_string()
 }
 
 fn build_strategy_stage_cache_perf(
@@ -3286,31 +3246,12 @@ fn push_unique_path(out: &mut Vec<PathBuf>, path: PathBuf) {
   }
 }
 
-fn strategy_runner_filenames() -> Vec<&'static str> {
-  let mut out = vec![STRATEGY_SIDECAR_FILENAME];
-  if STRATEGY_SIDECAR_GENERIC_FILENAME != STRATEGY_SIDECAR_FILENAME {
-    out.push(STRATEGY_SIDECAR_GENERIC_FILENAME);
-  }
-  out
-}
-
 fn strategy_llama_server_filenames() -> Vec<&'static str> {
   let mut out = vec![STRATEGY_LLAMA_SERVER_FILENAME];
   if STRATEGY_LLAMA_SERVER_GENERIC_FILENAME != STRATEGY_LLAMA_SERVER_FILENAME {
     out.push(STRATEGY_LLAMA_SERVER_GENERIC_FILENAME);
   }
   out
-}
-
-fn strategy_runner_hint_text() -> String {
-  if STRATEGY_SIDECAR_GENERIC_FILENAME == STRATEGY_SIDECAR_FILENAME {
-    return format!("{} 파일", STRATEGY_SIDECAR_FILENAME);
-  }
-  format!(
-    "{} 또는 {} 파일",
-    STRATEGY_SIDECAR_FILENAME,
-    STRATEGY_SIDECAR_GENERIC_FILENAME
-  )
 }
 
 fn strategy_llama_server_candidates(app: Option<&AppHandle>) -> Vec<PathBuf> {
@@ -3438,14 +3379,6 @@ fn strategy_model_label_for_id(model_id: &str) -> &'static str {
   }
 }
 
-#[cfg(target_os = "windows")]
-fn configure_strategy_child_process(command: &mut Command) {
-  command.creation_flags(STRATEGY_CREATE_NO_WINDOW);
-}
-
-#[cfg(not(target_os = "windows"))]
-fn configure_strategy_child_process(_command: &mut Command) {}
-
 fn looks_like_windows_path_line(s: &str) -> bool {
   let bytes = s.as_bytes();
   bytes.len() > 3 && bytes[1] == b':' && matches!(bytes[2], b'\\' | b'/')
@@ -3455,7 +3388,6 @@ fn is_strategy_runtime_noise(trimmed: &str) -> bool {
   let lower = trimmed.to_ascii_lowercase();
   looks_like_windows_path_line(trimmed)
     || lower.contains("using custom system prompt")
-    || lower.contains("llama-sidecar")
     || lower.contains("llama-cli")
     || lower.contains("llama-server")
     || lower.contains(".gguf")
@@ -3476,24 +3408,14 @@ fn is_strategy_runtime_noise(trimmed: &str) -> bool {
     || lower.starts_with("srv ")
 }
 
-fn should_emit_strategy_runtime_log(trimmed: &str) -> bool {
-  let lower = trimmed.to_ascii_lowercase();
-  !is_strategy_runtime_noise(trimmed)
-    && (lower.contains("error")
-      || lower.contains("failed")
-      || lower.contains("cannot")
-      || lower.contains("invalid")
-      || lower.contains("exception"))
-}
-
 #[cfg(unix)]
 fn ensure_executable(path: &Path) -> Result<(), String> {
-  let meta = fs::metadata(path).map_err(|e| format!("cannot inspect sidecar permissions: {e}"))?;
+  let meta = fs::metadata(path).map_err(|e| format!("cannot inspect runtime permissions: {e}"))?;
   let mut perms = meta.permissions();
   let mode = perms.mode();
   if mode & 0o111 == 0 {
     perms.set_mode(mode | 0o755);
-    fs::set_permissions(path, perms).map_err(|e| format!("cannot mark sidecar executable: {e}"))?;
+    fs::set_permissions(path, perms).map_err(|e| format!("cannot mark runtime executable: {e}"))?;
   }
   Ok(())
 }
@@ -3522,119 +3444,6 @@ fn strategy_sidecar_storage_dir(app: Option<&AppHandle>) -> Option<PathBuf> {
 #[cfg(not(target_os = "windows"))]
 fn strategy_sidecar_storage_dir(_app: Option<&AppHandle>) -> Option<PathBuf> {
   None
-}
-
-#[cfg(target_os = "windows")]
-fn copy_strategy_runtime_tree(source: &Path, target: &Path) -> Result<(), String> {
-  if !source.exists() {
-    return Ok(());
-  }
-  fs::create_dir_all(target).map_err(|e| format!("AI 런타임 폴더를 만들지 못했어요: {}", e))?;
-  for entry in fs::read_dir(source).map_err(|e| format!("AI 런타임 폴더를 읽지 못했어요: {}", e))? {
-    let entry = entry.map_err(|e| format!("AI 런타임 폴더 항목을 읽지 못했어요: {}", e))?;
-    let source_path = entry.path();
-    let target_path = target.join(entry.file_name());
-    if source_path.is_dir() {
-      copy_strategy_runtime_tree(&source_path, &target_path)?;
-    } else {
-      if let Some(parent) = target_path.parent() {
-        fs::create_dir_all(parent).map_err(|e| format!("AI 런타임 하위 폴더를 만들지 못했어요: {}", e))?;
-      }
-      fs::copy(&source_path, &target_path).map_err(|e| format!("AI 런타임 파일 복사에 실패했어요: {}", e))?;
-    }
-  }
-  Ok(())
-}
-
-#[cfg(target_os = "windows")]
-fn hydrate_strategy_runtime_to_appdata(app: Option<&AppHandle>) {
-  let Some(target_dir) = strategy_sidecar_storage_dir(app) else {
-    return;
-  };
-
-  let has_all_required = strategy_runner_filenames()
-    .iter()
-    .any(|name| target_dir.join(name).exists())
-    && target_dir.join("llama.dll").exists()
-    && target_dir.join("mtmd.dll").exists();
-  if has_all_required {
-    return;
-  }
-
-  if let Ok(exe) = std::env::current_exe() {
-    if let Some(dir) = exe.parent() {
-      let bootstrap_candidates = [
-        dir.join("RoosyCozy").join("sidecar"),
-        dir.join("sidecar"),
-      ];
-      for source in bootstrap_candidates {
-        if source.exists() {
-          let _ = copy_strategy_runtime_tree(&source, &target_dir);
-          break;
-        }
-      }
-    }
-  }
-}
-
-#[cfg(not(target_os = "windows"))]
-fn hydrate_strategy_runtime_to_appdata(_app: Option<&AppHandle>) {}
-
-fn strategy_runner_candidates(_app: Option<&AppHandle>) -> Vec<PathBuf> {
-  let mut out = Vec::<PathBuf>::new();
-  hydrate_strategy_runtime_to_appdata(_app);
-
-  if let Some(dir) = strategy_sidecar_storage_dir(_app) {
-    for file_name in strategy_runner_filenames() {
-      push_unique_path(&mut out, dir.join(file_name));
-    }
-  }
-
-  if let Ok(exe) = std::env::current_exe() {
-    if let Some(dir) = exe.parent() {
-      for file_name in strategy_runner_filenames() {
-        push_unique_path(&mut out, dir.join("RoosyCozy").join("sidecar").join(file_name));
-      }
-      for file_name in strategy_runner_filenames() {
-        push_unique_path(&mut out, dir.join("sidecar").join(file_name));
-      }
-    }
-  }
-
-  #[cfg(debug_assertions)]
-  {
-    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    for file_name in strategy_runner_filenames() {
-      push_unique_path(&mut out, manifest.join("binaries").join(file_name));
-      push_unique_path(&mut out, manifest.join("resources").join("sidecar").join(file_name));
-    }
-  }
-
-  out
-}
-
-fn resolve_strategy_runner_path(app: Option<&AppHandle>) -> Result<PathBuf, String> {
-  for candidate in strategy_runner_candidates(app) {
-    if candidate.exists() {
-      let _ = ensure_executable(&candidate);
-      return Ok(candidate);
-    }
-  }
-  #[cfg(target_os = "windows")]
-  {
-    return Err(format!(
-      "전략자문 추론기 파일을 찾지 못했어요. 먼저 AI 모델 다운로드를 완료했는지 확인해주세요. 실행 파일은 공용 RoosyCozy sidecar 폴더에서 찾고 있어요. 필요한 파일: {}",
-      strategy_runner_hint_text()
-    ));
-  }
-
-  #[cfg(not(target_os = "windows"))]
-  {
-    Err(format!(
-      "전략자문 추론기 파일을 찾지 못했어요. 앱 번들의 sidecar 안에 {}이(가) 함께 포함되어야 해요.",
-      strategy_runner_hint_text()
-    ))
-  }
 }
 
 struct StrategyModelDownloadSpec {
@@ -7454,7 +7263,7 @@ fn execute_strategy_model_once(
   drace_stage: HybridStage,
   system_prompt_raw: &str,
   user_prompt_raw: &str,
-  evidence_packet: &StrategyEvidencePacket,
+  _evidence_packet: &StrategyEvidencePacket,
   n_ctx: u32,
   max_tokens: u32,
   threads: u32,
@@ -7478,67 +7287,48 @@ fn execute_strategy_model_once(
   let started = Instant::now();
   let stage = stage_label.trim();
   let model_label = strategy_model_label_for_id(model_id);
-  let mut static_prefix_log: Option<(String, u64, Option<u64>, usize, String, String)> = None;
-
   let model_path = resolve_strategy_model_path(app, model_id)?;
-  let runner = resolve_strategy_runner_path(app)?;
   let prompt_build_started = Instant::now();
-  let (system_prompt, user_prompt, mut stage_plan, static_prefix_id, static_prefix_hash, static_prefix_tokens) = if matches!(capabilities.backend_kind, BackendKind::CliSidecar) {
-    (
-      strategy_sanitize_text(system_prompt_raw.trim()),
-      strategy_fit_prompt_to_budget(&strategy_sanitize_text(user_prompt_raw.trim()), runtime.n_ctx, max_tokens),
-      strategy_cli_bypass_plan_with_reason(
-        cache_requested,
-        if cache_requested && !backend_runtime.llama_server_unavailable_reason.trim().is_empty() {
-          backend_runtime.llama_server_unavailable_reason.clone()
-        } else if cache_requested {
-          "unsupported_backend_cli".to_string()
-        } else {
-          "cache disabled".to_string()
-        },
-      ),
-      String::new(),
-      0_u64,
-      0usize,
-    )
-  } else {
-    let prepared_prompt = strategy_prepare_stage_prompt(
-      model_id,
-      drace_stage,
-      synthetic_cache_enabled,
-      system_prompt_raw.trim(),
-      user_prompt_raw.trim(),
-      max_tokens as usize,
-    );
-    static_prefix_log = Some((
-      prepared_prompt.static_prefix.id.clone(),
-      prepared_prompt.static_prefix.content_hash,
-      prepared_prompt.static_prefix_previous_hash,
-      prepared_prompt.static_prefix.estimated_tokens,
-      prepared_prompt.system_segment_order.join(" > "),
-      prepared_prompt.user_segment_order.join(" > "),
-    ));
-    (
-      render_prompt_segments(&prepared_prompt.system_segments),
-      strategy_fit_prompt_to_budget(
-        &render_prompt_segments(&prepared_prompt.user_segments),
-        runtime.n_ctx,
-        max_tokens,
-      ),
-      prepared_prompt.plan,
-      prepared_prompt.static_prefix.id,
-      prepared_prompt.static_prefix.content_hash,
-      prepared_prompt.static_prefix.estimated_tokens,
-    )
-  };
+  let prepared_prompt = strategy_prepare_stage_prompt(
+    model_id,
+    drace_stage,
+    synthetic_cache_enabled,
+    system_prompt_raw.trim(),
+    user_prompt_raw.trim(),
+    max_tokens as usize,
+  );
+  let static_prefix_log = Some((
+    prepared_prompt.static_prefix.id.clone(),
+    prepared_prompt.static_prefix.content_hash,
+    prepared_prompt.static_prefix_previous_hash,
+    prepared_prompt.static_prefix.estimated_tokens,
+    prepared_prompt.system_segment_order.join(" > "),
+    prepared_prompt.user_segment_order.join(" > "),
+  ));
+  let (system_prompt, user_prompt, stage_plan, static_prefix_id, static_prefix_hash, static_prefix_tokens) = (
+    render_prompt_segments(&prepared_prompt.system_segments),
+    strategy_fit_prompt_to_budget(
+      &render_prompt_segments(&prepared_prompt.user_segments),
+      runtime.n_ctx,
+      max_tokens,
+    ),
+    prepared_prompt.plan,
+    prepared_prompt.static_prefix.id,
+    prepared_prompt.static_prefix.content_hash,
+    prepared_prompt.static_prefix.estimated_tokens,
+  );
   let prompt_build_ms = prompt_build_started.elapsed().as_millis();
   let prompt_chars = system_prompt.chars().count() + user_prompt.chars().count();
   let prompt_tokens = strategy_approx_output_tokens(&(system_prompt.clone() + "\n" + &user_prompt));
-  let runner_name = runner.file_name().and_then(|x| x.to_str()).unwrap_or("llama-sidecar");
+  let runner_name = match capabilities.backend_kind {
+    BackendKind::LlamaServer => "llama-server",
+    BackendKind::Native => "native-backend",
+    BackendKind::CliSidecar => "disabled-cli",
+  };
   let model_name = model_path.file_name().and_then(|x| x.to_str()).unwrap_or(strategy_model_filename_for_id(model_id));
   let mut stage_cache_pref = build_strategy_stage_cache_perf(&capabilities, &stage_plan, prompt_tokens, 0);
   let mut effective_assistant_prefix = assistant_prefix.map(|value| value.to_string());
-  let mut stage_overhead = StrategyOverheadMetrics {
+  let _stage_overhead = StrategyOverheadMetrics {
     prompt_build_ms,
     cache_capability_ms: 0,
     cache_plan_ms: 0,
@@ -7697,25 +7487,11 @@ fn execute_strategy_model_once(
           app,
           stage,
           format!(
-            "native backend가 응답하지 않아 CLI baseline으로 안전하게 되돌릴게요. {}",
+            "native backend가 응답하지 않았어요. {}",
             strategy_trim(&err, 220)
           ),
         );
-        let cli_capabilities = BackendCapabilities {
-          backend_kind: BackendKind::CliSidecar,
-          supports_resident: false,
-          supports_prompt_token_cache: false,
-          supports_prompt_cache: false,
-          supports_prefix_kv_cache: false,
-          supports_token_verification: false,
-          supports_batch_verification: false,
-          supports_speculative_decode: false,
-          supports_synthetic_token_cache: false,
-          supports_mmap_cache_pack: false,
-          supports_resident_model: false,
-        };
-        stage_plan = strategy_cli_bypass_plan_with_reason(cache_requested, format!("native_backend_request_failed: {}", strategy_trim(&err, 240)));
-        stage_cache_pref = build_strategy_stage_cache_perf(&cli_capabilities, &stage_plan, prompt_tokens, 0);
+        return Err(format!("native_backend_request_failed: {}", strategy_trim(&err, 240)));
       }
     }
   }
@@ -7731,25 +7507,11 @@ fn execute_strategy_model_once(
         app,
         stage,
         format!(
-          "resident backend healthcheck가 실패해서 CLI baseline으로 되돌릴게요. {}",
+          "resident backend healthcheck가 실패했어요. {}",
           strategy_trim(&reason, 220)
         ),
       );
-      let cli_capabilities = BackendCapabilities {
-        backend_kind: BackendKind::CliSidecar,
-        supports_resident: false,
-        supports_prompt_token_cache: false,
-        supports_prompt_cache: false,
-        supports_prefix_kv_cache: false,
-        supports_token_verification: false,
-        supports_batch_verification: false,
-        supports_speculative_decode: false,
-        supports_synthetic_token_cache: false,
-        supports_mmap_cache_pack: false,
-        supports_resident_model: false,
-      };
-      stage_plan = strategy_cli_bypass_plan_with_reason(cache_requested, reason);
-      stage_cache_pref = build_strategy_stage_cache_perf(&cli_capabilities, &stage_plan, prompt_tokens, 0);
+      return Err(reason);
     } else if let Some(llama_server) = backend_runtime.llama_server.as_ref() {
       match execute_strategy_model_via_llama_server(
         app,
@@ -7779,267 +7541,19 @@ fn execute_strategy_model_once(
             app,
             stage,
             format!(
-              "resident backend가 응답하지 않아 CLI baseline으로 안전하게 되돌릴게요. {}",
+              "resident backend가 응답하지 않았어요. {}",
               strategy_trim(&err, 220)
             ),
           );
-          let cli_capabilities = BackendCapabilities {
-            backend_kind: BackendKind::CliSidecar,
-            supports_resident: false,
-            supports_prompt_token_cache: false,
-            supports_prompt_cache: false,
-            supports_prefix_kv_cache: false,
-            supports_token_verification: false,
-            supports_batch_verification: false,
-            supports_speculative_decode: false,
-            supports_synthetic_token_cache: false,
-            supports_mmap_cache_pack: false,
-            supports_resident_model: false,
-          };
-          stage_plan = strategy_cli_bypass_plan_with_reason(cache_requested, format!("llama_server_request_failed: {}", strategy_trim(&err, 240)));
-          stage_cache_pref = build_strategy_stage_cache_perf(&cli_capabilities, &stage_plan, prompt_tokens, 0);
+          return Err(format!("llama_server_request_failed: {}", strategy_trim(&err, 240)));
         }
       }
     } else {
-      let cli_capabilities = BackendCapabilities {
-        backend_kind: BackendKind::CliSidecar,
-        supports_resident: false,
-        supports_prompt_token_cache: false,
-        supports_prompt_cache: false,
-        supports_prefix_kv_cache: false,
-        supports_token_verification: false,
-        supports_batch_verification: false,
-        supports_speculative_decode: false,
-        supports_synthetic_token_cache: false,
-        supports_mmap_cache_pack: false,
-        supports_resident_model: false,
-      };
-      stage_plan = strategy_cli_bypass_plan_with_reason(cache_requested, "llama_server_endpoint_missing".to_string());
-      stage_cache_pref = build_strategy_stage_cache_perf(&cli_capabilities, &stage_plan, prompt_tokens, 0);
+      return Err("llama_server_endpoint_missing".to_string());
     }
   }
 
-  let prompt_file_started = Instant::now();
-  let system_prompt_file = write_strategy_prompt_file("system_prompt", &system_prompt)?;
-  let user_prompt_file = match write_strategy_prompt_file("user_prompt", &user_prompt) {
-    Ok(path) => path,
-    Err(err) => {
-      cleanup_strategy_prompt_file(&system_prompt_file);
-      return Err(err);
-    }
-  };
-  stage_overhead.prompt_file_write_ms = prompt_file_started.elapsed().as_millis();
-
-  let mut command = Command::new(&runner);
-  command
-    .arg("-m")
-    .arg(&model_path)
-    .arg("-c")
-    .arg(runtime.n_ctx.to_string())
-    .arg("-n")
-    .arg(max_tokens.to_string())
-    .arg("-t")
-    .arg(runtime.threads.to_string())
-    .arg("--threads-batch")
-    .arg(runtime.threads.to_string())
-    .arg("--temp")
-    .arg(tuning.temperature.to_string())
-    .arg("--top-p")
-    .arg(tuning.top_p.to_string())
-    .arg("--repeat-penalty")
-    .arg(tuning.repeat_penalty.to_string())
-    .arg("--parallel")
-    .arg("1")
-    .arg("--simple-io")
-    .arg("--no-display-prompt")
-    .arg("--no-show-timings")
-    .arg("--single-turn")
-    .arg("--no-warmup")
-    .arg("--device")
-    .arg(runtime.device)
-    .arg("--n-gpu-layers")
-    .arg(runtime.n_gpu_layers.to_string())
-    .arg("--color")
-    .arg("off")
-    .arg("--log-colors")
-    .arg("off")
-    .arg("--system-prompt-file")
-    .arg(&system_prompt_file)
-    .arg("--file")
-    .arg(&user_prompt_file)
-    .stdin(Stdio::null())
-    .stdout(Stdio::piped())
-    .stderr(Stdio::piped());
-  configure_strategy_child_process(&mut command);
-
-  let spawn_started = Instant::now();
-  let mut child = command.spawn().map_err(|e| {
-    cleanup_strategy_prompt_file(&system_prompt_file);
-    cleanup_strategy_prompt_file(&user_prompt_file);
-    format!(
-      "{} 실행에 실패했어요. sidecar 포함 여부와 실행 권한을 확인해주세요. runner={} / 상세: {}",
-      model_label,
-      runner.display(),
-      e
-    )
-  })?;
-  stage_overhead.process_spawn_ms = spawn_started.elapsed().as_millis();
-  emit_strategy_progress(app, stage, format!("{}로 응답을 생성하고 있어요.", model_label));
-
-  let stdout = child.stdout.take().ok_or_else(|| format!("{} 표준출력을 연결하지 못했어요.", model_label))?;
-  let stderr = child.stderr.take().ok_or_else(|| format!("{} 표준에러를 연결하지 못했어요.", model_label))?;
-
-  let first_stdout_ms = Arc::new(AtomicU64::new(0));
-  let first_stdout_ms_worker = Arc::clone(&first_stdout_ms);
-  let started_for_stdout = started;
-  let stdout_handle = thread::spawn(move || {
-    let mut reader = BufReader::new(stdout);
-    let mut bytes = Vec::<u8>::new();
-    let mut buf = [0_u8; 8192];
-    loop {
-      match reader.read(&mut buf) {
-        Ok(0) => break,
-        Ok(n) => {
-          if first_stdout_ms_worker.load(AtomicOrdering::Relaxed) == 0 {
-            let elapsed = started_for_stdout.elapsed().as_millis() as u64;
-            let _ = first_stdout_ms_worker.compare_exchange(0, elapsed.max(1), AtomicOrdering::Relaxed, AtomicOrdering::Relaxed);
-          }
-          bytes.extend_from_slice(&buf[..n]);
-        }
-        Err(_) => break,
-      }
-    }
-    bytes
-  });
-
-  let app_for_stderr = app.cloned();
-  let stderr_handle = thread::spawn(move || {
-    let mut reader = BufReader::new(stderr);
-    let mut collected = String::new();
-    loop {
-      let mut line = String::new();
-      match reader.read_line(&mut line) {
-        Ok(0) => break,
-        Ok(_) => {
-          collected.push_str(&line);
-          let trimmed = line.trim();
-          if !trimmed.is_empty() && should_emit_strategy_runtime_log(trimmed) {
-            emit_strategy_progress(app_for_stderr.as_ref(), "모델로그", strategy_trim(trimmed, 260));
-          }
-        }
-        Err(err) => {
-          let msg = format!("표준에러 읽기 실패: {err}");
-          collected.push_str(&msg);
-          emit_strategy_progress(app_for_stderr.as_ref(), "모델로그", &msg);
-          break;
-        }
-      }
-    }
-    collected
-  });
-
-  let mut timed_out = false;
-  let mut last_heartbeat = 0_u64;
-  let status = loop {
-    if let Some(status) = child.try_wait().map_err(|e| format!("{} 상태 확인에 실패했어요: {e}", model_label))? {
-      break status;
-    }
-
-    let elapsed = started.elapsed().as_secs();
-    if elapsed >= STRATEGY_CHAT_TIMEOUT_SECS {
-      timed_out = true;
-      emit_strategy_progress(app, stage, format!("{}가 {}초 동안 끝나지 않아 실행을 중단할게요.", model_label, STRATEGY_CHAT_TIMEOUT_SECS));
-      let _ = child.kill();
-      let status = child.wait().map_err(|e| format!("중단된 {} 프로세스를 정리하지 못했어요: {e}", model_label))?;
-      break status;
-    }
-    if elapsed >= last_heartbeat + 5 {
-      last_heartbeat = elapsed;
-      emit_strategy_progress(app, stage, format!("{} 응답을 기다리는 중이에요. {}초 경과했어요.", model_label, elapsed));
-    }
-    thread::sleep(Duration::from_millis(200));
-  };
-
-  let stdout = String::from_utf8_lossy(&stdout_handle.join().unwrap_or_default()).to_string();
-  let stderr = stderr_handle.join().unwrap_or_else(|_| "stderr 수집 스레드가 비정상 종료되었어요.".to_string());
-  stage_overhead.stdout_read_ms = started.elapsed().as_millis();
-  cleanup_strategy_prompt_file(&system_prompt_file);
-  cleanup_strategy_prompt_file(&user_prompt_file);
-  let postprocess_started = Instant::now();
-  let answer = finalize_strategy_answer(&cleanup_strategy_output(&stdout), evidence_packet, user_prompt_raw);
-  stage_overhead.postprocess_ms = postprocess_started.elapsed().as_millis();
-
-  if timed_out {
-    return Err(format!(
-      "{} 응답이 {}초 안에 끝나지 않아 중단했어요. 마지막 로그: {}",
-      model_label,
-      STRATEGY_CHAT_TIMEOUT_SECS,
-      strategy_trim(stderr.trim(), 280)
-    ));
-  }
-  if !status.success() && answer.is_empty() {
-    return Err(format!(
-      "{} 실행이 완료되지 않았어요. runner={} / stderr: {}",
-      model_label,
-      runner.display(),
-      strategy_trim(stderr.trim(), 600)
-    ));
-  }
-  if answer.is_empty() {
-    return Err(format!("{}가 빈 응답을 반환했어요.", model_label));
-  }
-
-  let e2e_ms = started.elapsed().as_millis() as u128;
-  let ttft_ms = first_stdout_ms.load(AtomicOrdering::Relaxed).max(1) as u128;
-  let output_tokens = strategy_approx_output_tokens(&answer);
-  let decode_ms = e2e_ms.saturating_sub(ttft_ms);
-  let e2e_tps = {
-    let seconds = (e2e_ms.max(1) as f32) / 1000.0;
-    ((output_tokens as f32) / seconds * 100.0).round() / 100.0
-  };
-  let decode_tps = {
-    let seconds = (decode_ms.max(1) as f32) / 1000.0;
-    ((output_tokens as f32) / seconds * 100.0).round() / 100.0
-  };
-  let model_path_text = model_path.display().to_string();
-  let runner_text = runner.display().to_string();
-  emit_strategy_progress(app, stage, format!("{} 단계 응답을 {}자로 정리했어요.", model_label, answer.chars().count()));
-  let mut stage_cache = stage_cache_pref;
-  stage_cache.fallback_tokens = output_tokens;
-  Ok(StrategyModelExecution {
-    answer,
-    model_path: model_path_text.clone(),
-    runner: runner_text.clone(),
-    prompt_chars,
-    metrics: StrategyStagePerf {
-      stage_name: stage.to_string(),
-      model_id: model_id.to_string(),
-      backend_kind: "cli".to_string(),
-      runner_path: runner_text.clone(),
-      model_path: model_path_text,
-      threads: runtime.threads,
-      threads_batch: runtime.threads,
-      n_ctx: runtime.n_ctx,
-      max_tokens,
-      temperature: tuning.temperature,
-      top_p: tuning.top_p,
-      repeat_penalty: tuning.repeat_penalty,
-      e2e_ms: e2e_ms.max(1),
-      ttft_ms: Some(ttft_ms.max(1)),
-      prompt_tokens,
-      output_tokens,
-      prompt_eval_ms: None,
-      decode_ms: Some(decode_ms),
-      e2e_tps,
-      decode_tps,
-      peak_memory_mb: strategy_estimate_model_footprint_mb(model_path.to_string_lossy().as_ref()),
-      process_spawn_ms: stage_overhead.process_spawn_ms,
-      prompt_file_write_ms: stage_overhead.prompt_file_write_ms,
-      stdout_read_ms: stage_overhead.stdout_read_ms,
-      postprocess_ms: stage_overhead.postprocess_ms,
-      cache: stage_cache,
-    },
-  })
+  Err("unsupported_strategy_backend".to_string())
 }
 
 pub fn run_strategy_chat(
@@ -8430,12 +7944,12 @@ pub fn run_strategy_chat(
               );
               #[cfg(target_os = "windows")]
               return Err(format!(
-                "기록모드 초안 두 개를 모두 만들지 못했어요. 먼저 AI 모델 다운로드와 sidecar 상태를 함께 확인해주세요. {}",
+                "기록모드 초안 두 개를 모두 만들지 못했어요. 먼저 AI 모델 다운로드와 resident llama-server 상태를 함께 확인해주세요. {}",
                 combined_detail
               ));
               #[cfg(not(target_os = "windows"))]
               return Err(format!(
-                "기록모드 초안 두 개를 모두 만들지 못했어요. 번들된 모델 파일과 sidecar 상태를 함께 확인해주세요. {}",
+                "기록모드 초안 두 개를 모두 만들지 못했어요. 번들된 모델 파일과 resident llama-server 상태를 함께 확인해주세요. {}",
                 combined_detail
               ));
             }
@@ -8662,9 +8176,9 @@ pub fn run_strategy_chat(
       }
       (None, None) => {
         #[cfg(target_os = "windows")]
-        return Err("ROOSY-Hybrid 초안 두 개를 모두 만들지 못했어요. 먼저 AI 모델 다운로드가 완료됐는지, 그리고 sidecar가 정상인지 함께 확인해주세요.".to_string());
+        return Err("ROOSY-Hybrid 초안 두 개를 모두 만들지 못했어요. 먼저 AI 모델 다운로드가 완료됐는지, 그리고 resident llama-server가 정상인지 함께 확인해주세요.".to_string());
         #[cfg(not(target_os = "windows"))]
-        return Err("ROOSY-Hybrid 초안 두 개를 모두 만들지 못했어요. 번들된 모델 파일과 sidecar 상태를 함께 확인해주세요.".to_string());
+        return Err("ROOSY-Hybrid 초안 두 개를 모두 만들지 못했어요. 번들된 모델 파일과 resident llama-server 상태를 함께 확인해주세요.".to_string());
       }
     }
   }

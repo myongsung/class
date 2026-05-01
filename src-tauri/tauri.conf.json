@@ -52,7 +52,6 @@
       "files": {
         "embedded.provisionprofile": "embedded.provisionprofile",
         "MacOS/sidecar/llama-server-aarch64-apple-darwin": "binaries/llama-server-aarch64-apple-darwin",
-        "MacOS/sidecar/llama-sidecar-aarch64-apple-darwin": "binaries/llama-sidecar-aarch64-apple-darwin",
         "MacOS/sidecar/libggml-base.0.dylib": "binaries/libggml-base.0.dylib",
         "MacOS/sidecar/libggml-blas.0.dylib": "binaries/libggml-blas.0.dylib",
         "MacOS/sidecar/libggml-cpu.0.dylib": "binaries/libggml-cpu.0.dylib",
