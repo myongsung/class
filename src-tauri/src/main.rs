@@ -319,21 +319,74 @@ fn windows_runtime_marker_path(sidecar_dir: &Path) -> PathBuf {
 }
 
 #[cfg(target_os = "windows")]
-fn windows_install_needs_repair(app: &AppHandle) -> bool {
-    let Ok(sidecar_dir) = windows_sidecar_storage_dir(app) else {
-        return true;
-    };
-
-    if !sidecar_dir.exists() {
-        return true;
+fn windows_runtime_dir_has_required_files(dir: &Path) -> bool {
+    if !dir.exists() {
+        return false;
     }
-
     windows_sidecar_required_files()
         .iter()
         .chain(windows_resident_server_required_files().iter())
         .chain(windows_msvc_runtime_files().iter())
-        .any(|name| !sidecar_dir.join(name).exists())
-        || !windows_runtime_marker_path(&sidecar_dir).exists()
+        .all(|name| dir.join(name).exists())
+}
+
+#[cfg(target_os = "windows")]
+fn windows_install_runtime_dirs(install_dir: &Path) -> [PathBuf; 4] {
+    [
+        install_dir.join(WINDOWS_BUNDLE_SUPPORT_DIR_NAME).join("runtime"),
+        install_dir.join(WINDOWS_BUNDLE_SUPPORT_DIR_NAME).join("sidecar"),
+        install_dir.join("runtime"),
+        install_dir.join("sidecar"),
+    ]
+}
+
+#[cfg(target_os = "windows")]
+fn windows_installed_runtime_dir(install_dir: &Path) -> Option<PathBuf> {
+    windows_install_runtime_dirs(install_dir)
+        .into_iter()
+        .find(|dir| windows_runtime_dir_has_required_files(dir))
+}
+
+#[cfg(target_os = "windows")]
+fn windows_install_model_dirs(install_dir: &Path) -> [PathBuf; 4] {
+    [
+        install_dir.join(WINDOWS_BUNDLE_SUPPORT_DIR_NAME).join("resources").join("models"),
+        install_dir.join(WINDOWS_BUNDLE_SUPPORT_DIR_NAME).join("models"),
+        install_dir.join("resources").join("models"),
+        install_dir.join("models"),
+    ]
+}
+
+#[cfg(target_os = "windows")]
+fn windows_model_dir_has_required_files(dir: &Path) -> bool {
+    dir.join("HyperCLOVAX-SEED-Text-Instruct-0.5B-q4_0.gguf").exists()
+        && dir.join("hyperclovax_roosy_Q4_K_M.gguf").exists()
+}
+
+#[cfg(target_os = "windows")]
+fn windows_installed_model_dir(install_dir: &Path) -> Option<PathBuf> {
+    windows_install_model_dirs(install_dir)
+        .into_iter()
+        .find(|dir| windows_model_dir_has_required_files(dir))
+}
+
+#[cfg(target_os = "windows")]
+fn windows_runtime_needs_repair(app: &AppHandle) -> bool {
+    let current_exe = match std::env::current_exe() {
+        Ok(path) => path,
+        Err(_) => return true,
+    };
+    let install_dir = match current_exe.parent() {
+        Some(path) => path,
+        None => return true,
+    };
+    if windows_installed_runtime_dir(install_dir).is_some() {
+        return false;
+    }
+    let Ok(sidecar_dir) = windows_sidecar_storage_dir(app) else {
+        return true;
+    };
+    !windows_runtime_dir_has_required_files(&sidecar_dir) || !windows_runtime_marker_path(&sidecar_dir).exists()
 }
 
 #[cfg(target_os = "windows")]
@@ -526,42 +579,35 @@ fn ensure_windows_runtime_cache(app: &AppHandle) -> Result<(), String> {
     fs::create_dir_all(&sidecar_dir).map_err(|e| format!("공용 AI 런타임 폴더를 만들지 못했어요: {}", e))?;
     fs::create_dir_all(&resources_dir).map_err(|e| format!("공용 AI 모델 폴더를 만들지 못했어요: {}", e))?;
 
-    if windows_install_needs_repair(app) {
-        let bootstrap_candidates = [
-            install_dir.join(WINDOWS_BUNDLE_SUPPORT_DIR_NAME).join("runtime"),
-            install_dir.join(WINDOWS_BUNDLE_SUPPORT_DIR_NAME).join("sidecar"),
-            install_dir.join("runtime"),
-            install_dir.join("sidecar"),
-        ];
-        for source in bootstrap_candidates {
-            if source.exists() {
+    if windows_runtime_needs_repair(app) {
+        for source in windows_install_runtime_dirs(install_dir) {
+            if windows_runtime_dir_has_required_files(&source) {
                 copy_dir_recursive(&source, &sidecar_dir)?;
                 break;
             }
         }
     }
 
-    if windows_install_needs_repair(app) {
+    if windows_runtime_needs_repair(app) {
         let restored_from_embedded = restore_embedded_windows_runtime_to_appdata(&sidecar_dir)?;
-        if !restored_from_embedded && windows_install_needs_repair(app) {
+        if !restored_from_embedded && windows_runtime_needs_repair(app) {
             download_windows_runtime_to_appdata(&sidecar_dir)?;
         }
     }
 
-    let resource_candidates = [
-        install_dir.join(WINDOWS_BUNDLE_SUPPORT_DIR_NAME).join("resources").join("models"),
-        install_dir.join(WINDOWS_BUNDLE_SUPPORT_DIR_NAME).join("models"),
-        install_dir.join("resources").join("models"),
-        install_dir.join("models"),
-    ];
-    for source in resource_candidates {
-        if source.exists() {
-            copy_dir_recursive(&source, &resources_dir)?;
-            break;
+    let installed_model_dir = windows_installed_model_dir(install_dir);
+    if installed_model_dir.is_none() {
+        for source in windows_install_model_dirs(install_dir) {
+            if source.exists() {
+                copy_dir_recursive(&source, &resources_dir)?;
+                break;
+            }
         }
     }
 
-    let _ = restore_embedded_windows_models(&resources_dir)?;
+    if !windows_model_dir_has_required_files(&resources_dir) && installed_model_dir.is_none() {
+        let _ = restore_embedded_windows_models(&resources_dir)?;
+    }
 
     Ok(())
 }
@@ -742,7 +788,7 @@ fn check_and_update_sync(app: AppHandle) -> Result<String, String> {
         }
 
         ensure_windows_runtime_cache(&app)?;
-        let needs_repair = windows_install_needs_repair(&app);
+        let needs_repair = windows_runtime_needs_repair(&app);
 
         if !needs_repair {
             Ok("최신 버전입니다.".to_string())

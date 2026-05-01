@@ -1265,6 +1265,20 @@ const maybeStartStrategyBackendPrewarm = (reason = 'startup') => {
     });
 };
 
+const scheduleStrategyBackendPrewarm = (reason = 'startup') => {
+  const delayMs = isWindowsDesktop() ? 12000 : 2500;
+  window.setTimeout(() => {
+    if (typeof (window as any).requestIdleCallback === 'function') {
+      (window as any).requestIdleCallback(
+        () => maybeStartStrategyBackendPrewarm(reason),
+        { timeout: 8000 },
+      );
+      return;
+    }
+    maybeStartStrategyBackendPrewarm(reason);
+  }, delayMs);
+};
+
 const getStrategyLlamaServerConfig = () => {
   const raw = ((ui as any).strategyLlamaServerConfig || defaultStrategyLlamaServerConfig()) as StrategyLlamaServerConfigDraft;
   const isManagedLoopbackCompletion = (value: string) => {
@@ -4940,9 +4954,7 @@ export function initApp() {
 
   // ✅ 앱 실행 시 첫 화면: 홈
   (S as any).tab = 'home' as any; S.tab = 'home' as any; render();
-  window.setTimeout(() => {
-    maybeStartStrategyBackendPrewarm('app_init');
-  }, 160);
+  scheduleStrategyBackendPrewarm('app_init');
 
   (async () => {
     try {
@@ -4958,9 +4970,9 @@ export function initApp() {
     syncDraftDefaults(); render();
   })();
 }
-queueMicrotask(() => {
+window.setTimeout(() => {
   if (!hasTauriWindow() || !isWindowsDesktop()) return;
-  void refreshStrategyModelStatus().catch((err) => {
+  void refreshStrategyModelStatus({ silent: true }).catch((err) => {
     log('initial strategy model status failed', err);
   });
-});
+}, 6000);

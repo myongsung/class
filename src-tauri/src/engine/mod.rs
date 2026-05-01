@@ -3273,7 +3273,13 @@ fn strategy_llama_server_candidates(app: Option<&AppHandle>) -> Vec<PathBuf> {
   if let Ok(exe) = std::env::current_exe() {
     if let Some(dir) = exe.parent() {
       for file_name in strategy_llama_server_filenames() {
+        push_unique_path(&mut out, dir.join("RoosyCozy").join("runtime").join(file_name));
+      }
+      for file_name in strategy_llama_server_filenames() {
         push_unique_path(&mut out, dir.join("RoosyCozy").join("sidecar").join(file_name));
+      }
+      for file_name in strategy_llama_server_filenames() {
+        push_unique_path(&mut out, dir.join("runtime").join(file_name));
       }
       for file_name in strategy_llama_server_filenames() {
         push_unique_path(&mut out, dir.join("sidecar").join(file_name));

@@ -6,6 +6,9 @@ type BootStatusKind = 'loading' | 'updating' | 'repairing' | 'ready' | 'error';
 
 const BOOT_SPLASH_MIN_VISIBLE_MS = 900;
 const BOOT_SPLASH_MAX_VISIBLE_MS = 2200;
+const WINDOWS_BACKGROUND_UPDATE_DELAY_MS = 18000;
+const DEFAULT_BACKGROUND_UPDATE_DELAY_MS = BOOT_SPLASH_MAX_VISIBLE_MS + 1200;
+const isWindowsDesktop = () => typeof navigator !== 'undefined' && /Windows/i.test(String(navigator.userAgent || ''));
 
 function setBootSplash(message: string, hint = '', kind: BootStatusKind = 'loading') {
   const splash = document.getElementById('boot-splash');
@@ -117,7 +120,6 @@ setBootSplash(
   '화면은 곧 열리고, 업데이트와 Windows 런타임 점검은 백그라운드에서 이어집니다.',
   'loading'
 );
-initApp();
 window.setTimeout(() => {
   releaseBootSplash();
 }, BOOT_SPLASH_MIN_VISIBLE_MS);
@@ -133,4 +135,8 @@ window.setTimeout(() => {
 
 window.setTimeout(() => {
   void checkAndUpdateApp();
-}, BOOT_SPLASH_MAX_VISIBLE_MS + 1200);
+}, isWindowsDesktop() ? WINDOWS_BACKGROUND_UPDATE_DELAY_MS : DEFAULT_BACKGROUND_UPDATE_DELAY_MS);
+
+window.setTimeout(() => {
+  initApp();
+}, 0);
