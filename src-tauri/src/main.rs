@@ -551,10 +551,6 @@ fn restore_embedded_windows_runtime_to_appdata(sidecar_dir: &Path) -> Result<boo
 
 #[cfg(target_os = "windows")]
 fn ensure_windows_runtime_cache(app: &AppHandle) -> Result<(), String> {
-    if windows_resource_runtime_dir(app).is_some() && windows_resource_model_dir(app).is_some() {
-        return Ok(());
-    }
-
     let current_exe = std::env::current_exe()
         .map_err(|e| format!("현재 실행 파일 경로를 읽지 못했어요: {}", e))?;
     let install_dir = current_exe
@@ -565,6 +561,12 @@ fn ensure_windows_runtime_cache(app: &AppHandle) -> Result<(), String> {
     let resources_dir = windows_resources_storage_dir(app)?;
     fs::create_dir_all(&sidecar_dir).map_err(|e| format!("공용 AI 런타임 폴더를 만들지 못했어요: {}", e))?;
     fs::create_dir_all(&resources_dir).map_err(|e| format!("공용 AI 모델 폴더를 만들지 못했어요: {}", e))?;
+
+    if !windows_runtime_dir_has_required_files(&sidecar_dir) {
+        if let Some(resource_runtime) = windows_resource_runtime_dir(app) {
+            copy_dir_recursive(&resource_runtime, &sidecar_dir)?;
+        }
+    }
 
     if windows_runtime_needs_repair(app) {
         for source in windows_install_runtime_dirs(install_dir) {
@@ -579,6 +581,12 @@ fn ensure_windows_runtime_cache(app: &AppHandle) -> Result<(), String> {
         let restored_from_embedded = restore_embedded_windows_runtime_to_appdata(&sidecar_dir)?;
         if !restored_from_embedded && windows_runtime_needs_repair(app) {
             download_windows_runtime_to_appdata(&sidecar_dir)?;
+        }
+    }
+
+    if !windows_model_dir_has_required_files(&resources_dir) {
+        if let Some(resource_models) = windows_resource_model_dir(app) {
+            copy_dir_recursive(&resource_models, &resources_dir)?;
         }
     }
 
@@ -834,6 +842,10 @@ fn load_shared_app_state() -> Result<Option<String>, String> {
     {
         let _ = bootstrap_shared_state_from_macos_storage();
     }
+    #[cfg(target_os = "windows")]
+    {
+        let _ = bootstrap_shared_state_from_windows_storage();
+    }
     let path = shared_state_file_path()?;
     if !path.exists() {
         return Ok(None);
@@ -969,7 +981,7 @@ fn copy_dir_recursive_overwrite(source: &Path, target: &Path) -> Result<(), Stri
     Ok(())
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 fn find_named_dir(root: &Path, target_name: &str, depth: usize) -> Option<PathBuf> {
     if depth == 0 || !root.exists() {
         return None;
@@ -990,7 +1002,7 @@ fn find_named_dir(root: &Path, target_name: &str, depth: usize) -> Option<PathBu
     None
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 fn collect_named_files(root: &Path, target_name: &str, depth: usize, out: &mut Vec<PathBuf>) {
     if depth == 0 || !root.exists() {
         return;
@@ -1026,7 +1038,7 @@ fn decode_hex_string(value: &str) -> Option<Vec<u8>> {
     Some(out)
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 fn decode_storage_text_bytes(bytes: &[u8]) -> Option<String> {
     if let Ok(text) = String::from_utf8(bytes.to_vec()) {
         let normalized = text.trim_matches('\u{feff}').to_string();
@@ -1051,7 +1063,7 @@ fn decode_storage_text_bytes(bytes: &[u8]) -> Option<String> {
     }
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 fn score_state_payload(value: &str) -> usize {
     let parsed: serde_json::Value = match serde_json::from_str(value) {
         Ok(parsed) => parsed,
@@ -1095,6 +1107,240 @@ fn read_state_payload_from_sqlite(path: &Path) -> Option<String> {
     let hex = String::from_utf8_lossy(&output.stdout).trim().to_string();
     let bytes = decode_hex_string(&hex)?;
     decode_storage_text_bytes(&bytes)
+}
+
+#[cfg(target_os = "windows")]
+fn extract_state_payload_from_text(text: &str) -> Option<String> {
+    let trimmed = text.trim_matches('\u{feff}').trim();
+    if score_state_payload(trimmed) > 0 {
+        return Some(trimmed.to_string());
+    }
+
+    const STATE_KEY: &str = "roosycozy_state_v1";
+    let mut offset = 0usize;
+    while let Some(found) = text[offset..].find(STATE_KEY) {
+        let key_idx = offset + found + STATE_KEY.len();
+        let Some(rel_start) = text[key_idx..].find('{') else {
+            break;
+        };
+        let start = key_idx + rel_start;
+        let mut depth = 0usize;
+        let mut in_string = false;
+        let mut escaped = false;
+        for (idx, ch) in text[start..].char_indices() {
+            if in_string {
+                if escaped {
+                    escaped = false;
+                    continue;
+                }
+                match ch {
+                    '\\' => escaped = true,
+                    '"' => in_string = false,
+                    _ => {}
+                }
+                continue;
+            }
+
+            match ch {
+                '"' => in_string = true,
+                '{' => depth = depth.saturating_add(1),
+                '}' => {
+                    depth = depth.saturating_sub(1);
+                    if depth == 0 {
+                        let candidate = &text[start..start + idx + ch.len_utf8()];
+                        if score_state_payload(candidate) > 0 {
+                            return Some(candidate.to_string());
+                        }
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        offset = key_idx;
+    }
+    None
+}
+
+#[cfg(target_os = "windows")]
+fn extract_state_payload_from_bytes(bytes: &[u8]) -> Option<String> {
+    if let Some(decoded) = decode_storage_text_bytes(bytes) {
+        if let Some(payload) = extract_state_payload_from_text(&decoded) {
+            return Some(payload);
+        }
+    }
+
+    let lossy = String::from_utf8_lossy(bytes);
+    extract_state_payload_from_text(&lossy)
+}
+
+#[cfg(target_os = "windows")]
+fn should_scan_windows_state_file(path: &Path) -> bool {
+    let file_name = path.file_name().and_then(|value| value.to_str()).unwrap_or_default();
+    if file_name.eq_ignore_ascii_case("shared-state-v1.json")
+        || file_name.eq_ignore_ascii_case("localstorage.sqlite3")
+        || file_name.eq_ignore_ascii_case("CURRENT")
+        || file_name.starts_with("MANIFEST-")
+    {
+        return true;
+    }
+    match path.extension().and_then(|value| value.to_str()).map(|value| value.to_ascii_lowercase()) {
+        Some(ext) if matches!(ext.as_str(), "json" | "sqlite" | "sqlite3" | "ldb" | "log") => true,
+        _ => false,
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn collect_state_candidates_from_windows_root(
+    label: &str,
+    root: &Path,
+    priority: usize,
+    out: &mut Vec<(usize, usize, String, String)>,
+) {
+    let mut files = Vec::new();
+    collect_named_files(root, "shared-state-v1.json", 6, &mut files);
+    collect_named_files(root, "localstorage.sqlite3", 6, &mut files);
+
+    let mut stack = vec![(root.to_path_buf(), 0usize)];
+    while let Some((dir, depth)) = stack.pop() {
+        if depth > 6 || !dir.exists() {
+            continue;
+        }
+        let Ok(entries) = fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push((path, depth + 1));
+                continue;
+            }
+            if should_scan_windows_state_file(&path) && !files.iter().any(|existing| existing == &path) {
+                files.push(path);
+            }
+        }
+    }
+
+    for file_path in files {
+        let payload = if file_path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .map(|value| value.eq_ignore_ascii_case("localstorage.sqlite3"))
+            .unwrap_or(false)
+        {
+            read_state_payload_from_sqlite(&file_path).or_else(|| {
+                fs::read(&file_path)
+                    .ok()
+                    .and_then(|bytes| extract_state_payload_from_bytes(&bytes))
+            })
+        } else {
+            fs::read(&file_path)
+                .ok()
+                .and_then(|bytes| extract_state_payload_from_bytes(&bytes))
+        };
+        let Some(payload) = payload else {
+            continue;
+        };
+        let score = score_state_payload(&payload);
+        if score == 0 {
+            continue;
+        }
+        out.push((
+            score,
+            priority,
+            format!("{}:{}", label, file_path.display()),
+            payload,
+        ));
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn windows_env_dir(name: &str) -> Option<PathBuf> {
+    std::env::var_os(name).map(PathBuf::from)
+}
+
+#[cfg(target_os = "windows")]
+fn windows_state_candidate_roots() -> Vec<(usize, String, PathBuf)> {
+    let mut out = Vec::<(usize, String, PathBuf)>::new();
+    let mut push = |priority: usize, label: String, path: PathBuf| {
+        if !path.exists() || out.iter().any(|(_, _, existing)| existing == &path) {
+            return;
+        }
+        out.push((priority, label, path));
+    };
+
+    push(2, "shared-root".to_string(), windows_shared_root());
+
+    for (env_name, priority) in [("APPDATA", 10usize), ("LOCALAPPDATA", 9usize)] {
+        let Some(base) = windows_env_dir(env_name) else {
+            continue;
+        };
+        for (offset, folder) in [
+            (3usize, "roosycozy"),
+            (2usize, "RoosyCozy"),
+            (1usize, "co.roosycozy.desktop"),
+            (0usize, "co.roosycozy.app"),
+        ] {
+            push(
+                priority + offset,
+                format!("{}:{}", env_name, folder),
+                base.join(folder),
+            );
+        }
+    }
+
+    if let Some(user_profile) = windows_env_dir("USERPROFILE") {
+        push(
+            4,
+            "userprofile:Documents/RoosyCozy".to_string(),
+            user_profile.join("Documents").join("RoosyCozy"),
+        );
+    }
+
+    out
+}
+
+#[cfg(target_os = "windows")]
+fn bootstrap_shared_state_from_windows_storage() -> Result<bool, String> {
+    let shared_state_path = shared_state_file_path()?;
+    let existing_state = fs::read(&shared_state_path)
+        .ok()
+        .and_then(|bytes| decode_storage_text_bytes(&bytes))
+        .and_then(|value| {
+            let trimmed = value.trim().to_string();
+            if score_state_payload(&trimmed) > 0 {
+                Some(trimmed)
+            } else {
+                None
+            }
+        });
+
+    let mut candidates = Vec::new();
+    for (priority, label, root) in windows_state_candidate_roots() {
+        collect_state_candidates_from_windows_root(&label, &root, priority, &mut candidates);
+    }
+
+    let Some((_score, _priority, source, payload)) = candidates
+        .into_iter()
+        .max_by(|left, right| left.1.cmp(&right.1).then(left.0.cmp(&right.0)))
+    else {
+        return Ok(false);
+    };
+
+    if let Some(existing) = existing_state.as_deref() {
+        if existing == payload {
+            return Ok(false);
+        }
+    }
+
+    if let Some(parent) = shared_state_path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("공용 상태 폴더를 만들지 못했어요: {}", e))?;
+    }
+    fs::write(&shared_state_path, payload)
+        .map_err(|e| format!("공용 상태 파일을 저장하지 못했어요: {}", e))?;
+    eprintln!("shared app state bootstrapped from {}", source);
+    Ok(true)
 }
 
 #[cfg(target_os = "macos")]
@@ -1294,6 +1540,14 @@ fn main() {
             #[cfg(target_os = "macos")]
             if let Err(err) = migrate_macos_legacy_storage() {
                 eprintln!("legacy macOS storage migration skipped: {}", err);
+            }
+            #[cfg(target_os = "windows")]
+            if let Err(err) = bootstrap_shared_state_from_windows_storage() {
+                eprintln!("legacy Windows shared-state bootstrap skipped: {}", err);
+            }
+            #[cfg(target_os = "windows")]
+            if let Err(err) = ensure_windows_runtime_cache(&app.handle().clone()) {
+                eprintln!("Windows runtime bootstrap skipped: {}", err);
             }
             #[cfg(target_os = "windows")]
             if let Some(window) = app.get_webview_window("main") {
