@@ -58,6 +58,52 @@ function resolveCandidateFile(rootDir, candidates) {
   return null;
 }
 
+function resolveRuntimeDlls() {
+  if (!existsSync(runtimeDir)) {
+    throw new Error(`Windows runtime 폴더를 찾지 못했어요: ${runtimeDir}`);
+  }
+  const files = walk(runtimeDir);
+  const resolved = [];
+  const missing = [];
+
+  const systemRoot = process.env.SystemRoot || 'C:\\Windows';
+  const system32 = resolve(systemRoot, 'System32');
+
+  for (const name of requiredDlls) {
+    const foundInRuntime = files.find((filePath) => {
+      const lower = filePath.toLowerCase();
+      return lower.endsWith(`/${name}`) || lower.endsWith(`\\${name}`);
+    });
+    if (foundInRuntime) {
+      resolved.push({ name, source: foundInRuntime });
+      continue;
+    }
+
+    const systemSource = resolve(system32, name);
+    if (process.platform === 'win32' && existsSync(systemSource)) {
+      resolved.push({ name, source: systemSource });
+      continue;
+    }
+
+    missing.push(name);
+  }
+
+  if (missing.length) {
+    throw new Error(`Windows runtime DLL을 모두 찾지 못했어요. 필수 파일: ${missing.join(', ')}`);
+  }
+
+  const extraDlls = files
+    .filter((filePath) => filePath.toLowerCase().endsWith('.dll'))
+    .map((source) => ({ name: source.split(/[\\/]/).pop(), source }))
+    .filter((item) => !resolved.some((picked) => picked.name?.toLowerCase() === item.name?.toLowerCase()));
+
+  const allDlls = [...resolved, ...extraDlls];
+  if (!allDlls.length) {
+    throw new Error('Windows runtime 폴더에 DLL이 하나도 없어요.');
+  }
+  return allDlls;
+}
+
 function copyWindowsSystemDlls() {
   if (process.platform !== 'win32') return;
   const systemRoot = process.env.SystemRoot || 'C:\\Windows';
