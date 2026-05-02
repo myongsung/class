@@ -78,6 +78,11 @@ function canonicalizeRuntimeExecutables() {
     throw new Error(`Windows runtime에서 llama-server 실행 파일을 찾지 못했어요: ${residentServerCandidates.join(', ')}`);
   }
   copyFileSync(serverSource, canonicalServerPath);
+
+  const runtimeDlls = resolveRuntimeDlls();
+  for (const dll of runtimeDlls) {
+    copyFileSync(dll.source, resolve(runtimeDir, dll.name));
+  }
 }
 
 function runOrThrow(command, args) {

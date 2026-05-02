@@ -7,7 +7,7 @@ const BOOT_SPLASH_MIN_VISIBLE_MS = 900;
 const BOOT_SPLASH_MAX_VISIBLE_MS = 2200;
 const BOOT_SPLASH_HARD_TIMEOUT_MS = 4500;
 const WINDOWS_BACKGROUND_UPDATE_DELAY_MS = 18000;
-const DEFAULT_BACKGROUND_UPDATE_DELAY_MS = BOOT_SPLASH_MAX_VISIBLE_MS + 1200;
+const AUTO_UPDATE_ON_BOOT = false;
 const isWindowsDesktop = () => typeof navigator !== 'undefined' && /Windows/i.test(String(navigator.userAgent || ''));
 const isDesktopRuntime = () => typeof window !== 'undefined' && !!(window as any).__TAURI_INTERNALS__;
 
@@ -170,7 +170,7 @@ window.setTimeout(() => {
   );
 }, BOOT_SPLASH_HARD_TIMEOUT_MS);
 
-if (isWindowsDesktop()) {
+if (AUTO_UPDATE_ON_BOOT && isWindowsDesktop()) {
   window.setTimeout(() => {
     void checkAndUpdateApp();
   }, WINDOWS_BACKGROUND_UPDATE_DELAY_MS);

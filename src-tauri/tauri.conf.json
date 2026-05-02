@@ -34,6 +34,10 @@
     "active": true,
     "targets": "all",
     "category": "Productivity",
+    "resources": {
+      "resources/models/HyperCLOVAX-SEED-Text-Instruct-0.5B-q4_0.gguf": "models/HyperCLOVAX-SEED-Text-Instruct-0.5B-q4_0.gguf",
+      "resources/models/hyperclovax_roosy_Q4_K_M.gguf": "models/hyperclovax_roosy_Q4_K_M.gguf"
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -41,14 +45,18 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "windows": {
+      "webviewInstallMode": {
+        "type": "offlineInstaller",
+        "silent": true
+      }
+    },
     "macOS": {
       "entitlements": "entitlements.macos.plist",
       "infoPlist": "Info.plist",
       "minimumSystemVersion": "12.0",
       "files": {
         "embedded.provisionprofile": "embedded.provisionprofile",
-        "Resources/models/HyperCLOVAX-SEED-Text-Instruct-0.5B-q4_0.gguf": "resources/models/HyperCLOVAX-SEED-Text-Instruct-0.5B-q4_0.gguf",
-        "Resources/models/hyperclovax_roosy_Q4_K_M.gguf": "resources/models/hyperclovax_roosy_Q4_K_M.gguf",
         "MacOS/sidecar/llama-server-aarch64-apple-darwin": "binaries/llama-server-aarch64-apple-darwin",
         "MacOS/sidecar/libggml-base.0.dylib": "binaries/libggml-base.0.dylib",
         "MacOS/sidecar/libggml-blas.0.dylib": "binaries/libggml-blas.0.dylib",

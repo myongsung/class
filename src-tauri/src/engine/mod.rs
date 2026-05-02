@@ -3264,6 +3264,14 @@ fn strategy_llama_server_candidates(app: Option<&AppHandle>) -> Vec<PathBuf> {
     }
   }
 
+  if let Some(app) = app {
+    for file_name in strategy_llama_server_filenames() {
+      if let Ok(path) = app.path().resolve(format!("runtime/{file_name}"), BaseDirectory::Resource) {
+        push_unique_path(&mut out, path);
+      }
+    }
+  }
+
   if let Some(dir) = strategy_sidecar_storage_dir(app) {
     for file_name in strategy_llama_server_filenames() {
       push_unique_path(&mut out, dir.join(file_name));
@@ -3823,14 +3831,14 @@ fn strategy_model_candidates(app: Option<&AppHandle>, model_id: &str) -> Vec<Pat
   let resource_path = strategy_model_resource_path_for_id(model_id);
   let filename = strategy_model_filename_for_id(model_id);
 
-  if let Some(path) = strategy_downloaded_model_path(app, model_id) {
-    push_unique_path(&mut out, path);
-  }
-
   if let Some(app) = app {
     if let Ok(path) = app.path().resolve(resource_path, BaseDirectory::Resource) {
       push_unique_path(&mut out, path);
     }
+  }
+
+  if let Some(path) = strategy_downloaded_model_path(app, model_id) {
+    push_unique_path(&mut out, path);
   }
 
   if let Ok(exe) = std::env::current_exe() {
@@ -3895,7 +3903,7 @@ fn resolve_strategy_model_path(app: Option<&AppHandle>, model_id: &str) -> Resul
   }
   #[cfg(target_os = "windows")]
   let message = format!(
-    "{} 모델 파일을 찾지 못했어요. 채팅 화면에서 먼저 AI 모델 다운로드를 실행한 뒤 다시 시도해주세요. 필요한 파일: {}",
+    "{} 모델 파일을 찾지 못했어요. Windows installer 안에 번들된 models 리소스를 먼저 확인해주세요. 필요한 파일: {}",
     strategy_model_label_for_id(model_id),
     filename
   );

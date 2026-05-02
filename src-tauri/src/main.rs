@@ -44,12 +44,6 @@ const EMBEDDED_WINDOWS_RUNTIME_ZIP: &[u8] =
 const LEGACY_MAC_APP_ID: &str = "co.roosycozy.app";
 #[cfg(target_os = "macos")]
 const CURRENT_MAC_APP_ID: &str = "co.roosycozy.desktop";
-#[cfg(target_os = "windows")]
-const EMBEDDED_HYPERCLOVA_MODEL: &[u8] =
-    include_bytes!(concat!(env!("OUT_DIR"), "/embedded-hyper-model.gguf"));
-#[cfg(target_os = "windows")]
-const EMBEDDED_ROOSY_MODEL: &[u8] =
-    include_bytes!(concat!(env!("OUT_DIR"), "/embedded-roosy-model.gguf"));
 
 #[cfg(target_os = "windows")]
 #[derive(Debug, serde::Deserialize)]
@@ -354,6 +348,14 @@ fn windows_installed_runtime_dir(install_dir: &Path) -> Option<PathBuf> {
 }
 
 #[cfg(target_os = "windows")]
+fn windows_resource_runtime_dir(app: &AppHandle) -> Option<PathBuf> {
+    app.path()
+        .resolve("runtime", tauri::path::BaseDirectory::Resource)
+        .ok()
+        .filter(|dir| windows_runtime_dir_has_required_files(dir))
+}
+
+#[cfg(target_os = "windows")]
 fn windows_install_model_dirs(install_dir: &Path) -> [PathBuf; 4] {
     [
         install_dir.join(WINDOWS_BUNDLE_SUPPORT_DIR_NAME).join("resources").join("models"),
@@ -377,7 +379,18 @@ fn windows_installed_model_dir(install_dir: &Path) -> Option<PathBuf> {
 }
 
 #[cfg(target_os = "windows")]
+fn windows_resource_model_dir(app: &AppHandle) -> Option<PathBuf> {
+    app.path()
+        .resolve("models", tauri::path::BaseDirectory::Resource)
+        .ok()
+        .filter(|dir| windows_model_dir_has_required_files(dir))
+}
+
+#[cfg(target_os = "windows")]
 fn windows_runtime_needs_repair(app: &AppHandle) -> bool {
+    if windows_resource_runtime_dir(app).is_some() {
+        return false;
+    }
     let current_exe = match std::env::current_exe() {
         Ok(path) => path,
         Err(_) => return true,
@@ -537,43 +550,11 @@ fn restore_embedded_windows_runtime_to_appdata(sidecar_dir: &Path) -> Result<boo
 }
 
 #[cfg(target_os = "windows")]
-fn restore_embedded_windows_models(resources_dir: &Path) -> Result<bool, String> {
-    let embedded_models = [
-        (
-            "HyperCLOVAX-SEED-Text-Instruct-0.5B-q4_0.gguf",
-            EMBEDDED_HYPERCLOVA_MODEL,
-        ),
-        ("hyperclovax_roosy_Q4_K_M.gguf", EMBEDDED_ROOSY_MODEL),
-    ];
-
-    fs::create_dir_all(resources_dir)
-        .map_err(|e| format!("공용 AI 모델 폴더를 만들지 못했어요: {}", e))?;
-
-    let mut restored = false;
-    for (name, bytes) in embedded_models {
-        if bytes.is_empty() {
-            continue;
-        }
-
-        let target = resources_dir.join(name);
-        let needs_write = match fs::metadata(&target) {
-            Ok(metadata) => metadata.len() == 0,
-            Err(_) => true,
-        };
-        if !needs_write {
-            continue;
-        }
-
-        fs::write(&target, bytes)
-            .map_err(|e| format!("내장 모델 {} 를 공용 폴더로 풀지 못했어요: {}", name, e))?;
-        restored = true;
+fn ensure_windows_runtime_cache(app: &AppHandle) -> Result<(), String> {
+    if windows_resource_runtime_dir(app).is_some() && windows_resource_model_dir(app).is_some() {
+        return Ok(());
     }
 
-    Ok(restored)
-}
-
-#[cfg(target_os = "windows")]
-fn ensure_windows_runtime_cache(app: &AppHandle) -> Result<(), String> {
     let current_exe = std::env::current_exe()
         .map_err(|e| format!("현재 실행 파일 경로를 읽지 못했어요: {}", e))?;
     let install_dir = current_exe
@@ -612,7 +593,10 @@ fn ensure_windows_runtime_cache(app: &AppHandle) -> Result<(), String> {
     }
 
     if !windows_model_dir_has_required_files(&resources_dir) && installed_model_dir.is_none() {
-        let _ = restore_embedded_windows_models(&resources_dir)?;
+        return Err(
+            "설치된 Windows 앱에서 기본 모델 파일을 찾지 못했어요. installer에 models 리소스가 포함되어야 해요."
+                .to_string(),
+        );
     }
 
     Ok(())
