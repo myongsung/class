@@ -1094,8 +1094,16 @@ fn score_state_payload(value: &str) -> usize {
         + value.len()
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 fn read_state_payload_from_sqlite(path: &Path) -> Option<String> {
+    #[cfg(target_os = "windows")]
+    {
+        let bytes = fs::read(path).ok()?;
+        return extract_state_payload_from_bytes(&bytes);
+    }
+
+    #[cfg(target_os = "macos")]
+    {
     let output = Command::new("/usr/bin/sqlite3")
         .arg(path)
         .arg("select hex(value) from ItemTable where key='roosycozy_state_v1' limit 1;")
@@ -1107,6 +1115,7 @@ fn read_state_payload_from_sqlite(path: &Path) -> Option<String> {
     let hex = String::from_utf8_lossy(&output.stdout).trim().to_string();
     let bytes = decode_hex_string(&hex)?;
     decode_storage_text_bytes(&bytes)
+    }
 }
 
 #[cfg(target_os = "windows")]
