@@ -850,26 +850,30 @@ type StrategyPerfRunState = {
   cacheApplied: boolean;
 };
 
-const emptyStrategyPerfLabState = (): StrategyPerfLabState => ({
-  baseline: null,
-  drace: null,
-  baselineRuns: [],
-  draceRuns: [],
-  draceWarmup: null,
-  latest: null,
-  comparisonWarning: '',
-});
+function emptyStrategyPerfLabState(): StrategyPerfLabState {
+  return {
+    baseline: null,
+    drace: null,
+    baselineRuns: [],
+    draceRuns: [],
+    draceWarmup: null,
+    latest: null,
+    comparisonWarning: '',
+  };
+}
 
-const emptyStrategyPerfRunState = (): StrategyPerfRunState => ({
-  status: 'idle',
-  requestedBackend: 'llama-server',
-  requestedMode: 'FullDRACE',
-  actualBackend: '',
-  startedAt: '',
-  finishedAt: '',
-  error: '',
-  cacheApplied: false,
-});
+function emptyStrategyPerfRunState(): StrategyPerfRunState {
+  return {
+    status: 'idle',
+    requestedBackend: 'llama-server',
+    requestedMode: 'FullDRACE',
+    actualBackend: '',
+    startedAt: '',
+    finishedAt: '',
+    error: '',
+    cacheApplied: false,
+  };
+}
 
 type StrategyThreadPackageState = {
   id: string;

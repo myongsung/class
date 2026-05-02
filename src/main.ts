@@ -1,14 +1,15 @@
 import { invoke } from '@tauri-apps/api/core';
 import './styles.css';
-import { initApp } from './main/app';
 
 type BootStatusKind = 'loading' | 'updating' | 'repairing' | 'ready' | 'error';
 
 const BOOT_SPLASH_MIN_VISIBLE_MS = 900;
 const BOOT_SPLASH_MAX_VISIBLE_MS = 2200;
+const BOOT_SPLASH_HARD_TIMEOUT_MS = 4500;
 const WINDOWS_BACKGROUND_UPDATE_DELAY_MS = 18000;
 const DEFAULT_BACKGROUND_UPDATE_DELAY_MS = BOOT_SPLASH_MAX_VISIBLE_MS + 1200;
 const isWindowsDesktop = () => typeof navigator !== 'undefined' && /Windows/i.test(String(navigator.userAgent || ''));
+const isDesktopRuntime = () => typeof window !== 'undefined' && !!(window as any).__TAURI_INTERNALS__;
 
 function setBootSplash(message: string, hint = '', kind: BootStatusKind = 'loading') {
   const splash = document.getElementById('boot-splash');
@@ -77,6 +78,33 @@ function showUpdateToast(message: string, autoHide: boolean = false) {
   return toast;
 }
 
+function renderBootFallback(message: string, detail = '') {
+  const app = document.getElementById('app');
+  if (!app || app.childElementCount > 0) return;
+  app.innerHTML = `
+    <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f6f8fb;padding:24px;font-family:Pretendard,-apple-system,BlinkMacSystemFont,system-ui,sans-serif;color:#233247;">
+      <div style="width:min(560px,100%);background:rgba(255,255,255,0.96);border:1px solid rgba(115,138,168,0.14);box-shadow:0 24px 60px rgba(52,72,104,0.10);border-radius:24px;padding:28px 28px 24px;">
+        <div style="font-size:24px;font-weight:800;letter-spacing:-0.03em;">기본 화면을 여는 중 문제가 생겼어요.</div>
+        <div style="margin-top:10px;font-size:14px;line-height:1.7;color:#5f6f86;">${message}</div>
+        ${detail ? `<pre style="margin-top:16px;padding:14px 16px;background:#f7f9fc;border-radius:16px;color:#6b7b92;font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-word;">${detail.replace(/[&<>]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[char] as string))}</pre>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+function handleBootFailure(label: string, error: unknown) {
+  const message = String(error ?? '알 수 없는 오류');
+  console.error(label, error);
+  releaseBootSplash(
+    '문제가 생겼지만 화면은 먼저 열어둘게요.',
+    '초기화 오류가 있어도 상태를 확인할 수 있게 기본 화면을 열어두겠습니다.',
+    'error',
+    80
+  );
+  renderBootFallback(label, message);
+  showUpdateToast(`⚠️ ${label}\n${message}`, false);
+}
+
 async function checkAndUpdateApp() {
   try {
     showUpdateToast('🔄 백그라운드에서 새 버전과 Windows 런타임을 확인하고 있어요.', true);
@@ -134,9 +162,32 @@ window.setTimeout(() => {
 }, BOOT_SPLASH_MAX_VISIBLE_MS);
 
 window.setTimeout(() => {
-  void checkAndUpdateApp();
-}, isWindowsDesktop() ? WINDOWS_BACKGROUND_UPDATE_DELAY_MS : DEFAULT_BACKGROUND_UPDATE_DELAY_MS);
+  releaseBootSplash(
+    '기본 화면을 먼저 열어둘게요.',
+    '뒤에서 준비 중인 작업이 남아 있어도 우선 앱을 사용할 수 있게 할게요.',
+    'ready',
+    60
+  );
+}, BOOT_SPLASH_HARD_TIMEOUT_MS);
+
+if (isWindowsDesktop()) {
+  window.setTimeout(() => {
+    void checkAndUpdateApp();
+  }, WINDOWS_BACKGROUND_UPDATE_DELAY_MS);
+}
+
+window.addEventListener('error', (event) => {
+  handleBootFailure('앱 초기화 중 오류가 발생했어요.', event.error ?? event.message);
+});
+
+window.addEventListener('unhandledrejection', (event) => {
+  handleBootFailure('처리되지 않은 초기화 오류가 발생했어요.', event.reason);
+});
 
 window.setTimeout(() => {
-  initApp();
+  void import('./main/app')
+    .then(({ initApp }) => Promise.resolve(initApp()))
+    .catch((error) => {
+      handleBootFailure('앱 시작 준비를 마치지 못했어요.', error);
+    });
 }, 0);

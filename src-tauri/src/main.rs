@@ -9,14 +9,16 @@ mod drace;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 #[cfg(target_os = "windows")]
 use base64::Engine;
+#[cfg(target_os = "macos")]
+use std::env;
 use std::fs;
 #[cfg(target_os = "windows")]
 use std::fs::File;
 #[cfg(target_os = "windows")]
 use std::io::{self, Cursor};
-#[cfg(target_os = "windows")]
+#[cfg(any(target_os = "windows", target_os = "macos"))]
 use std::path::{Path, PathBuf};
-#[cfg(target_os = "windows")]
+#[cfg(any(target_os = "windows", target_os = "macos"))]
 use std::process::Command;
 #[cfg(target_os = "windows")]
 use tauri::Manager;
@@ -38,6 +40,10 @@ const WINDOWS_RUNTIME_MARKER_FILENAME: &str = ".runtime-ready";
 #[cfg(target_os = "windows")]
 const EMBEDDED_WINDOWS_RUNTIME_ZIP: &[u8] =
     include_bytes!(concat!(env!("OUT_DIR"), "/embedded-windows-runtime.zip"));
+#[cfg(target_os = "macos")]
+const LEGACY_MAC_APP_ID: &str = "co.roosycozy.app";
+#[cfg(target_os = "macos")]
+const CURRENT_MAC_APP_ID: &str = "co.roosycozy.desktop";
 #[cfg(target_os = "windows")]
 const EMBEDDED_HYPERCLOVA_MODEL: &[u8] =
     include_bytes!(concat!(env!("OUT_DIR"), "/embedded-hyper-model.gguf"));
@@ -817,6 +823,73 @@ fn exit_for_update(app: AppHandle) {
     app.exit(0);
 }
 
+#[cfg(target_os = "macos")]
+fn shared_state_file_path() -> Result<PathBuf, String> {
+    Ok(macos_home_dir()?
+        .join("Library")
+        .join("Application Support")
+        .join("RoosyCozy")
+        .join("shared-state-v1.json"))
+}
+
+#[cfg(target_os = "windows")]
+fn shared_state_file_path() -> Result<PathBuf, String> {
+    Ok(windows_shared_root().join("shared-state-v1.json"))
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+fn shared_state_file_path() -> Result<PathBuf, String> {
+    std::env::current_dir()
+        .map(|dir| dir.join("shared-state-v1.json"))
+        .map_err(|e| format!("공용 상태 파일 경로를 찾지 못했어요: {}", e))
+}
+
+#[command]
+fn load_shared_app_state() -> Result<Option<String>, String> {
+    #[cfg(target_os = "macos")]
+    {
+        let _ = bootstrap_shared_state_from_macos_storage();
+    }
+    let path = shared_state_file_path()?;
+    if !path.exists() {
+        return Ok(None);
+    }
+    match fs::read_to_string(&path) {
+        Ok(value) => Ok(Some(value)),
+        Err(_) => {
+            #[cfg(target_os = "macos")]
+            {
+                let bytes =
+                    fs::read(&path).map_err(|e| format!("공용 상태 파일을 읽지 못했어요: {}", e))?;
+                if let Some(value) = decode_storage_text_bytes(&bytes) {
+                    let _ = save_shared_app_state(value.clone());
+                    return Ok(Some(value));
+                }
+            }
+            Err("공용 상태 파일을 읽지 못했어요.".to_string())
+        }
+    }
+}
+
+#[command]
+fn save_shared_app_state(value: String) -> Result<(), String> {
+    let path = shared_state_file_path()?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("공용 상태 폴더를 만들지 못했어요: {}", e))?;
+    }
+    fs::write(&path, value).map_err(|e| format!("공용 상태 파일을 저장하지 못했어요: {}", e))
+}
+
+#[command]
+fn remove_shared_app_state() -> Result<(), String> {
+    let path = shared_state_file_path()?;
+    if !path.exists() {
+        return Ok(());
+    }
+    fs::remove_file(&path).map_err(|e| format!("공용 상태 파일을 삭제하지 못했어요: {}", e))
+}
+
 fn cleanup_old_versions() {
     if let Ok(current_exe) = std::env::current_exe() {
         let old_exe = current_exe.with_extension("exe.old");
@@ -826,14 +899,420 @@ fn cleanup_old_versions() {
     }
 }
 
+#[cfg(target_os = "macos")]
+fn macos_home_dir() -> Result<PathBuf, String> {
+    env::var_os("HOME")
+        .map(PathBuf::from)
+        .ok_or_else(|| "HOME 경로를 찾지 못했어요.".to_string())
+}
+
+#[cfg(target_os = "macos")]
+fn macos_app_support_dir(app_id: &str) -> Result<PathBuf, String> {
+    Ok(macos_home_dir()?
+        .join("Library")
+        .join("Application Support")
+        .join(app_id))
+}
+
+#[cfg(target_os = "macos")]
+fn macos_dev_webkit_dir() -> Result<PathBuf, String> {
+    Ok(macos_home_dir()?
+        .join("Library")
+        .join("WebKit")
+        .join("roosycozy"))
+}
+
+#[cfg(target_os = "macos")]
+fn macos_webkit_dir(app_id: &str) -> Result<PathBuf, String> {
+    Ok(macos_home_dir()?
+        .join("Library")
+        .join("WebKit")
+        .join(app_id))
+}
+
+#[cfg(target_os = "macos")]
+fn copy_dir_recursive_if_missing(source: &Path, target: &Path) -> Result<(), String> {
+    if !source.exists() {
+        return Ok(());
+    }
+    fs::create_dir_all(target).map_err(|e| format!("마이그레이션 폴더를 만들지 못했어요: {}", e))?;
+    for entry in fs::read_dir(source).map_err(|e| format!("마이그레이션 폴더를 읽지 못했어요: {}", e))? {
+        let entry = entry.map_err(|e| format!("마이그레이션 항목을 읽지 못했어요: {}", e))?;
+        let source_path = entry.path();
+        let target_path = target.join(entry.file_name());
+        if source_path.is_dir() {
+            copy_dir_recursive_if_missing(&source_path, &target_path)?;
+            continue;
+        }
+        if target_path.exists() {
+            continue;
+        }
+        if let Some(parent) = target_path.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|e| format!("마이그레이션 대상 폴더를 만들지 못했어요: {}", e))?;
+        }
+        fs::copy(&source_path, &target_path)
+            .map_err(|e| format!("마이그레이션 파일 복사에 실패했어요: {}", e))?;
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn copy_dir_recursive_overwrite(source: &Path, target: &Path) -> Result<(), String> {
+    if !source.exists() {
+        return Ok(());
+    }
+    if target.exists() {
+        fs::remove_dir_all(target)
+            .map_err(|e| format!("기존 저장소 폴더를 비우지 못했어요: {}", e))?;
+    }
+    fs::create_dir_all(target).map_err(|e| format!("저장소 폴더를 만들지 못했어요: {}", e))?;
+    for entry in fs::read_dir(source).map_err(|e| format!("저장소 폴더를 읽지 못했어요: {}", e))? {
+        let entry = entry.map_err(|e| format!("저장소 항목을 읽지 못했어요: {}", e))?;
+        let source_path = entry.path();
+        let target_path = target.join(entry.file_name());
+        if source_path.is_dir() {
+            copy_dir_recursive_overwrite(&source_path, &target_path)?;
+            continue;
+        }
+        if let Some(parent) = target_path.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|e| format!("저장소 대상 폴더를 만들지 못했어요: {}", e))?;
+        }
+        fs::copy(&source_path, &target_path)
+            .map_err(|e| format!("저장소 파일 복사에 실패했어요: {}", e))?;
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn find_named_dir(root: &Path, target_name: &str, depth: usize) -> Option<PathBuf> {
+    if depth == 0 || !root.exists() {
+        return None;
+    }
+    for entry in fs::read_dir(root).ok()? {
+        let entry = entry.ok()?;
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        if entry.file_name().to_string_lossy() == target_name {
+            return Some(path);
+        }
+        if let Some(found) = find_named_dir(&path, target_name, depth - 1) {
+            return Some(found);
+        }
+    }
+    None
+}
+
+#[cfg(target_os = "macos")]
+fn collect_named_files(root: &Path, target_name: &str, depth: usize, out: &mut Vec<PathBuf>) {
+    if depth == 0 || !root.exists() {
+        return;
+    }
+    let Ok(entries) = fs::read_dir(root) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_named_files(&path, target_name, depth - 1, out);
+            continue;
+        }
+        if entry.file_name().to_string_lossy() == target_name {
+            out.push(path);
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn decode_hex_string(value: &str) -> Option<Vec<u8>> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() || trimmed.len() % 2 != 0 {
+        return None;
+    }
+    let mut out = Vec::with_capacity(trimmed.len() / 2);
+    let bytes = trimmed.as_bytes();
+    for idx in (0..bytes.len()).step_by(2) {
+        let hi = (bytes[idx] as char).to_digit(16)?;
+        let lo = (bytes[idx + 1] as char).to_digit(16)?;
+        out.push(((hi << 4) | lo) as u8);
+    }
+    Some(out)
+}
+
+#[cfg(target_os = "macos")]
+fn decode_storage_text_bytes(bytes: &[u8]) -> Option<String> {
+    if let Ok(text) = String::from_utf8(bytes.to_vec()) {
+        let normalized = text.trim_matches('\u{feff}').to_string();
+        if !normalized.trim().is_empty() {
+            return Some(normalized);
+        }
+    }
+
+    if bytes.len() % 2 != 0 {
+        return None;
+    }
+    let utf16: Vec<u16> = bytes
+        .chunks_exact(2)
+        .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
+        .collect();
+    let text = String::from_utf16(&utf16).ok()?;
+    let normalized = text.trim_matches('\u{feff}').to_string();
+    if normalized.trim().is_empty() {
+        None
+    } else {
+        Some(normalized)
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn score_state_payload(value: &str) -> usize {
+    let parsed: serde_json::Value = match serde_json::from_str(value) {
+        Ok(parsed) => parsed,
+        Err(_) => return 0,
+    };
+    let count = |key: &str| {
+        parsed
+            .get(key)
+            .and_then(|value| value.as_array())
+            .map(|items| items.len())
+            .unwrap_or(0)
+    };
+    let records = count("records");
+    let strategy_threads = count("strategyThreadPackages");
+    let class_roster = count("classRoster");
+    let relationship_groups = count("relationshipGroups");
+    let cases = parsed
+        .get("cases")
+        .and_then(|value| value.as_object())
+        .map(|items| items.len())
+        .unwrap_or(0);
+
+    records * 10_000
+        + cases * 5_000
+        + strategy_threads * 2_000
+        + class_roster * 500
+        + relationship_groups * 500
+        + value.len()
+}
+
+#[cfg(target_os = "macos")]
+fn read_state_payload_from_sqlite(path: &Path) -> Option<String> {
+    let output = Command::new("/usr/bin/sqlite3")
+        .arg(path)
+        .arg("select hex(value) from ItemTable where key='roosycozy_state_v1' limit 1;")
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let hex = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let bytes = decode_hex_string(&hex)?;
+    decode_storage_text_bytes(&bytes)
+}
+
+#[cfg(target_os = "macos")]
+fn collect_state_candidates_from_root(
+    label: &str,
+    root: &Path,
+    priority: usize,
+    out: &mut Vec<(usize, usize, String, String)>,
+) {
+    let mut databases = Vec::new();
+    collect_named_files(root, "localstorage.sqlite3", 8, &mut databases);
+    for db_path in databases {
+        let Some(payload) = read_state_payload_from_sqlite(&db_path) else {
+            continue;
+        };
+        let score = score_state_payload(&payload);
+        if score == 0 {
+            continue;
+        }
+        out.push((
+            score,
+            priority,
+            format!("{}:{}", label, db_path.display()),
+            payload,
+        ));
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn bootstrap_shared_state_from_macos_storage() -> Result<bool, String> {
+    let shared_state_path = shared_state_file_path()?;
+    let existing_state = fs::read_to_string(&shared_state_path).ok();
+    let existing_state = existing_state
+        .and_then(|value| decode_storage_text_bytes(value.as_bytes()).or(Some(value)));
+
+    let mut candidates = Vec::new();
+    collect_state_candidates_from_root("dev", &macos_dev_webkit_dir()?, 3, &mut candidates);
+    collect_state_candidates_from_root(
+        "current",
+        &macos_webkit_dir(CURRENT_MAC_APP_ID)?,
+        2,
+        &mut candidates,
+    );
+    collect_state_candidates_from_root(
+        "legacy",
+        &macos_webkit_dir(LEGACY_MAC_APP_ID)?,
+        1,
+        &mut candidates,
+    );
+
+    let Some((_score, priority, source, payload)) = candidates
+        .into_iter()
+        .max_by(|left, right| left.1.cmp(&right.1).then(left.0.cmp(&right.0)))
+    else {
+        return Ok(false);
+    };
+
+    if let Some(existing) = existing_state.as_deref() {
+        if existing == payload {
+            return Ok(false);
+        }
+        if priority < 3 && score_state_payload(existing) > 0 {
+            return Ok(false);
+        }
+    }
+
+    if let Some(parent) = shared_state_path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("공용 상태 폴더를 만들지 못했어요: {}", e))?;
+    }
+    fs::write(&shared_state_path, payload)
+        .map_err(|e| format!("공용 상태 파일을 저장하지 못했어요: {}", e))?;
+    eprintln!("shared app state bootstrapped from {}", source);
+    Ok(true)
+}
+
+#[cfg(target_os = "macos")]
+fn file_contains_bytes(path: &Path, needle: &[u8]) -> bool {
+    fs::read(path).map(|bytes| bytes.windows(needle.len()).any(|window| window == needle)).unwrap_or(false)
+}
+
+#[cfg(target_os = "macos")]
+fn dir_contains_state_key(dir: &Path, state_key: &[u8]) -> bool {
+    if !dir.exists() {
+        return false;
+    }
+    let Ok(entries) = fs::read_dir(dir) else {
+        return false;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            if dir_contains_state_key(&path, state_key) {
+                return true;
+            }
+            continue;
+        }
+        if file_contains_bytes(&path, state_key) {
+            return true;
+        }
+    }
+    false
+}
+
+#[cfg(target_os = "macos")]
+fn webkit_root_contains_state_key(root: &Path, state_key: &[u8]) -> bool {
+    find_named_dir(root, "LocalStorage", 6)
+        .map(|dir| dir_contains_state_key(&dir, state_key))
+        .unwrap_or(false)
+}
+
+#[cfg(target_os = "macos")]
+fn migrate_macos_dev_webkit_storage() -> Result<bool, String> {
+    let dev_root = macos_dev_webkit_dir()?;
+    let new_root = macos_webkit_dir(CURRENT_MAC_APP_ID)?;
+    let state_key = b"roosycozy_state_v1";
+    if !webkit_root_contains_state_key(&dev_root, state_key) {
+        return Ok(false);
+    }
+    copy_dir_recursive_overwrite(&dev_root, &new_root)?;
+    Ok(true)
+}
+
+#[cfg(target_os = "macos")]
+fn migrate_macos_legacy_local_storage() -> Result<bool, String> {
+    let old_root = macos_webkit_dir(LEGACY_MAC_APP_ID)?;
+    let new_root = macos_webkit_dir(CURRENT_MAC_APP_ID)?;
+    if !old_root.exists() {
+        return Ok(false);
+    }
+
+    let state_key = b"roosycozy_state_v1";
+    let old_local_storage = find_named_dir(&old_root, "LocalStorage", 6);
+    if old_local_storage
+        .as_ref()
+        .map(|dir| !dir_contains_state_key(dir, state_key))
+        .unwrap_or(true)
+    {
+        return Ok(false);
+    }
+    let new_local_storage = find_named_dir(&new_root, "LocalStorage", 6);
+
+    match (old_local_storage, new_local_storage) {
+        (Some(source_dir), Some(target_dir)) => {
+            fs::create_dir_all(&target_dir)
+                .map_err(|e| format!("새 LocalStorage 폴더를 준비하지 못했어요: {}", e))?;
+            for filename in ["localstorage.sqlite3", "localstorage.sqlite3-shm", "localstorage.sqlite3-wal"] {
+                let source_path = source_dir.join(filename);
+                if !source_path.exists() {
+                    continue;
+                }
+                let target_path = target_dir.join(filename);
+                fs::copy(&source_path, &target_path)
+                    .map_err(|e| format!("기존 LocalStorage 파일을 복사하지 못했어요: {}", e))?;
+            }
+            Ok(true)
+        }
+        (Some(_), None) => {
+            copy_dir_recursive_if_missing(&old_root, &new_root)?;
+            Ok(true)
+        }
+        _ => Ok(false),
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn migrate_macos_legacy_app_support() -> Result<bool, String> {
+    let old_dir = macos_app_support_dir(LEGACY_MAC_APP_ID)?;
+    let new_dir = macos_app_support_dir(CURRENT_MAC_APP_ID)?;
+    if !old_dir.exists() {
+        return Ok(false);
+    }
+    copy_dir_recursive_if_missing(&old_dir, &new_dir)?;
+    Ok(true)
+}
+
+#[cfg(target_os = "macos")]
+fn migrate_macos_legacy_storage() -> Result<(), String> {
+    let migrated_dev_storage = migrate_macos_dev_webkit_storage()?;
+    let migrated_local_storage = if migrated_dev_storage {
+        false
+    } else {
+        migrate_macos_legacy_local_storage()?
+    };
+    let migrated_app_support = migrate_macos_legacy_app_support()?;
+    let _ = bootstrap_shared_state_from_macos_storage()?;
+    let _ = migrated_local_storage || migrated_app_support || migrated_dev_storage;
+    Ok(())
+}
+
 fn main() {
     cleanup_old_versions();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .setup(|_app| {
+        .setup(|app| {
+            #[cfg(target_os = "macos")]
+            if let Err(err) = migrate_macos_legacy_storage() {
+                eprintln!("legacy macOS storage migration skipped: {}", err);
+            }
             #[cfg(target_os = "windows")]
-            if let Some(window) = _app.get_webview_window("main") {
+            if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_decorations(false);
             }
             Ok(())
@@ -852,6 +1331,9 @@ fn main() {
             commands::export_case_pdf,
             commands::export_backup_json,
             commands::import_backup_json,
+            load_shared_app_state,
+            save_shared_app_state,
+            remove_shared_app_state,
             check_and_update,
             exit_for_update
         ])

@@ -21,13 +21,44 @@ export const LS_DEVICE_SIGNER_PUBLIC_KEY_KEY = 'roosycozy_device_signer_public_k
 
 export const IS_TAURI =
   typeof window !== 'undefined' &&
-  (Boolean((window as any).__TAURI__) || (typeof (window as any).isTauri === 'function' && (window as any).isTauri()));
+  (
+    Boolean((window as any).__TAURI__) ||
+    Boolean((window as any).__TAURI_INTERNALS__) ||
+    (typeof (window as any).isTauri === 'function' && (window as any).isTauri())
+  );
 
 const ls = () => (typeof localStorage === 'undefined' ? null : localStorage);
 
-export const storageGet = async (): Promise<string | null> => ls()?.getItem(LS_KEY) ?? null;
-export const storageSet = async (value: string): Promise<void> => void ls()?.setItem(LS_KEY, value);
-export const storageRemove = async (): Promise<void> => void ls()?.removeItem(LS_KEY);
+export const storageGet = async (): Promise<string | null> => {
+  const legacy = ls()?.getItem(LS_KEY) ?? null;
+  if (!IS_TAURI) return legacy;
+  try {
+    const shared = await invoke<string | null>('load_shared_app_state');
+    if (typeof shared === 'string' && shared.trim()) {
+      void ls()?.setItem(LS_KEY, shared);
+      return shared;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+export const storageSet = async (value: string): Promise<void> => {
+  void ls()?.setItem(LS_KEY, value);
+  if (!IS_TAURI) return;
+  try {
+    await invoke('save_shared_app_state', { value });
+  } catch {}
+};
+
+export const storageRemove = async (): Promise<void> => {
+  void ls()?.removeItem(LS_KEY);
+  if (!IS_TAURI) return;
+  try {
+    await invoke('remove_shared_app_state');
+  } catch {}
+};
 
 export type RecordRevisionAction = 'create' | 'amend' | 'legacy-import';
 export type SealAlgorithm = 'rust-ed25519-v1' | 'legacy-chain-v8';
@@ -1256,7 +1287,7 @@ export const normalizeState = (anyObj: any): AppState => {
 };
 
 const SAMPLE_PACK_URL = new URL('./sample_pack_v7.json', import.meta.url);
-const SEED_ON_EMPTY = ((import.meta as any)?.env?.VITE_SEED_SAMPLE ?? '') === '1' || String((import.meta as any)?.env?.MODE ?? '') === 'production';
+const SEED_ON_EMPTY = !IS_TAURI && ((import.meta as any)?.env?.VITE_SEED_SAMPLE ?? '') === '1';
 const loadSamplePack = async (): Promise<any | null> => {
   try {
     const res = await fetch(SAMPLE_PACK_URL);

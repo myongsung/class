@@ -9,6 +9,7 @@ const host = env.TAURI_DEV_HOST ? env.TAURI_DEV_HOST : false;
 
 const config: UserConfig = {
   clearScreen: false,
+  base: './',
   server: {
     port: 1420,
     strictPort: true,
