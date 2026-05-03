@@ -287,6 +287,17 @@ fn windows_shared_root() -> PathBuf {
     public_root
         .join("Documents")
         .join("RoosyCozy")
+        .join("co.roosycozy.desktop")
+}
+
+#[cfg(target_os = "windows")]
+fn windows_legacy_shared_root() -> PathBuf {
+    let public_root = std::env::var_os("PUBLIC")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(r"C:\Users\Public"));
+    public_root
+        .join("Documents")
+        .join("RoosyCozy")
         .join("co.roosycozy.app")
 }
 
@@ -550,7 +561,7 @@ fn restore_embedded_windows_runtime_to_appdata(sidecar_dir: &Path) -> Result<boo
 }
 
 #[cfg(target_os = "windows")]
-fn ensure_windows_runtime_cache(app: &AppHandle) -> Result<(), String> {
+pub(crate) fn ensure_windows_runtime_cache(app: &AppHandle) -> Result<(), String> {
     let current_exe = std::env::current_exe()
         .map_err(|e| format!("현재 실행 파일 경로를 읽지 못했어요: {}", e))?;
     let install_dir = current_exe
@@ -1278,7 +1289,8 @@ fn windows_state_candidate_roots() -> Vec<(usize, String, PathBuf)> {
         out.push((priority, label, path));
     };
 
-    push(2, "shared-root".to_string(), windows_shared_root());
+    push(6, "shared-root".to_string(), windows_shared_root());
+    push(5, "legacy-shared-root".to_string(), windows_legacy_shared_root());
 
     for (env_name, priority) in [("APPDATA", 10usize), ("LOCALAPPDATA", 9usize)] {
         let Some(base) = windows_env_dir(env_name) else {
@@ -1310,7 +1322,7 @@ fn windows_state_candidate_roots() -> Vec<(usize, String, PathBuf)> {
 }
 
 #[cfg(target_os = "windows")]
-fn bootstrap_shared_state_from_windows_storage() -> Result<bool, String> {
+pub(crate) fn bootstrap_shared_state_from_windows_storage() -> Result<bool, String> {
     let shared_state_path = shared_state_file_path()?;
     let existing_state = fs::read(&shared_state_path)
         .ok()

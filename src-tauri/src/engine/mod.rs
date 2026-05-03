@@ -3447,7 +3447,7 @@ fn strategy_windows_shared_root() -> PathBuf {
   public_root
     .join("Documents")
     .join("RoosyCozy")
-    .join("co.roosycozy.app")
+    .join("co.roosycozy.desktop")
 }
 
 #[cfg(target_os = "windows")]

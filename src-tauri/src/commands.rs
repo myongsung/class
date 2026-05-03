@@ -65,6 +65,12 @@ pub struct StrategyChatArgs {
 #[tauri::command]
 pub async fn strategy_agent_chat(app: AppHandle, args: StrategyChatArgs) -> Result<StrategyChatRunResult, String> {
   tauri::async_runtime::spawn_blocking(move || {
+    #[cfg(target_os = "windows")]
+    {
+      let _ = crate::bootstrap_shared_state_from_windows_storage();
+      crate::ensure_windows_runtime_cache(&app)?;
+    }
+
     let opts = StrategyChatOptions {
       model: args.model,
       max_tokens: args.max_tokens,
@@ -101,6 +107,12 @@ pub struct StrategyPrewarmArgs {
 #[tauri::command]
 pub async fn strategy_prewarm_backend(app: AppHandle, args: StrategyPrewarmArgs) -> Result<StrategyBackendPrewarmResult, String> {
   tauri::async_runtime::spawn_blocking(move || {
+    #[cfg(target_os = "windows")]
+    {
+      let _ = crate::bootstrap_shared_state_from_windows_storage();
+      crate::ensure_windows_runtime_cache(&app)?;
+    }
+
     let opts = StrategyChatOptions {
       model: None,
       max_tokens: None,
