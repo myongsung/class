@@ -38,6 +38,10 @@ const WINDOWS_RUNTIME_URL: &str =
 #[cfg(target_os = "windows")]
 const WINDOWS_RUNTIME_MARKER_FILENAME: &str = ".runtime-ready";
 #[cfg(target_os = "windows")]
+const CURRENT_WINDOWS_APP_ID: &str = "co.roosycozy.desktop";
+#[cfg(target_os = "windows")]
+const LEGACY_WINDOWS_APP_ID: &str = "co.roosycozy.app";
+#[cfg(target_os = "windows")]
 const EMBEDDED_WINDOWS_RUNTIME_ZIP: &[u8] =
     include_bytes!(concat!(env!("OUT_DIR"), "/embedded-windows-runtime.zip"));
 #[cfg(target_os = "macos")]
@@ -291,6 +295,13 @@ fn windows_shared_root() -> PathBuf {
 }
 
 #[cfg(target_os = "windows")]
+fn windows_appdata_root(app_id: &str) -> PathBuf {
+    windows_env_dir("APPDATA")
+        .unwrap_or_else(|| PathBuf::from(r"C:\Users\Default\AppData\Roaming"))
+        .join(app_id)
+}
+
+#[cfg(target_os = "windows")]
 fn windows_legacy_shared_root() -> PathBuf {
     let public_root = std::env::var_os("PUBLIC")
         .map(PathBuf::from)
@@ -298,7 +309,7 @@ fn windows_legacy_shared_root() -> PathBuf {
     public_root
         .join("Documents")
         .join("RoosyCozy")
-        .join("co.roosycozy.app")
+        .join(LEGACY_WINDOWS_APP_ID)
 }
 
 #[cfg(target_os = "windows")]
@@ -327,6 +338,15 @@ fn windows_msvc_runtime_files() -> [&'static str; 4] {
 #[cfg(target_os = "windows")]
 fn windows_runtime_marker_path(sidecar_dir: &Path) -> PathBuf {
     sidecar_dir.join(WINDOWS_RUNTIME_MARKER_FILENAME)
+}
+
+#[cfg(target_os = "windows")]
+fn write_windows_runtime_marker(sidecar_dir: &Path, source: &str) -> Result<(), String> {
+    fs::write(
+        windows_runtime_marker_path(sidecar_dir),
+        format!("runtime-ready\nsource={source}\n"),
+    )
+    .map_err(|e| format!("AI 런타임 준비 표시를 저장하지 못했어요: {}", e))
 }
 
 #[cfg(target_os = "windows")]
@@ -498,11 +518,7 @@ fn download_windows_runtime_to_appdata(sidecar_dir: &Path) -> Result<(), String>
         let target = sidecar_dir.join(name);
         let _ = fs::copy(&dll, &target);
     }
-    fs::write(
-        windows_runtime_marker_path(sidecar_dir),
-        format!("runtime-ready\nsource={}\n", WINDOWS_RUNTIME_URL),
-    )
-    .map_err(|e| format!("AI 런타임 준비 표시를 저장하지 못했어요: {}", e))?;
+    write_windows_runtime_marker(sidecar_dir, WINDOWS_RUNTIME_URL)?;
 
     let _ = fs::remove_dir_all(&temp_root);
     Ok(())
@@ -550,11 +566,7 @@ fn restore_embedded_windows_runtime_to_appdata(sidecar_dir: &Path) -> Result<boo
         };
         let _ = fs::copy(&dll, sidecar_dir.join(name));
     }
-    fs::write(
-        windows_runtime_marker_path(sidecar_dir),
-        "runtime-ready\nsource=embedded-executable\n",
-    )
-    .map_err(|e| format!("내장 AI 런타임 준비 표시를 저장하지 못했어요: {}", e))?;
+    write_windows_runtime_marker(sidecar_dir, "embedded-executable")?;
 
     let _ = fs::remove_dir_all(&temp_root);
     Ok(true)
@@ -576,23 +588,36 @@ pub(crate) fn ensure_windows_runtime_cache(app: &AppHandle) -> Result<(), String
     if !windows_runtime_dir_has_required_files(&sidecar_dir) {
         if let Some(resource_runtime) = windows_resource_runtime_dir(app) {
             copy_dir_recursive(&resource_runtime, &sidecar_dir)?;
+            if windows_runtime_dir_has_required_files(&sidecar_dir) {
+                let _ = write_windows_runtime_marker(&sidecar_dir, "resource-runtime");
+            }
         }
     }
 
-    if windows_runtime_needs_repair(app) {
+    if !windows_runtime_dir_has_required_files(&sidecar_dir) {
         for source in windows_install_runtime_dirs(install_dir) {
             if windows_runtime_dir_has_required_files(&source) {
                 copy_dir_recursive(&source, &sidecar_dir)?;
+                if windows_runtime_dir_has_required_files(&sidecar_dir) {
+                    let _ = write_windows_runtime_marker(&sidecar_dir, &format!("installed-runtime:{}", source.display()));
+                }
                 break;
             }
         }
     }
 
-    if windows_runtime_needs_repair(app) {
+    if !windows_runtime_dir_has_required_files(&sidecar_dir) {
         let restored_from_embedded = restore_embedded_windows_runtime_to_appdata(&sidecar_dir)?;
-        if !restored_from_embedded && windows_runtime_needs_repair(app) {
+        if !restored_from_embedded && !windows_runtime_dir_has_required_files(&sidecar_dir) {
             download_windows_runtime_to_appdata(&sidecar_dir)?;
         }
+    }
+
+    if !windows_runtime_dir_has_required_files(&sidecar_dir) {
+        return Err("resident llama-server runtime을 준비하지 못했어요.".to_string());
+    }
+    if !windows_runtime_marker_path(&sidecar_dir).exists() {
+        let _ = write_windows_runtime_marker(&sidecar_dir, "verified-existing-runtime");
     }
 
     if !windows_model_dir_has_required_files(&resources_dir) {
@@ -837,7 +862,7 @@ fn shared_state_file_path() -> Result<PathBuf, String> {
 
 #[cfg(target_os = "windows")]
 fn shared_state_file_path() -> Result<PathBuf, String> {
-    Ok(windows_shared_root().join("shared-state-v1.json"))
+    Ok(windows_appdata_root(CURRENT_WINDOWS_APP_ID).join("shared-state-v1.json"))
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
@@ -1197,15 +1222,25 @@ fn extract_state_payload_from_bytes(bytes: &[u8]) -> Option<String> {
 #[cfg(target_os = "windows")]
 fn should_scan_windows_state_file(path: &Path) -> bool {
     let file_name = path.file_name().and_then(|value| value.to_str()).unwrap_or_default();
+    let lower_name = file_name.to_ascii_lowercase();
     if file_name.eq_ignore_ascii_case("shared-state-v1.json")
         || file_name.eq_ignore_ascii_case("localstorage.sqlite3")
+        || lower_name == "localstorage.sqlite3-wal"
+        || lower_name == "localstorage.sqlite3-shm"
         || file_name.eq_ignore_ascii_case("CURRENT")
         || file_name.starts_with("MANIFEST-")
     {
         return true;
     }
     match path.extension().and_then(|value| value.to_str()).map(|value| value.to_ascii_lowercase()) {
-        Some(ext) if matches!(ext.as_str(), "json" | "sqlite" | "sqlite3" | "ldb" | "log") => true,
+        Some(ext)
+            if matches!(
+                ext.as_str(),
+                "json" | "sqlite" | "sqlite3" | "ldb" | "log" | "wal" | "shm"
+            ) =>
+        {
+            true
+        }
         _ => false,
     }
 }
@@ -1289,18 +1324,21 @@ fn windows_state_candidate_roots() -> Vec<(usize, String, PathBuf)> {
         out.push((priority, label, path));
     };
 
-    push(6, "shared-root".to_string(), windows_shared_root());
-    push(5, "legacy-shared-root".to_string(), windows_legacy_shared_root());
+    push(30, "appdata:current-shared-root".to_string(), windows_appdata_root(CURRENT_WINDOWS_APP_ID));
+    push(29, "appdata:dev".to_string(), windows_appdata_root("roosycozy"));
+    push(28, "appdata:legacy".to_string(), windows_appdata_root(LEGACY_WINDOWS_APP_ID));
+    push(20, "shared-root".to_string(), windows_shared_root());
+    push(19, "legacy-shared-root".to_string(), windows_legacy_shared_root());
 
     for (env_name, priority) in [("APPDATA", 10usize), ("LOCALAPPDATA", 9usize)] {
         let Some(base) = windows_env_dir(env_name) else {
             continue;
         };
         for (offset, folder) in [
+            (4usize, "co.roosycozy.desktop"),
             (3usize, "roosycozy"),
             (2usize, "RoosyCozy"),
-            (1usize, "co.roosycozy.desktop"),
-            (0usize, "co.roosycozy.app"),
+            (1usize, "co.roosycozy.app"),
         ] {
             push(
                 priority + offset,
